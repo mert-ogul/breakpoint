@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 
 from breakpoint_eval.candidate_map import CANDIDATES
+from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.run_baseline import RunRequest, build_seeds, parse_seed_list, run_baseline
 from breakpoint_eval.stack import repo_root_from_package
 
@@ -43,6 +44,18 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Write one mp4 per episode",
+    )
+    parser.add_argument(
+        "--latency-ms",
+        type=float,
+        default=0.0,
+        help="Constant simulated inference latency in milliseconds (not wall sleep)",
+    )
+    parser.add_argument(
+        "--latency-sweep-ms",
+        type=str,
+        default=None,
+        help="Comma-separated latency_ms values; writes one report subdir per value",
     )
     parser.add_argument(
         "--repo-root",
@@ -83,26 +96,55 @@ def main(argv: list[str] | None = None) -> int:
         output_dir = repo_root / "artifacts" / "runs" / args.candidate
     output_dir = output_dir.resolve()
 
-    report = run_baseline(
-        RunRequest(
-            candidate=args.candidate,
-            seeds=seeds,
-            output_dir=output_dir,
-            device=args.device,
-            save_video=args.video,
-            repo_root=repo_root,
-        )
-    )
-    print(report)
+    if args.latency_ms < 0:
+        parser.error("--latency-ms must be >= 0")
 
-    payload = json.loads(report.read_text(encoding="utf-8"))
-    summary = payload.get("summary", {})
-    provenance = payload.get("provenance", {})
-    if provenance.get("env_created") is False:
-        return 2
-    if summary.get("n_runtime_error", 0) > 0 and summary.get("n_episodes_eligible", 0) == 0:
-        return 2
-    return 0
+    latency_values_ms: list[float]
+    if args.latency_sweep_ms:
+        latency_values_ms = [
+            float(x.strip()) for x in args.latency_sweep_ms.split(",") if x.strip()
+        ]
+        if not latency_values_ms:
+            parser.error("--latency-sweep-ms is empty")
+        if any(v < 0 for v in latency_values_ms):
+            parser.error("--latency-sweep-ms values must be >= 0")
+    else:
+        latency_values_ms = [args.latency_ms]
+
+    exit_code = 0
+    for latency_ms in latency_values_ms:
+        run_dir = output_dir
+        if len(latency_values_ms) > 1:
+            run_dir = output_dir / f"latency_ms_{latency_ms:g}"
+        report = run_baseline(
+            RunRequest(
+                candidate=args.candidate,
+                seeds=seeds,
+                output_dir=run_dir,
+                device=args.device,
+                save_video=args.video,
+                latency_s=latency_ms / 1000.0,
+                repo_root=repo_root,
+            )
+        )
+        print(report)
+        print(
+            json.dumps(
+                {
+                    "latency_ms": latency_ms,
+                    "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
+                    "report": str(report),
+                }
+            )
+        )
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        summary = payload.get("summary", {})
+        provenance = payload.get("provenance", {})
+        if provenance.get("env_created") is False:
+            exit_code = 2
+        if summary.get("n_runtime_error", 0) > 0 and summary.get("n_episodes_eligible", 0) == 0:
+            exit_code = 2
+    return exit_code
 
 
 if __name__ == "__main__":

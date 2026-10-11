@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.policy_adapter import PolicyAdapter
 from breakpoint_eval.run_episode import EpisodeOutcome, EpisodeResult, run_episode
 from breakpoint_eval.sim_env import (
@@ -35,6 +36,7 @@ class RunRequest:
     output_dir: Path
     device: str
     save_video: bool
+    latency_s: float = 0.0
     repo_root: Path | None = None
 
 
@@ -87,6 +89,10 @@ def run_baseline(req: RunRequest) -> Path:
         "temporal_ensemble_coeff": adapter.chunk_info.temporal_ensemble_coeff,
         "save_video": req.save_video,
         "policy_loaded": True,
+        "latency_s": req.latency_s,
+        "latency_ms": req.latency_s * 1000.0,
+        "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
+        "host_compute_added_to_latency": False,
     }
 
     try:
@@ -114,6 +120,8 @@ def run_baseline(req: RunRequest) -> Path:
                 control_period_s=period_s,
                 chunk_size=adapter.chunk_info.chunk_size,
                 n_action_steps=adapter.chunk_info.n_action_steps,
+                latency_s=req.latency_s,
+                chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
             )
             for i, seed in enumerate(req.seeds)
         ]
@@ -130,6 +138,7 @@ def run_baseline(req: RunRequest) -> Path:
                 seed=seed,
                 episode_index=episode_index,
                 render_frames=frames,
+                latency_s=req.latency_s,
             )
             if req.save_video and frames:
                 video_path = (
