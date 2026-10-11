@@ -17,6 +17,9 @@ dev = [
   "pytest>=8.0.0",
 ]
 
+[project.scripts]
+breakpoint = "breakpoint_eval.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
