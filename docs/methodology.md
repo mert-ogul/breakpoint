@@ -117,3 +117,26 @@ device and seed are recorded in provenance. Stub/unit tests use exact equality.
 - `time.sleep` / wall-clock pauses
 - Adding measured host inference duration on top of configured `L`
 - Changing chunk arrival policy between runs without recording it
+
+## Camera degradation (visual quality only)
+
+Image interventions run at the **raw rendered-pixel boundary**: uint8 HWC RGB
+frames under `observation["pixels"]`, **before** `preprocess_observation` and
+policy normalization. Checkpoint-expected tensor shape and camera key order are
+preserved. Degradation is **independent** of latency / network delay; these
+modes isolate visual quality and are **not** a full sensor-stream transport
+simulation.
+
+| Mode | Behavior |
+| --- | --- |
+| `native` | Uncompressed identity bypass (copy only; no codec, no resize) |
+| `downsample` | Resize to requested capture `HxW` with OpenCV `INTER_AREA`, then back to policy-native resolution with `INTER_LINEAR` |
+| `jpeg` | Real JPEG encode/decode at **native** resolution via OpenCV `imencode`/ `imdecode` (RGB↔BGR for the codec). Quality is in `[1, 100]`; quality `100` is still encoded and is **not** an uncompressed identity control |
+
+JPEG quality is a codec parameter, **not** a bitrate. Optional bandwidth estimates
+use measured JPEG payload bytes × frame rate and exclude container/RTP/TCP
+overhead. Provenance records OpenCV/NumPy versions, quality, requested and
+effective dimensions, compressed byte counts, and frame rate.
+
+CLI: `--image-mode`, `--capture-hw`, `--jpeg-quality`, and isolated smoke sweeps
+`--image-sweep resolution|jpeg` (mutually exclusive with a latency sweep).

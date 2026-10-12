@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from breakpoint_eval.camera_degrade import ImageDegradeConfig, ImageMode, config_provenance
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.policy_adapter import PolicyAdapter
 from breakpoint_eval.run_episode import EpisodeOutcome, EpisodeResult, run_episode
@@ -37,6 +38,7 @@ class RunRequest:
     device: str
     save_video: bool
     latency_s: float = 0.0
+    image_cfg: ImageDegradeConfig | None = None
     repo_root: Path | None = None
 
 
@@ -69,6 +71,9 @@ def run_baseline(req: RunRequest) -> Path:
     env_cfg = make_env_config(spec)
     policy = load_policy(spec, str(checkpoint_dir), req.device)
     adapter = PolicyAdapter(policy, control_period_s=period_s, device=req.device)
+    image_cfg = req.image_cfg or ImageDegradeConfig(mode=ImageMode.NATIVE)
+    if image_cfg.frame_rate_hz is None:
+        image_cfg = replace(image_cfg, frame_rate_hz=float(env_cfg.fps))
 
     provenance: dict[str, Any] = {
         "candidate": req.candidate,
@@ -93,6 +98,8 @@ def run_baseline(req: RunRequest) -> Path:
         "latency_ms": req.latency_s * 1000.0,
         "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
         "host_compute_added_to_latency": False,
+        "image_degrade": config_provenance(image_cfg),
+        "image_degrade_separate_from_latency": True,
     }
 
     try:
@@ -122,6 +129,7 @@ def run_baseline(req: RunRequest) -> Path:
                 n_action_steps=adapter.chunk_info.n_action_steps,
                 latency_s=req.latency_s,
                 chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
+                image_mode=image_cfg.mode.value,
             )
             for i, seed in enumerate(req.seeds)
         ]
@@ -139,6 +147,7 @@ def run_baseline(req: RunRequest) -> Path:
                 episode_index=episode_index,
                 render_frames=frames,
                 latency_s=req.latency_s,
+                image_cfg=image_cfg,
             )
             if req.save_video and frames:
                 video_path = (

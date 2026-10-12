@@ -9,6 +9,13 @@ from typing import Any
 
 import numpy as np
 
+from breakpoint_eval.camera_degrade import (
+    FrameDegradeStats,
+    ImageDegradeConfig,
+    ImageMode,
+    degrade_observation,
+    summarize_frame_stats,
+)
 from breakpoint_eval.latency_scheduler import (
     CHUNK_ARRIVAL_POLICY,
     LatencyConfig,
@@ -74,11 +81,24 @@ class EpisodeResult:
     latency_events: list[dict[str, Any]] = field(default_factory=list)
     n_underflows: int = 0
     n_missed_deadlines: int = 0
+    image_mode: str = ImageMode.NATIVE.value
+    image_degrade_summary: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["outcome"] = self.outcome.value
         return payload
+
+
+def _policy_observation(
+    observation: dict[str, Any],
+    image_cfg: ImageDegradeConfig,
+    frame_stats: list[FrameDegradeStats],
+) -> Any:
+    """Degrade raw pixels then apply LeRobot preprocess (norms happen inside policy)."""
+    degraded = degrade_observation(observation, image_cfg)
+    frame_stats.extend(degraded.frames)
+    return preprocess_observation(degraded.observation)
 
 
 def _extract_is_success(info: dict[str, Any], *, env_index: int = 0) -> bool:
@@ -126,15 +146,20 @@ def run_episode(
     episode_index: int,
     render_frames: list[np.ndarray] | None = None,
     latency_s: float = 0.0,
+    image_cfg: ImageDegradeConfig | None = None,
 ) -> EpisodeResult:
     """Run one episode; uses env is_success, not reward > 0.
 
     When ``latency_s == 0`` and the scheduler path is used, behavior matches the
     verified zero-latency control loop (see docs/methodology.md). Host compute
     time is never added to ``latency_s``.
+
+    Image degradation runs on raw rendered pixels before policy normalization and
+    is independent of latency injection.
     """
     if latency_s < 0:
         raise ValueError("latency_s must be >= 0")
+    cfg = image_cfg or ImageDegradeConfig()
     # Always use the discrete-event scheduler so L=0 shares the same code path.
     return _run_episode_with_scheduler(
         env=env,
@@ -143,6 +168,7 @@ def run_episode(
         episode_index=episode_index,
         render_frames=render_frames,
         latency_s=latency_s,
+        image_cfg=cfg,
     )
 
 
@@ -154,6 +180,7 @@ def _run_episode_with_scheduler(
     episode_index: int,
     render_frames: list[np.ndarray] | None,
     latency_s: float,
+    image_cfg: ImageDegradeConfig,
 ) -> EpisodeResult:
     chunk_info = adapter.chunk_info
     steps: list[ControlStepRecord] = []
@@ -166,6 +193,7 @@ def _run_episode_with_scheduler(
     runtime_error: str | None = None
     outcome = EpisodeOutcome.TERMINATED_NO_SUCCESS
     scheduler: LatencyScheduler | None = None
+    frame_stats: list[FrameDegradeStats] = []
 
     try:
         adapter.reset()
@@ -189,7 +217,15 @@ def _run_episode_with_scheduler(
         while not done:
             requested = False
             if scheduler.needs_inference_request():
-                obs_t = preprocess_observation(observation)
+                try:
+                    obs_t = _policy_observation(observation, image_cfg, frame_stats)
+                except (TypeError, ValueError, RuntimeError) as exc:
+                    runtime_error = f"{type(exc).__name__}: {exc}"
+                    outcome = EpisodeOutcome.RUNTIME_ERROR
+                    LOGGER.warning(
+                        "Image degrade/preprocess failure at step %s: %s", len(steps), exc
+                    )
+                    break
                 try:
                     action_chunk = adapter.compute_action_chunk(obs_t)
                 except (ValueError, NotImplementedError) as exc:
@@ -242,7 +278,7 @@ def _run_episode_with_scheduler(
             if done:
                 scheduler.mark_terminated()
 
-        if not policy_failed:
+        if outcome not in {EpisodeOutcome.POLICY_FAILED, EpisodeOutcome.RUNTIME_ERROR}:
             outcome = _classify_outcome(
                 policy_failed=policy_failed,
                 is_success=is_success,
@@ -281,6 +317,8 @@ def _run_episode_with_scheduler(
         latency_events=scheduler.events_as_dicts() if scheduler is not None else [],
         n_underflows=scheduler.n_underflows if scheduler is not None else 0,
         n_missed_deadlines=scheduler.n_missed_deadlines if scheduler is not None else 0,
+        image_mode=image_cfg.mode.value,
+        image_degrade_summary=summarize_frame_stats(frame_stats, image_cfg),
     )
 
 
@@ -291,6 +329,7 @@ def run_episode_baseline_queue(
     seed: int,
     episode_index: int,
     render_frames: list[np.ndarray] | None = None,
+    image_cfg: ImageDegradeConfig | None = None,
 ) -> EpisodeResult:
     """Legacy direct policy-queue loop (no scheduler). Used only for equivalence tests."""
     chunk = adapter.chunk_info
@@ -305,6 +344,8 @@ def run_episode_baseline_queue(
     policy_failed = False
     runtime_error: str | None = None
     outcome = EpisodeOutcome.TERMINATED_NO_SUCCESS
+    cfg = image_cfg or ImageDegradeConfig()
+    frame_stats: list[FrameDegradeStats] = []
 
     try:
         adapter.reset()
@@ -316,10 +357,16 @@ def run_episode_baseline_queue(
 
         done = False
         while not done:
-            obs_t = preprocess_observation(observation)
+            try:
+                obs_t = _policy_observation(observation, cfg, frame_stats)
+            except (TypeError, ValueError, RuntimeError) as exc:
+                runtime_error = f"{type(exc).__name__}: {exc}"
+                outcome = EpisodeOutcome.RUNTIME_ERROR
+                LOGGER.warning("Image degrade/preprocess failure at step %s: %s", len(steps), exc)
+                break
             try:
                 action_step: ActionStep = adapter.select_action(obs_t)
-            except ValueError as exc:
+            except (ValueError, NotImplementedError) as exc:
                 policy_failed = True
                 outcome = EpisodeOutcome.POLICY_FAILED
                 LOGGER.warning("Policy failure at step %s: %s", len(steps), exc)
@@ -359,7 +406,7 @@ def run_episode_baseline_queue(
                 if frame is not None:
                     render_frames.append(np.asarray(frame))
 
-        if not policy_failed:
+        if outcome not in {EpisodeOutcome.POLICY_FAILED, EpisodeOutcome.RUNTIME_ERROR}:
             outcome = _classify_outcome(
                 policy_failed=policy_failed,
                 is_success=is_success,
@@ -395,4 +442,6 @@ def run_episode_baseline_queue(
         steps=steps,
         latency_s=0.0,
         chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
+        image_mode=cfg.mode.value,
+        image_degrade_summary=summarize_frame_stats(frame_stats, cfg),
     )
