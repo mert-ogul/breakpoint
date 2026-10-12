@@ -1,4 +1,4 @@
-"""Thin CLI for Breakpoint. Subcommands: run, export, profile."""
+"""Thin CLI for Breakpoint. Subcommands: run, report, export, profile, plan, summarize."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from breakpoint_eval.camera_degrade import (
     ImageDegradeConfig,
@@ -32,11 +33,18 @@ from breakpoint_eval.experiment_summary import (
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.latency_trace import (
     load_latency_profile,
-    profiling_command_hint,
     require_unique_device_profile,
 )
+from breakpoint_eval.render_report import render_report
 from breakpoint_eval.run_baseline import RunRequest, build_seeds, parse_seed_list, run_baseline
 from breakpoint_eval.run_export import ExportRequest, run_export
+from breakpoint_eval.run_orchestrate import (
+    MissingPrerequisiteError,
+    execute_resolved_run,
+    resolve_run_plan,
+    write_partial_diagnostics,
+    write_run_manifest,
+)
 from breakpoint_eval.run_profile import ProfileCliRequest, run_profile
 from breakpoint_eval.stack import repo_root_from_package
 
@@ -51,15 +59,28 @@ def parse_capture_hw(text: str) -> tuple[int, int]:
 def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser(
         "run",
-        help="Run a pinned candidate baseline through the Breakpoint episode runner",
+        help="Run a pinned candidate / Hub model through the Breakpoint episode runner",
+    )
+    parser.add_argument(
+        "model",
+        nargs="?",
+        default=None,
+        help="Candidate key or Hub repo (e.g. lerobot/act_aloha_sim_transfer_cube_human)",
     )
     parser.add_argument(
         "--candidate",
-        default="act_aloha_transfer",
+        default=None,
         choices=sorted(CANDIDATES),
-        help="Direct model-to-environment mapping key",
+        help="Candidate key (alternative to positional model)",
     )
-    parser.add_argument("--n-episodes", type=int, default=None)
+    parser.add_argument(
+        "--episodes",
+        "--n-episodes",
+        dest="n_episodes",
+        type=int,
+        default=None,
+        help="Number of paired episodes",
+    )
     parser.add_argument(
         "--seeds",
         type=str,
@@ -68,10 +89,17 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
     parser.add_argument("--start-seed", type=int, default=1000)
     parser.add_argument(
+        "--out",
         "--output-dir",
+        dest="output_dir",
         type=Path,
         default=None,
         help="Directory for provenance + episode results",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Resolve plan / profile / cache paths and exit without running episodes",
     )
     parser.add_argument(
         "--device",
@@ -309,6 +337,18 @@ def _add_plan_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPar
     parser.add_argument("--output", type=Path, required=True, help="Path for experiment_plan.json")
 
 
+def _add_report_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    parser = subparsers.add_parser(
+        "report",
+        help="Render summary.md / report.html / plots from a saved RUN_DIR (no sim/model)",
+    )
+    parser.add_argument(
+        "run_dir",
+        type=Path,
+        help="Directory containing run_manifest.json and/or run_report.json records",
+    )
+
+
 def _add_summarize_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser(
         "summarize",
@@ -342,6 +382,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="breakpoint", description="Breakpoint evaluation CLI")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_run_parser(sub)
+    _add_report_parser(sub)
     _add_export_parser(sub)
     _add_profile_parser(sub)
     _add_plan_parser(sub)
@@ -422,7 +463,12 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_latency_profile(args: argparse.Namespace, repo_root: Path):
+def _resolve_latency_profile(
+    args: argparse.Namespace,
+    repo_root: Path,
+    *,
+    candidate: str | None = None,
+):
     profile_device = args.profile_device
     if args.device == "rpi5":
         if profile_device is not None and profile_device != "rpi5":
@@ -433,11 +479,14 @@ def _resolve_latency_profile(args: argparse.Namespace, repo_root: Path):
     if args.latency_profile is not None:
         return load_latency_profile(Path(args.latency_profile).resolve())
     if profile_device is not None:
+        cand = candidate or args.candidate
+        if cand is None:
+            raise ValueError("candidate required to resolve device latency profile")
         profiles_dir = repo_root / "profiles" / profile_device
         path = require_unique_device_profile(
             profiles_dir,
             device_label=profile_device,
-            candidate=args.candidate,
+            candidate=cand,
             variant_label=args.profile_variant,
             precision_recipe=args.profile_recipe_id,
         )
@@ -512,25 +561,59 @@ def _cmd_profile(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    model = args.model or args.candidate
+    if model is None:
+        parser.error("provide a positional MODEL or --candidate")
+    if args.model and args.candidate and args.model != args.candidate:
+        # Allow hub repo positional with --candidate omitted; conflict if both differ.
+        from breakpoint_eval.model_resolve import resolve_model_to_candidate
+
+        try:
+            resolved_key, _ = resolve_model_to_candidate(args.model)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if resolved_key != args.candidate:
+            parser.error("positional model and --candidate disagree")
+
+    if args.latency_block_length is not None and args.latency_block_seed is None:
+        parser.error("--latency-block-length requires --latency-block-seed")
+    if args.latency_block_seed is not None and args.latency_block_length is None:
+        parser.error("--latency-block-seed requires --latency-block-length")
+    if args.latency_ms < 0:
+        parser.error("--latency-ms must be >= 0")
+
+    repo_root = (args.repo_root or repo_root_from_package()).resolve()
     seeds_arg = parse_seed_list(args.seeds) if args.seeds is not None else None
+    n_episodes = args.n_episodes
+    if n_episodes is None and seeds_arg is not None:
+        n_episodes = len(seeds_arg)
+    if n_episodes is None:
+        n_episodes = 1
+
     try:
         seeds = build_seeds(
-            n_episodes=args.n_episodes,
+            n_episodes=n_episodes,
             seeds=seeds_arg,
             start_seed=args.start_seed,
         )
     except ValueError as exc:
         parser.error(str(exc))
 
-    repo_root = (args.repo_root or repo_root_from_package()).resolve()
+    # Resolve candidate early for default output path.
+    from breakpoint_eval.model_resolve import resolve_model_to_candidate
+
+    try:
+        candidate_key, _spec = resolve_model_to_candidate(model)
+    except ValueError as exc:
+        logging.error("%s", exc)
+        return 2
+
     output_dir = args.output_dir
     if output_dir is None:
-        output_dir = repo_root / "artifacts" / "runs" / args.candidate
+        output_dir = repo_root / "artifacts" / "runs" / candidate_key
     output_dir = output_dir.resolve()
 
-    if args.latency_ms < 0:
-        parser.error("--latency-ms must be >= 0")
-
+    using_sweep = bool(args.latency_sweep_ms or args.image_sweep)
     using_profile = (
         args.latency_profile is not None or args.profile_device is not None or args.device == "rpi5"
     )
@@ -540,29 +623,80 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             "device replay; do not combine with --latency-profile/--device rpi5"
         )
 
+    # Preferred orchestration path (single condition / dry-run / rpi5 / explicit profile).
+    if not using_sweep:
+        try:
+            plan, profile = resolve_run_plan(
+                model=model,
+                n_episodes=n_episodes,
+                output_dir=output_dir,
+                device=args.device,
+                compute_device=args.compute_device,
+                latency_ms=args.latency_ms,
+                latency_profile=args.latency_profile,
+                profile_device=args.profile_device,
+                profile_variant=args.profile_variant,
+                profile_recipe_id=args.profile_recipe_id,
+                seeds=seeds,
+                start_seed=args.start_seed,
+                image_mode=args.image_mode,
+                repo_root=repo_root,
+                dry_run=args.dry_run,
+            )
+        except MissingPrerequisiteError as exc:
+            logging.error("%s", exc)
+            return 2
+        except ValueError as exc:
+            logging.error("%s", exc)
+            return 2
+
+        manifest = write_run_manifest(plan)
+        print(manifest)
+        print(json.dumps(plan.to_dict(), indent=2, sort_keys=True))
+        if args.dry_run:
+            return 0
+
+        try:
+            base_image_cfg = _build_image_cfg(args)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            report, exit_code = execute_resolved_run(
+                plan,
+                profile,
+                save_video=args.video,
+                image_cfg=base_image_cfg,
+                latency_end_of_trace=args.latency_end_of_trace,
+                latency_block_length=args.latency_block_length,
+                latency_block_seed=args.latency_block_seed,
+            )
+        except KeyboardInterrupt:
+            return 130
+        print(report)
+        print(
+            json.dumps(
+                {
+                    "latency_mode": plan.latency_mode,
+                    "latency_profile": plan.latency_profile_path,
+                    "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
+                    "report": str(report),
+                    "exit_code": exit_code,
+                }
+            )
+        )
+        return exit_code
+
+    # Sweep path (constant-delay or image sweeps) — still writes a run_manifest.
     try:
         compute_device = _host_compute_device(args)
     except ValueError as exc:
         parser.error(str(exc))
-    if args.latency_block_length is not None and args.latency_block_seed is None:
-        parser.error("--latency-block-length requires --latency-block-seed")
-    if args.latency_block_seed is not None and args.latency_block_length is None:
-        parser.error("--latency-block-seed requires --latency-block-length")
 
     try:
-        latency_profile = _resolve_latency_profile(args, repo_root)
+        latency_profile = _resolve_latency_profile(args, repo_root, candidate=candidate_key)
     except (ValueError, FileNotFoundError, OSError) as exc:
         logging.error("%s", exc)
-        label = args.profile_device or ("rpi5" if args.device == "rpi5" else None)
-        if label and "No compatible latency profile" not in str(exc):
-            logging.error(
-                "%s",
-                profiling_command_hint(
-                    device_label=label,
-                    candidate=args.candidate,
-                    recipe_id=args.profile_recipe_id or "RECIPE_ID",
-                ),
-            )
         return 2
 
     try:
@@ -570,7 +704,6 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    latency_values_ms: list[float]
     if args.latency_sweep_ms:
         latency_values_ms = [
             float(x.strip()) for x in args.latency_sweep_ms.split(",") if x.strip()
@@ -579,12 +712,9 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             parser.error("--latency-sweep-ms is empty")
         if any(v < 0 for v in latency_values_ms):
             parser.error("--latency-sweep-ms values must be >= 0")
-    elif using_profile:
-        latency_values_ms = [0.0]
     else:
         latency_values_ms = [args.latency_ms]
 
-    image_jobs: list[tuple[str | None, ImageDegradeConfig]]
     if args.image_sweep:
         if args.image_mode != ImageMode.NATIVE.value or args.capture_hw or args.jpeg_quality:
             parser.error("--image-sweep is mutually exclusive with explicit image mode flags")
@@ -594,61 +724,116 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
     if len(latency_values_ms) > 1 and len(image_jobs) > 1:
         parser.error("combine only one of --latency-sweep-ms or --image-sweep per invocation")
-    if using_profile and len(image_jobs) > 1:
-        parser.error("do not combine --image-sweep with latency profile replay")
+
+    try:
+        plan, _profile = resolve_run_plan(
+            model=model,
+            n_episodes=n_episodes,
+            output_dir=output_dir,
+            device=compute_device,
+            compute_device=compute_device,
+            latency_ms=0.0,
+            seeds=seeds,
+            repo_root=repo_root,
+            dry_run=args.dry_run,
+        )
+    except (ValueError, MissingPrerequisiteError) as exc:
+        logging.error("%s", exc)
+        return 2
+    plan.notes.append("sweep orchestration: constant-delay and/or image-mode grid")
+    write_run_manifest(
+        plan,
+        extra={
+            "latency_sweep_ms": latency_values_ms,
+            "image_sweep": args.image_sweep,
+            "n_jobs": len(latency_values_ms) * len(image_jobs),
+        },
+    )
+    print(output_dir / "run_manifest.json")
+    print(json.dumps(plan.to_dict(), indent=2, sort_keys=True))
+    if args.dry_run:
+        return 0
 
     exit_code = 0
-    for latency_ms in latency_values_ms:
-        for image_name, image_cfg in image_jobs:
-            run_dir = output_dir
-            if len(latency_values_ms) > 1:
-                run_dir = output_dir / f"latency_ms_{latency_ms:g}"
-            if image_name is not None:
-                run_dir = output_dir / image_name
-            if using_profile and latency_profile is not None:
-                run_dir = output_dir / "latency_profile_replay"
-            report = run_baseline(
-                RunRequest(
-                    candidate=args.candidate,
-                    seeds=seeds,
-                    output_dir=run_dir,
-                    device=compute_device,
-                    save_video=args.video,
-                    latency_s=0.0 if using_profile else latency_ms / 1000.0,
-                    latency_profile=latency_profile,
-                    latency_end_of_trace=args.latency_end_of_trace,
-                    latency_block_length=args.latency_block_length,
-                    latency_block_seed=args.latency_block_seed,
-                    image_cfg=image_cfg,
-                    repo_root=repo_root,
+    completed: list[dict[str, Any]] = []
+    try:
+        for latency_ms in latency_values_ms:
+            for image_name, image_cfg in image_jobs:
+                run_dir = output_dir
+                if len(latency_values_ms) > 1:
+                    run_dir = output_dir / f"latency_ms_{latency_ms:g}"
+                if image_name is not None:
+                    run_dir = output_dir / image_name
+                report = run_baseline(
+                    RunRequest(
+                        candidate=candidate_key,
+                        seeds=seeds,
+                        output_dir=run_dir,
+                        device=compute_device,
+                        save_video=args.video,
+                        latency_s=latency_ms / 1000.0,
+                        latency_profile=latency_profile,
+                        latency_end_of_trace=args.latency_end_of_trace,
+                        latency_block_length=args.latency_block_length,
+                        latency_block_seed=args.latency_block_seed,
+                        image_cfg=image_cfg,
+                        repo_root=repo_root,
+                    )
                 )
-            )
-            print(report)
-            print(
-                json.dumps(
-                    {
-                        "latency_ms": None if using_profile else latency_ms,
-                        "latency_mode": "trace_replay" if using_profile else "constant",
-                        "latency_profile": (
-                            str(latency_profile.path)
-                            if latency_profile is not None and latency_profile.path
-                            else None
-                        ),
-                        "image_mode": image_cfg.mode.value,
-                        "image_label": image_name,
-                        "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
-                        "report": str(report),
-                    }
+                print(report)
+                print(
+                    json.dumps(
+                        {
+                            "latency_ms": latency_ms,
+                            "latency_mode": "constant",
+                            "image_mode": image_cfg.mode.value,
+                            "image_label": image_name,
+                            "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
+                            "report": str(report),
+                        }
+                    )
                 )
-            )
-            payload = json.loads(report.read_text(encoding="utf-8"))
-            summary = payload.get("summary", {})
-            provenance = payload.get("provenance", {})
-            if provenance.get("env_created") is False:
-                exit_code = 2
-            if summary.get("n_runtime_error", 0) > 0 and summary.get("n_episodes_eligible", 0) == 0:
-                exit_code = 2
+                payload = json.loads(report.read_text(encoding="utf-8"))
+                summary = payload.get("summary", {})
+                provenance = payload.get("provenance", {})
+                completed.append({"report": str(report), "summary": summary})
+                if provenance.get("env_created") is False:
+                    exit_code = 2
+                if (
+                    summary.get("n_runtime_error", 0) > 0
+                    and summary.get("n_episodes_eligible", 0) == 0
+                ):
+                    exit_code = 2
+    except KeyboardInterrupt:
+        write_partial_diagnostics(
+            output_dir,
+            plan=plan.to_dict(),
+            completed=completed,
+            error="KeyboardInterrupt",
+            interrupted=True,
+        )
+        return 130
     return exit_code
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    try:
+        bundle = render_report(args.run_dir.resolve())
+    except (FileNotFoundError, ImportError, ValueError, OSError) as exc:
+        logging.error("%s", exc)
+        return 2
+    print(bundle.report_html)
+    print(
+        json.dumps(
+            {
+                "summary_md": str(bundle.summary_md),
+                "report_html": str(bundle.report_html),
+                "plots_dir": str(bundle.plots_dir),
+                "index": bundle.index,
+            }
+        )
+    )
+    return 0
 
 
 def _parse_condition_maps(items: list[str]) -> dict[str, Path]:
@@ -733,6 +918,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run":
         return _cmd_run(parser, args)
+    if args.command == "report":
+        return _cmd_report(args)
     if args.command == "export":
         return _cmd_export(args)
     if args.command == "profile":

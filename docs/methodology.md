@@ -291,3 +291,16 @@ count does not match the plan, or runtime errors leave the condition without a
 valid success-rate denominator under the plan’s rules. Summaries must show
 completed counts and errors and **suppress** that condition’s breakpoint
 decision rather than cherry-picking successful executions.
+
+## Reporting from saved records
+
+`breakpoint report RUN_DIR` renders `summary.md`, `report.html`, and static
+Matplotlib plots **only** from artifacts already on disk. Reporting must not
+download models, open a simulator, or rerun episodes. Missing series are labeled
+missing — never replaced with zeros or smooth fitted curves.
+
+The HTML overview is a compact printable page with links to raw artifacts. It
+must separate isolated-axis vs combined-stress results, label **simulated task
+outcomes** vs **hardware-measured timing**, and must not imply that simulation
+ran on a physical robot or that every numeric value came from the profiled
+device. Optional dependency: `pip install 'breakpoint-eval[report]'`.

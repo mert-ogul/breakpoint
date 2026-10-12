@@ -20,6 +20,9 @@ onnx = [
   "onnx>=1.16,<1.19",
   "onnxruntime>=1.19,<1.23",
 ]
+report = [
+  "matplotlib>=3.8,<3.11",
+]
 
 [project.scripts]
 breakpoint = "breakpoint_eval.cli:main"
