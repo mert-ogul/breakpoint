@@ -140,3 +140,32 @@ effective dimensions, compressed byte counts, and frame rate.
 
 CLI: `--image-mode`, `--capture-hw`, `--jpeg-quality`, and isolated smoke sweeps
 `--image-sweep resolution|jpeg` (mutually exclusive with a latency sweep).
+
+## ACT ONNX export and quantization
+
+`breakpoint export` exports the verified ACT **tensor** path only:
+
+| Inside ONNX | Outside ONNX |
+| --- | --- |
+| `normalize_inputs`, camera stack, `ACT.model` (eval, zero latent), `n_action_steps` slice, `unnormalize_outputs` | `preprocess_observation`, action queue, temporal ensembler, camera degrade, latency scheduler |
+
+Declared FP32 parity tolerances live in `export_tolerances.py` and are recorded in the
+artifact manifest **before** measurement. ONNX FP32 must pass shapes, finite outputs,
+and per-element / action-unit error gates on a held-out corpus against PyTorch FP32.
+Export-induced failure is investigated first. Paired closed-loop rollouts compare
+action traces when the simulator is available; GL/env errors are recorded, not faked.
+
+Quantized variants use pinned recipe ids (no silent switch after failure):
+
+- INT8: ORT static QDQ (`QUInt8` activations / `QInt8` weights, MinMax calibration) on
+  calibration seeds **disjoint** from evaluation seeds. Partial coverage is labeled;
+  it is not claimed as full-model INT8.
+- INT4: ORT `MatMulNBits` weight-only when the EP can load/run the graph. Activations
+  remain float. Unsupported INT4 is an explicit capability result — not fake-quant or
+  dequantized-float labeled as native INT4 execution.
+- FP16: optional capability check; not a mandatory CPU speedup.
+
+Each variant runs with its actual weights and runtime. Compare quantized outputs to the
+ONNX FP32 baseline and show PyTorch FP32 separately to expose export effects. Quantized
+policies are not required to preserve baseline task success; degradation is measured.
+Optional deps: `pip install 'breakpoint-eval[onnx]'` (`onnx`, `onnxruntime`).

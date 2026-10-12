@@ -1,4 +1,4 @@
-"""Thin CLI for Breakpoint. Subcommand: run."""
+"""Thin CLI for Breakpoint. Subcommands: run, export."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from breakpoint_eval.camera_degrade import (
 from breakpoint_eval.candidate_map import CANDIDATES
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.run_baseline import RunRequest, build_seeds, parse_seed_list, run_baseline
+from breakpoint_eval.run_export import ExportRequest, run_export
 from breakpoint_eval.stack import repo_root_from_package
 
 
@@ -102,10 +103,54 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
 
 
+def _add_export_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    parser = subparsers.add_parser(
+        "export",
+        help="Export verified ACT tensor path to ONNX; FP32 parity then optional quant variants",
+    )
+    parser.add_argument(
+        "--candidate",
+        default="act_aloha_transfer",
+        choices=sorted(c for c, s in CANDIDATES.items() if s.policy_type == "act"),
+        help="Verified ACT candidate",
+    )
+    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--device", choices=["cuda", "cpu", "mps"], default="cpu")
+    parser.add_argument(
+        "--calibration-seeds",
+        type=str,
+        default=None,
+        help="Comma-separated calibration seeds (disjoint from eval)",
+    )
+    parser.add_argument(
+        "--eval-seeds",
+        type=str,
+        default=None,
+        help="Comma-separated held-out evaluation seeds",
+    )
+    parser.add_argument(
+        "--closed-loop-seeds",
+        type=str,
+        default=None,
+        help="Comma-separated seeds for paired closed-loop compare",
+    )
+    parser.add_argument(
+        "--synthetic-corpus",
+        action="store_true",
+        help="Skip simulator capture; use shape-matched synthetic observations",
+    )
+    parser.add_argument("--no-int8", action="store_true")
+    parser.add_argument("--no-int4", action="store_true")
+    parser.add_argument("--no-fp16", action="store_true")
+    parser.add_argument("--no-closed-loop", action="store_true")
+    parser.add_argument("--repo-root", type=Path, default=None)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="breakpoint", description="Breakpoint evaluation CLI")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_run_parser(sub)
+    _add_export_parser(sub)
     return parser
 
 
@@ -130,14 +175,59 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, ImageDegradeConfig]]:
     raise ValueError(kind)
 
 
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = build_parser()
-    args = parser.parse_args(argv)
+def _cmd_export(args: argparse.Namespace) -> int:
+    repo_root = (args.repo_root or repo_root_from_package()).resolve()
+    output_dir = args.output_dir
+    if output_dir is None:
+        output_dir = repo_root / "artifacts" / "export" / args.candidate
+    try:
+        calib = parse_seed_list(args.calibration_seeds) if args.calibration_seeds else None
+        eval_seeds = parse_seed_list(args.eval_seeds) if args.eval_seeds else None
+        closed = parse_seed_list(args.closed_loop_seeds) if args.closed_loop_seeds else None
+        manifest = run_export(
+            ExportRequest(
+                candidate=args.candidate,
+                output_dir=output_dir.resolve(),
+                device=args.device,
+                calibration_seeds=calib,
+                eval_seeds=eval_seeds,
+                closed_loop_seeds=closed,
+                prefer_simulator_corpus=not args.synthetic_corpus,
+                attempt_int8=not args.no_int8,
+                attempt_int4=not args.no_int4,
+                attempt_fp16=not args.no_fp16,
+                run_closed_loop=not args.no_closed_loop,
+                repo_root=repo_root,
+            )
+        )
+    except (ImportError, ValueError, RuntimeError) as exc:
+        logging.error("%s", exc)
+        return 2
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    print(manifest)
+    print(
+        json.dumps(
+            {
+                "manifest": str(manifest),
+                "onnx_fp32_parity_passed": payload.get("comparisons", {})
+                .get("onnx_fp32_vs_pytorch_fp32", {})
+                .get("passed"),
+                "variants": [
+                    {"label": v["label"], "status": v["status"], "recipe_id": v["recipe_id"]}
+                    for v in payload.get("variants", [])
+                ],
+                "closed_loop_status": payload.get("closed_loop_onnx_fp32_vs_pytorch", {}).get(
+                    "status"
+                ),
+            }
+        )
+    )
+    if not payload.get("comparisons", {}).get("onnx_fp32_vs_pytorch_fp32", {}).get("passed"):
+        return 1
+    return 0
 
-    if args.command != "run":
-        parser.error(f"Unsupported command {args.command!r}")
 
+def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     seeds_arg = parse_seed_list(args.seeds) if args.seeds is not None else None
     try:
         seeds = build_seeds(
@@ -225,6 +315,19 @@ def main(argv: list[str] | None = None) -> int:
             if summary.get("n_runtime_error", 0) > 0 and summary.get("n_episodes_eligible", 0) == 0:
                 exit_code = 2
     return exit_code
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "run":
+        return _cmd_run(parser, args)
+    if args.command == "export":
+        return _cmd_export(args)
+    parser.error(f"Unsupported command {args.command!r}")
+    return 2
 
 
 if __name__ == "__main__":
