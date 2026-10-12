@@ -19,9 +19,11 @@ from breakpoint_eval.camera_degrade import (
 from breakpoint_eval.latency_scheduler import (
     CHUNK_ARRIVAL_POLICY,
     LatencyConfig,
+    LatencyMode,
     LatencyScheduler,
     initial_hold_command_from_obs,
 )
+from breakpoint_eval.latency_trace import LatencyTraceReplayer, TraceExhaustedError
 from breakpoint_eval.policy_adapter import ActionStep, PolicyAdapter
 from breakpoint_eval.sim_env import preprocess_observation
 
@@ -77,8 +79,10 @@ class EpisodeResult:
     steps: list[ControlStepRecord] = field(default_factory=list)
     video_path: str | None = None
     latency_s: float = 0.0
+    latency_mode: str = LatencyMode.CONSTANT.value
     chunk_arrival_policy: str = CHUNK_ARRIVAL_POLICY
     latency_events: list[dict[str, Any]] = field(default_factory=list)
+    latency_trace_provenance: dict[str, Any] = field(default_factory=dict)
     n_underflows: int = 0
     n_missed_deadlines: int = 0
     image_mode: str = ImageMode.NATIVE.value
@@ -146,6 +150,7 @@ def run_episode(
     episode_index: int,
     render_frames: list[np.ndarray] | None = None,
     latency_s: float = 0.0,
+    latency_replayer: LatencyTraceReplayer | None = None,
     image_cfg: ImageDegradeConfig | None = None,
 ) -> EpisodeResult:
     """Run one episode; uses env is_success, not reward > 0.
@@ -155,8 +160,12 @@ def run_episode(
     time is never added to ``latency_s``.
 
     Image degradation runs on raw rendered pixels before policy normalization and
-    is independent of latency injection.
+    is independent of latency injection. Trace replay is distinct from constant
+    delay: pass ``latency_replayer`` (with ``latency_s=0``) to inject measured
+    ordered latencies.
     """
+    if latency_replayer is not None and latency_s != 0.0:
+        raise ValueError("trace replay requires latency_s=0 (delays come from the profile)")
     if latency_s < 0:
         raise ValueError("latency_s must be >= 0")
     cfg = image_cfg or ImageDegradeConfig()
@@ -168,6 +177,7 @@ def run_episode(
         episode_index=episode_index,
         render_frames=render_frames,
         latency_s=latency_s,
+        latency_replayer=latency_replayer,
         image_cfg=cfg,
     )
 
@@ -181,6 +191,7 @@ def _run_episode_with_scheduler(
     render_frames: list[np.ndarray] | None,
     latency_s: float,
     image_cfg: ImageDegradeConfig,
+    latency_replayer: LatencyTraceReplayer | None = None,
 ) -> EpisodeResult:
     chunk_info = adapter.chunk_info
     steps: list[ControlStepRecord] = []
@@ -199,14 +210,26 @@ def _run_episode_with_scheduler(
         adapter.reset()
         observation, _info = env.reset(seed=[seed])
         initial = initial_hold_command_from_obs(observation)
-        scheduler = LatencyScheduler(
-            LatencyConfig(
+        if latency_replayer is not None:
+            lat_cfg = LatencyConfig(
+                latency_s=0.0,
+                control_period_s=chunk_info.control_period_s,
+                n_action_steps=chunk_info.n_action_steps,
+                mode=LatencyMode.TRACE_REPLAY,
+                chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
+            )
+        else:
+            lat_cfg = LatencyConfig(
                 latency_s=latency_s,
                 control_period_s=chunk_info.control_period_s,
                 n_action_steps=chunk_info.n_action_steps,
+                mode=LatencyMode.CONSTANT,
                 chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
-            ),
+            )
+        scheduler = LatencyScheduler(
+            lat_cfg,
             initial_command=initial,
+            latency_replayer=latency_replayer,
         )
         if render_frames is not None:
             frame = env.call("render")[0]
@@ -233,10 +256,16 @@ def _run_episode_with_scheduler(
                     outcome = EpisodeOutcome.POLICY_FAILED
                     LOGGER.warning("Policy failure at step %s: %s", len(steps), exc)
                     break
-                scheduler.submit_inference(
-                    request_time_s=scheduler.sim_time_s,
-                    chunk=action_chunk,
-                )
+                try:
+                    scheduler.submit_inference(
+                        request_time_s=scheduler.sim_time_s,
+                        chunk=action_chunk,
+                    )
+                except TraceExhaustedError as exc:
+                    runtime_error = f"{type(exc).__name__}: {exc}"
+                    outcome = EpisodeOutcome.RUNTIME_ERROR
+                    LOGGER.warning("Latency trace exhausted at step %s: %s", len(steps), exc)
+                    break
                 requested = True
 
             decision = scheduler.decide_apply(requested_this_step=requested)
@@ -313,8 +342,16 @@ def _run_episode_with_scheduler(
         n_action_steps=chunk_info.n_action_steps,
         steps=steps,
         latency_s=latency_s,
+        latency_mode=(
+            LatencyMode.TRACE_REPLAY.value
+            if latency_replayer is not None
+            else LatencyMode.CONSTANT.value
+        ),
         chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
         latency_events=scheduler.events_as_dicts() if scheduler is not None else [],
+        latency_trace_provenance=(
+            scheduler.provenance().get("trace_replay", {}) if scheduler is not None else {}
+        ),
         n_underflows=scheduler.n_underflows if scheduler is not None else 0,
         n_missed_deadlines=scheduler.n_missed_deadlines if scheduler is not None else 0,
         image_mode=image_cfg.mode.value,

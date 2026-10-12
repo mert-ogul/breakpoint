@@ -10,6 +10,7 @@ from typing import Any
 
 from breakpoint_eval.camera_degrade import ImageDegradeConfig, ImageMode, config_provenance
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
+from breakpoint_eval.latency_trace import LatencyProfile, LatencyTraceReplayer
 from breakpoint_eval.policy_adapter import PolicyAdapter
 from breakpoint_eval.run_episode import EpisodeOutcome, EpisodeResult, run_episode
 from breakpoint_eval.sim_env import (
@@ -38,6 +39,10 @@ class RunRequest:
     device: str
     save_video: bool
     latency_s: float = 0.0
+    latency_profile: LatencyProfile | None = None
+    latency_end_of_trace: str = "fail"
+    latency_block_length: int | None = None
+    latency_block_seed: int | None = None
     image_cfg: ImageDegradeConfig | None = None
     repo_root: Path | None = None
 
@@ -62,6 +67,10 @@ def build_seeds(*, n_episodes: int | None, seeds: list[int] | None, start_seed: 
 
 
 def run_baseline(req: RunRequest) -> Path:
+    if req.latency_profile is not None and req.latency_s != 0.0:
+        raise ValueError(
+            "constant --latency-ms and measured --latency-profile are mutually exclusive"
+        )
     repo_root = (req.repo_root or repo_root_from_package()).resolve()
     ensure_lerobot_on_path(repo_root)
     spec = resolve_candidate(req.candidate)
@@ -74,6 +83,22 @@ def run_baseline(req: RunRequest) -> Path:
     image_cfg = req.image_cfg or ImageDegradeConfig(mode=ImageMode.NATIVE)
     if image_cfg.frame_rate_hz is None:
         image_cfg = replace(image_cfg, frame_rate_hz=float(env_cfg.fps))
+
+    latency_replayer: LatencyTraceReplayer | None = None
+    if req.latency_profile is not None:
+        from breakpoint_eval.latency_trace import EndOfTraceBehavior, assert_profile_compatible
+
+        assert_profile_compatible(
+            req.latency_profile,
+            candidate=req.candidate,
+            chunk_horizon=adapter.chunk_info.n_action_steps,
+        )
+        latency_replayer = LatencyTraceReplayer.from_profile(
+            req.latency_profile,
+            end_of_trace=EndOfTraceBehavior(req.latency_end_of_trace),
+            block_length=req.latency_block_length,
+            block_resample_seed=req.latency_block_seed,
+        )
 
     provenance: dict[str, Any] = {
         "candidate": req.candidate,
@@ -94,10 +119,16 @@ def run_baseline(req: RunRequest) -> Path:
         "temporal_ensemble_coeff": adapter.chunk_info.temporal_ensemble_coeff,
         "save_video": req.save_video,
         "policy_loaded": True,
-        "latency_s": req.latency_s,
-        "latency_ms": req.latency_s * 1000.0,
+        "latency_s": req.latency_s if latency_replayer is None else None,
+        "latency_ms": (req.latency_s * 1000.0) if latency_replayer is None else None,
+        "latency_mode": "trace_replay" if latency_replayer is not None else "constant",
+        "latency_profile_identity": (
+            req.latency_profile.identity() if req.latency_profile is not None else None
+        ),
         "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
         "host_compute_added_to_latency": False,
+        "constant_delay_distinct_from_device_replay": True,
+        "simulator_policy_on_host_latency_may_be_from_profile_device": True,
         "image_degrade": config_provenance(image_cfg),
         "image_degrade_separate_from_latency": True,
     }
@@ -146,7 +177,8 @@ def run_baseline(req: RunRequest) -> Path:
                 seed=seed,
                 episode_index=episode_index,
                 render_frames=frames,
-                latency_s=req.latency_s,
+                latency_s=0.0 if latency_replayer is not None else req.latency_s,
+                latency_replayer=latency_replayer,
                 image_cfg=image_cfg,
             )
             if req.save_video and frames:

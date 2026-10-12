@@ -1,6 +1,7 @@
-"""Discrete-event constant-latency scheduler on simulation/control time.
+"""Discrete-event latency scheduler on simulation/control time.
 
-Host wall time spent computing a chunk is never added to the simulated delay.
+Supports constant delay and ordered device-trace replay. Host wall time spent
+computing a chunk is never added to the simulated delay.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from enum import StrEnum
 from typing import Any
 
 import numpy as np
+
+from breakpoint_eval.latency_trace import LatencyTraceReplayer
 
 # Fixed for ALOHA absolute joint-target chunks; recorded in every result.
 CHUNK_ARRIVAL_POLICY = "discard_stale"
@@ -21,15 +24,21 @@ class SchedulerEventType(StrEnum):
     INFERENCE_REQUEST = "inference_request"
 
 
+class LatencyMode(StrEnum):
+    CONSTANT = "constant"
+    TRACE_REPLAY = "trace_replay"
+
+
 @dataclass(frozen=True)
 class LatencyConfig:
-    latency_s: float
     control_period_s: float
     n_action_steps: int
+    latency_s: float = 0.0
+    mode: LatencyMode = LatencyMode.CONSTANT
     chunk_arrival_policy: str = CHUNK_ARRIVAL_POLICY
 
     def __post_init__(self) -> None:
-        if self.latency_s < 0:
+        if self.mode is LatencyMode.CONSTANT and self.latency_s < 0:
             raise ValueError("latency_s must be >= 0")
         if self.control_period_s <= 0:
             raise ValueError("control_period_s must be > 0")
@@ -40,6 +49,9 @@ class LatencyConfig:
                 f"Unsupported chunk_arrival_policy={self.chunk_arrival_policy!r}; "
                 f"only {CHUNK_ARRIVAL_POLICY!r} is implemented"
             )
+        if self.mode is LatencyMode.TRACE_REPLAY and self.latency_s != 0.0:
+            # Constant field unused in trace mode; keep at 0 to avoid mixed semantics.
+            raise ValueError("TRACE_REPLAY mode requires latency_s=0 (delay comes from the trace)")
 
 
 @dataclass
@@ -91,8 +103,19 @@ class ApplyDecision:
 class LatencyScheduler:
     """One-in-flight inference, upstream request-when-empty cadence, discard_stale."""
 
-    def __init__(self, config: LatencyConfig, *, initial_command: np.ndarray) -> None:
+    def __init__(
+        self,
+        config: LatencyConfig,
+        *,
+        initial_command: np.ndarray,
+        latency_replayer: LatencyTraceReplayer | None = None,
+    ) -> None:
+        if config.mode is LatencyMode.TRACE_REPLAY and latency_replayer is None:
+            raise ValueError("TRACE_REPLAY mode requires a LatencyTraceReplayer")
+        if config.mode is LatencyMode.CONSTANT and latency_replayer is not None:
+            raise ValueError("constant latency mode cannot take a latency_replayer")
         self.config = config
+        self._replayer = latency_replayer
         self._initial_command = np.asarray(initial_command, dtype=np.float32).copy()
         self._last_applied = self._initial_command.copy()
         self._pending: PendingInference | None = None
@@ -104,6 +127,7 @@ class LatencyScheduler:
         self.n_fresh_chunks = 0
         self.n_underflows = 0
         self.n_missed_deadlines = 0
+        self._last_latency_s: float | None = None
 
     def reset(self, *, initial_command: np.ndarray) -> None:
         self._initial_command = np.asarray(initial_command, dtype=np.float32).copy()
@@ -117,6 +141,7 @@ class LatencyScheduler:
         self.n_fresh_chunks = 0
         self.n_underflows = 0
         self.n_missed_deadlines = 0
+        self._last_latency_s = None
 
     def mark_terminated(self) -> None:
         """Stop releasing or applying buffered/pending actions after episode end."""
@@ -150,7 +175,12 @@ class LatencyScheduler:
             raise ValueError(
                 f"chunk length {chunk_arr.shape[0]} != n_action_steps {self.config.n_action_steps}"
             )
-        ready = request_time_s + self.config.latency_s
+        if self._replayer is not None:
+            latency_s = self._replayer.next_latency_s()
+        else:
+            latency_s = float(self.config.latency_s)
+        self._last_latency_s = latency_s
+        ready = request_time_s + latency_s
         self._pending = PendingInference(
             request_time_s=request_time_s,
             ready_time_s=ready,
@@ -164,7 +194,8 @@ class LatencyScheduler:
                 event_type=SchedulerEventType.INFERENCE_REQUEST,
                 detail={
                     "ready_time_s": ready,
-                    "latency_s": self.config.latency_s,
+                    "latency_s": latency_s,
+                    "latency_mode": self.config.mode.value,
                     "n_actions": int(chunk_arr.shape[0]),
                 },
             )
@@ -280,8 +311,12 @@ class LatencyScheduler:
         return decision
 
     def provenance(self) -> dict[str, Any]:
-        return {
-            "latency_s": self.config.latency_s,
+        payload: dict[str, Any] = {
+            "latency_mode": self.config.mode.value,
+            "latency_s": self.config.latency_s
+            if self.config.mode is LatencyMode.CONSTANT
+            else None,
+            "last_latency_s": self._last_latency_s,
             "control_period_s": self.config.control_period_s,
             "n_action_steps": self.config.n_action_steps,
             "chunk_arrival_policy": self.config.chunk_arrival_policy,
@@ -292,6 +327,9 @@ class LatencyScheduler:
             "n_underflows": self.n_underflows,
             "n_missed_deadlines": self.n_missed_deadlines,
         }
+        if self._replayer is not None:
+            payload["trace_replay"] = self._replayer.provenance()
+        return payload
 
     def events_as_dicts(self) -> list[dict[str, Any]]:
         return [e.to_dict() for e in self.events]

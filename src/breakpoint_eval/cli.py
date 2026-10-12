@@ -1,4 +1,4 @@
-"""Thin CLI for Breakpoint. Subcommands: run, export."""
+"""Thin CLI for Breakpoint. Subcommands: run, export, profile."""
 
 from __future__ import annotations
 
@@ -14,9 +14,16 @@ from breakpoint_eval.camera_degrade import (
     resolution_smoke_configs,
 )
 from breakpoint_eval.candidate_map import CANDIDATES
+from breakpoint_eval.device_profile import DEFAULT_MEASURED, DEFAULT_WARMUPS
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
+from breakpoint_eval.latency_trace import (
+    load_latency_profile,
+    profiling_command_hint,
+    require_unique_device_profile,
+)
 from breakpoint_eval.run_baseline import RunRequest, build_seeds, parse_seed_list, run_baseline
 from breakpoint_eval.run_export import ExportRequest, run_export
+from breakpoint_eval.run_profile import ProfileCliRequest, run_profile
 from breakpoint_eval.stack import repo_root_from_package
 
 
@@ -52,7 +59,21 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         default=None,
         help="Directory for provenance + episode results",
     )
-    parser.add_argument("--device", choices=["cuda", "cpu", "mps"], default="mps")
+    parser.add_argument(
+        "--device",
+        choices=["cuda", "cpu", "mps", "rpi5"],
+        default="mps",
+        help=(
+            "Policy compute device, or rpi5 to resolve measured latency from "
+            "profiles/rpi5/ (policy still runs on host; default host compute=cpu)"
+        ),
+    )
+    parser.add_argument(
+        "--compute-device",
+        choices=["cuda", "cpu", "mps"],
+        default=None,
+        help="Host policy compute device when --device rpi5 (default: cpu)",
+    )
     parser.add_argument(
         "--video",
         action=argparse.BooleanOptionalAction,
@@ -69,7 +90,49 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         "--latency-sweep-ms",
         type=str,
         default=None,
-        help="Comma-separated latency_ms values; writes one report subdir per value",
+        help="Comma-separated constant latency_ms values (distinct from device-profile replay)",
+    )
+    parser.add_argument(
+        "--latency-profile",
+        type=Path,
+        default=None,
+        help="Explicit path to a measured device latency profile JSON",
+    )
+    parser.add_argument(
+        "--profile-device",
+        type=str,
+        default=None,
+        help="Resolve an unambiguous profile from profiles/<label>/ (alternative to --device rpi5)",
+    )
+    parser.add_argument(
+        "--profile-variant",
+        type=str,
+        default=None,
+        help="Variant label filter when resolving --profile-device (e.g. onnx_fp32)",
+    )
+    parser.add_argument(
+        "--profile-recipe-id",
+        type=str,
+        default=None,
+        help="Precision recipe filter when resolving --profile-device",
+    )
+    parser.add_argument(
+        "--latency-end-of-trace",
+        choices=["fail", "cycle"],
+        default="fail",
+        help="Behavior when a measured latency trace is exhausted (default: fail)",
+    )
+    parser.add_argument(
+        "--latency-block-length",
+        type=int,
+        default=None,
+        help="Optional block-resampling length (requires --latency-block-seed)",
+    )
+    parser.add_argument(
+        "--latency-block-seed",
+        type=int,
+        default=None,
+        help="Seed for optional block resampling of a measured trace",
     )
     parser.add_argument(
         "--image-mode",
@@ -146,11 +209,65 @@ def _add_export_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     parser.add_argument("--repo-root", type=Path, default=None)
 
 
+def _add_profile_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    parser = subparsers.add_parser(
+        "profile",
+        help=(
+            "Measure ONNX Runtime policy inference latency on this device "
+            "(no simulator install required)"
+        ),
+    )
+    parser.add_argument(
+        "--candidate",
+        default="act_aloha_transfer",
+        choices=sorted(c for c, s in CANDIDATES.items() if s.policy_type == "act"),
+    )
+    parser.add_argument("--model", type=Path, required=True, help="Exported ONNX model path")
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        required=True,
+        help="Representative recorded inputs (.npz from breakpoint export)",
+    )
+    parser.add_argument(
+        "--reference-chunks",
+        type=Path,
+        default=None,
+        help="Optional reference action chunks for pre-timing output validation",
+    )
+    parser.add_argument("--device-label", type=str, required=True, help="e.g. rpi5, mac_m3")
+    parser.add_argument(
+        "--recipe-id",
+        type=str,
+        required=True,
+        help="Pinned precision recipe id (e.g. torch_onnx_export_fp32_opset17)",
+    )
+    parser.add_argument("--variant-label", type=str, default="onnx_fp32")
+    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--n-warmup", type=int, default=DEFAULT_WARMUPS)
+    parser.add_argument("--n-measured", type=int, default=DEFAULT_MEASURED)
+    parser.add_argument(
+        "--providers",
+        type=str,
+        default="CPUExecutionProvider",
+        help="Comma-separated ORT execution providers",
+    )
+    parser.add_argument("--intra-op-threads", type=int, default=None)
+    parser.add_argument("--inter-op-threads", type=int, default=None)
+    parser.add_argument("--chunk-horizon", type=int, default=None)
+    parser.add_argument("--hub-revision", type=str, default=None)
+    parser.add_argument("--cooling-note", type=str, default=None)
+    parser.add_argument("--power-note", type=str, default=None)
+    parser.add_argument("--load-note", type=str, default=None)
+    parser.add_argument("--repo-root", type=Path, default=None)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="breakpoint", description="Breakpoint evaluation CLI")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_run_parser(sub)
     _add_export_parser(sub)
+    _add_profile_parser(sub)
     return parser
 
 
@@ -227,6 +344,95 @@ def _cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_latency_profile(args: argparse.Namespace, repo_root: Path):
+    profile_device = args.profile_device
+    if args.device == "rpi5":
+        if profile_device is not None and profile_device != "rpi5":
+            raise ValueError("--device rpi5 conflicts with --profile-device")
+        profile_device = "rpi5"
+    if args.latency_profile is not None and profile_device is not None:
+        raise ValueError("use only one of --latency-profile or --device/--profile-device replay")
+    if args.latency_profile is not None:
+        return load_latency_profile(Path(args.latency_profile).resolve())
+    if profile_device is not None:
+        profiles_dir = repo_root / "profiles" / profile_device
+        path = require_unique_device_profile(
+            profiles_dir,
+            device_label=profile_device,
+            candidate=args.candidate,
+            variant_label=args.profile_variant,
+            precision_recipe=args.profile_recipe_id,
+        )
+        return load_latency_profile(path)
+    return None
+
+
+def _host_compute_device(args: argparse.Namespace) -> str:
+    if args.device == "rpi5":
+        return args.compute_device or "cpu"
+    if args.compute_device is not None and args.compute_device != args.device:
+        raise ValueError("--compute-device only applies with --device rpi5")
+    return args.device
+
+
+def _cmd_profile(args: argparse.Namespace) -> int:
+    repo_root = (args.repo_root or repo_root_from_package()).resolve()
+    output_dir = args.output_dir
+    if output_dir is None:
+        output_dir = repo_root / "profiles" / args.device_label
+    providers = tuple(p.strip() for p in args.providers.split(",") if p.strip())
+    if not providers:
+        logging.error("--providers is empty")
+        return 2
+    try:
+        path = run_profile(
+            ProfileCliRequest(
+                model_path=args.model.resolve(),
+                corpus_path=args.corpus.resolve(),
+                output_dir=output_dir.resolve(),
+                device_label=args.device_label,
+                candidate=args.candidate,
+                recipe_id=args.recipe_id,
+                variant_label=args.variant_label,
+                reference_chunks_path=(
+                    args.reference_chunks.resolve() if args.reference_chunks else None
+                ),
+                n_warmup=args.n_warmup,
+                n_measured=args.n_measured,
+                providers=providers,
+                intra_op_num_threads=args.intra_op_threads,
+                inter_op_num_threads=args.inter_op_threads,
+                cooling_note=args.cooling_note,
+                power_note=args.power_note,
+                load_note=args.load_note,
+                hub_revision=args.hub_revision,
+                chunk_horizon=args.chunk_horizon,
+            )
+        )
+    except (ImportError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        logging.error("%s", exc)
+        return 2
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    summary = payload.get("measurements", {}).get("summary", {})
+    print(path)
+    print(
+        json.dumps(
+            {
+                "profile": str(path),
+                "device_label": payload.get("device_label"),
+                "n_warmup": payload.get("measurements", {}).get("n_warmup"),
+                "n_measured": summary.get("count"),
+                "median_s": summary.get("median_s"),
+                "p95_s": summary.get("p95_s"),
+                "p99_s": summary.get("p99_s"),
+                "validation_passed": payload.get("output_validation", {}).get("passed"),
+                "timed_boundary": payload.get("timed_boundary"),
+            }
+        )
+    )
+    return 0
+
+
 def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     seeds_arg = parse_seed_list(args.seeds) if args.seeds is not None else None
     try:
@@ -247,6 +453,40 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.latency_ms < 0:
         parser.error("--latency-ms must be >= 0")
 
+    using_profile = (
+        args.latency_profile is not None or args.profile_device is not None or args.device == "rpi5"
+    )
+    if using_profile and (args.latency_ms != 0.0 or args.latency_sweep_ms):
+        parser.error(
+            "constant --latency-ms/--latency-sweep-ms is distinct from measured "
+            "device replay; do not combine with --latency-profile/--device rpi5"
+        )
+
+    try:
+        compute_device = _host_compute_device(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if args.latency_block_length is not None and args.latency_block_seed is None:
+        parser.error("--latency-block-length requires --latency-block-seed")
+    if args.latency_block_seed is not None and args.latency_block_length is None:
+        parser.error("--latency-block-seed requires --latency-block-length")
+
+    try:
+        latency_profile = _resolve_latency_profile(args, repo_root)
+    except (ValueError, FileNotFoundError, OSError) as exc:
+        logging.error("%s", exc)
+        label = args.profile_device or ("rpi5" if args.device == "rpi5" else None)
+        if label and "No compatible latency profile" not in str(exc):
+            logging.error(
+                "%s",
+                profiling_command_hint(
+                    device_label=label,
+                    candidate=args.candidate,
+                    recipe_id=args.profile_recipe_id or "RECIPE_ID",
+                ),
+            )
+        return 2
+
     try:
         base_image_cfg = _build_image_cfg(args)
     except ValueError as exc:
@@ -261,6 +501,8 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             parser.error("--latency-sweep-ms is empty")
         if any(v < 0 for v in latency_values_ms):
             parser.error("--latency-sweep-ms values must be >= 0")
+    elif using_profile:
+        latency_values_ms = [0.0]
     else:
         latency_values_ms = [args.latency_ms]
 
@@ -274,6 +516,8 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
     if len(latency_values_ms) > 1 and len(image_jobs) > 1:
         parser.error("combine only one of --latency-sweep-ms or --image-sweep per invocation")
+    if using_profile and len(image_jobs) > 1:
+        parser.error("do not combine --image-sweep with latency profile replay")
 
     exit_code = 0
     for latency_ms in latency_values_ms:
@@ -283,14 +527,20 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                 run_dir = output_dir / f"latency_ms_{latency_ms:g}"
             if image_name is not None:
                 run_dir = output_dir / image_name
+            if using_profile and latency_profile is not None:
+                run_dir = output_dir / "latency_profile_replay"
             report = run_baseline(
                 RunRequest(
                     candidate=args.candidate,
                     seeds=seeds,
                     output_dir=run_dir,
-                    device=args.device,
+                    device=compute_device,
                     save_video=args.video,
-                    latency_s=latency_ms / 1000.0,
+                    latency_s=0.0 if using_profile else latency_ms / 1000.0,
+                    latency_profile=latency_profile,
+                    latency_end_of_trace=args.latency_end_of_trace,
+                    latency_block_length=args.latency_block_length,
+                    latency_block_seed=args.latency_block_seed,
                     image_cfg=image_cfg,
                     repo_root=repo_root,
                 )
@@ -299,7 +549,13 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             print(
                 json.dumps(
                     {
-                        "latency_ms": latency_ms,
+                        "latency_ms": None if using_profile else latency_ms,
+                        "latency_mode": "trace_replay" if using_profile else "constant",
+                        "latency_profile": (
+                            str(latency_profile.path)
+                            if latency_profile is not None and latency_profile.path
+                            else None
+                        ),
                         "image_mode": image_cfg.mode.value,
                         "image_label": image_name,
                         "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
@@ -326,6 +582,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_run(parser, args)
     if args.command == "export":
         return _cmd_export(args)
+    if args.command == "profile":
+        return _cmd_profile(args)
     parser.error(f"Unsupported command {args.command!r}")
     return 2
 

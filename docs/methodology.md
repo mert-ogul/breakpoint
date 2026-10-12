@@ -117,6 +117,31 @@ device and seed are recorded in provenance. Stub/unit tests use exact equality.
 - `time.sleep` / wall-clock pauses
 - Adding measured host inference duration on top of configured `L`
 - Changing chunk arrival policy between runs without recording it
+- Sampling latency from a normal distribution or substituting only a mean for a
+  measured device trace
+
+## Device profiling and trace replay
+
+`breakpoint profile` measures **ONNX Runtime** policy computation on the local
+machine **without** simulator dependencies. It times only
+`InferenceSession.run` for batch size 1 on representative recorded corpus
+inputs. It does **not** time random matmuls or action-queue dequeue. Defaults:
+50 warmup calls (excluded) then 1000 measured calls (ordered sequence retained).
+
+Profiles record device label, host CPU/OS, ORT provider/threads, model hash,
+precision recipe, input shapes/corpus hash, chunk horizon, timed boundary,
+median/p95/p99/count, and the raw latency sequence. Temperature is recorded when
+the OS exposes it; missing telemetry is not fabricated. Manual cooling/power/load
+notes are optional. Output validation on the profiling device must pass before
+timings are trusted.
+
+Constant `--latency-ms` sweeps remain distinct from measured replay. Replay uses
+`--latency-profile PATH` or `--device rpi5` (resolves an **unambiguous** match
+under `profiles/rpi5/`). Missing profiles print the `breakpoint profile …`
+command; they do not invent latency numbers or auto-connect to a device. Default
+end-of-trace behavior is **fail**; explicit `cycle` or seeded block resampling
+may be requested. Simulator policy outputs may still run on the host while
+latency is replayed from another device’s profile.
 
 ## Camera degradation (visual quality only)
 
