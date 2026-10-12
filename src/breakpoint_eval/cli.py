@@ -15,6 +15,20 @@ from breakpoint_eval.camera_degrade import (
 )
 from breakpoint_eval.candidate_map import CANDIDATES
 from breakpoint_eval.device_profile import DEFAULT_MEASURED, DEFAULT_WARMUPS
+from breakpoint_eval.experiment_plan import (
+    N_EPISODES_FULL,
+    N_EPISODES_SMOKE,
+    ExperimentAxis,
+    PlanPhase,
+    make_isolated_plan,
+    write_experiment_plan,
+)
+from breakpoint_eval.experiment_summary import (
+    DEFAULT_BASELINE_SUCCESS_FLOOR,
+    DEFAULT_BOOTSTRAP_SEED,
+    DEFAULT_BREAKPOINT_RATIO,
+    summarize_from_plan_file,
+)
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.latency_trace import (
     load_latency_profile,
@@ -262,12 +276,76 @@ def _add_profile_parser(subparsers: argparse._SubParsersAction[argparse.Argument
     parser.add_argument("--repo-root", type=Path, default=None)
 
 
+def _add_plan_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    parser = subparsers.add_parser(
+        "plan",
+        help="Write a fixed isolated-axis experiment plan (paired seeds + condition grid)",
+    )
+    parser.add_argument(
+        "--candidate",
+        default="act_aloha_transfer",
+        choices=sorted(CANDIDATES),
+    )
+    parser.add_argument(
+        "--axis",
+        required=True,
+        choices=[a.value for a in ExperimentAxis if a is not ExperimentAxis.COMBINED],
+    )
+    parser.add_argument(
+        "--phase",
+        choices=[p.value for p in PlanPhase],
+        default=PlanPhase.EXPLORATORY.value,
+    )
+    parser.add_argument(
+        "--n-episodes",
+        type=int,
+        default=None,
+        help=f"Default full={N_EPISODES_FULL}, smoke={N_EPISODES_SMOKE}",
+    )
+    parser.add_argument("--env-seed-start", type=int, default=1000)
+    parser.add_argument("--policy-seed-offset", type=int, default=1_000_000)
+    parser.add_argument("--confirms-plan-id", type=str, default=None)
+    parser.add_argument("--plan-id", type=str, default=None)
+    parser.add_argument("--output", type=Path, required=True, help="Path for experiment_plan.json")
+
+
+def _add_summarize_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    parser = subparsers.add_parser(
+        "summarize",
+        help="Summarize existing run_report.json records against an experiment plan",
+    )
+    parser.add_argument("--plan", type=Path, required=True)
+    parser.add_argument(
+        "--condition",
+        action="append",
+        default=[],
+        metavar="ID=PATH",
+        help="Map condition_id to run_report.json (repeatable)",
+    )
+    parser.add_argument(
+        "--ratio",
+        type=float,
+        default=DEFAULT_BREAKPOINT_RATIO,
+        help="Below-threshold when p_c < ratio * p_baseline (default 0.8)",
+    )
+    parser.add_argument(
+        "--baseline-success-floor",
+        type=float,
+        default=DEFAULT_BASELINE_SUCCESS_FLOOR,
+        help="Weak-baseline floor for headline suppression (default 0.5)",
+    )
+    parser.add_argument("--bootstrap-seed", type=int, default=DEFAULT_BOOTSTRAP_SEED)
+    parser.add_argument("--output", type=Path, required=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="breakpoint", description="Breakpoint evaluation CLI")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_run_parser(sub)
     _add_export_parser(sub)
     _add_profile_parser(sub)
+    _add_plan_parser(sub)
+    _add_summarize_parser(sub)
     return parser
 
 
@@ -573,6 +651,81 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     return exit_code
 
 
+def _parse_condition_maps(items: list[str]) -> dict[str, Path]:
+    out: dict[str, Path] = {}
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f"expected ID=PATH, got {item!r}")
+        cid, path_s = item.split("=", 1)
+        cid = cid.strip()
+        if not cid:
+            raise ValueError(f"empty condition id in {item!r}")
+        out[cid] = Path(path_s).expanduser().resolve()
+    return out
+
+
+def _cmd_plan(args: argparse.Namespace) -> int:
+    try:
+        plan = make_isolated_plan(
+            axis=ExperimentAxis(args.axis),
+            candidate=args.candidate,
+            phase=PlanPhase(args.phase),
+            n_episodes=args.n_episodes,
+            env_seed_start=args.env_seed_start,
+            policy_seed_offset=args.policy_seed_offset,
+            plan_id=args.plan_id,
+            confirms_plan_id=args.confirms_plan_id,
+        )
+        path = write_experiment_plan(plan, args.output.resolve())
+    except ValueError as exc:
+        logging.error("%s", exc)
+        return 2
+    print(path)
+    print(
+        json.dumps(
+            {
+                "plan_id": plan.plan_id,
+                "axis": plan.axis,
+                "phase": plan.phase,
+                "n_episodes": plan.n_episodes,
+                "n_conditions": len(plan.conditions),
+                "baseline_condition_id": plan.baseline_condition_id,
+            }
+        )
+    )
+    return 0
+
+
+def _cmd_summarize(args: argparse.Namespace) -> int:
+    try:
+        mapping = _parse_condition_maps(args.condition)
+        summary = summarize_from_plan_file(
+            args.plan.resolve(),
+            mapping,
+            output_path=args.output.resolve(),
+            ratio=args.ratio,
+            baseline_success_floor=args.baseline_success_floor,
+            bootstrap_seed=args.bootstrap_seed,
+        )
+    except (ValueError, OSError, KeyError) as exc:
+        logging.error("%s", exc)
+        return 2
+    axis = summary.get("axis_summary") or {}
+    print(args.output.resolve())
+    print(
+        json.dumps(
+            {
+                "plan_id": summary.get("plan_id"),
+                "phase": summary.get("phase"),
+                "headline_suppressed": axis.get("headline_suppressed"),
+                "breakpoint": axis.get("breakpoint"),
+                "n_conditions": len(summary.get("conditions") or []),
+            }
+        )
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = build_parser()
@@ -584,6 +737,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_export(args)
     if args.command == "profile":
         return _cmd_profile(args)
+    if args.command == "plan":
+        return _cmd_plan(args)
+    if args.command == "summarize":
+        return _cmd_summarize(args)
     parser.error(f"Unsupported command {args.command!r}")
     return 2
 

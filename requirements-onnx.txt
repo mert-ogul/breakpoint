@@ -1,0 +1,4 @@
+# Optional ONNX export stack (pip install -r requirements-onnx.txt)
+# Keep CLI help working without these; breakpoint export requires them.
+onnx==1.18.0
+onnxruntime==1.22.1

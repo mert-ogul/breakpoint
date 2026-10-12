@@ -194,3 +194,100 @@ Each variant runs with its actual weights and runtime. Compare quantized outputs
 ONNX FP32 baseline and show PyTorch FP32 separately to expose export effects. Quantized
 policies are not required to preserve baseline task success; degradation is measured.
 Optional deps: `pip install 'breakpoint-eval[onnx]'` (`onnx`, `onnxruntime`).
+
+## Experiment plan and summary (from run records)
+
+This section defines how Breakpoint **plans** multi-condition evaluations and how
+it **summarizes** existing `run_report.json` records. Defaults below are project
+conventions for empirical reporting, **not** safety criteria or known failure
+thresholds.
+
+### Seeds and sample counts
+
+- Use the **same paired environment seeds** across all conditions in a plan.
+- Record a **separate policy RNG seed** per episode (may equal the env seed or a
+  documented offset); do not silently reuse one RNG stream for both roles.
+- Keep condition lists and sample counts **fixed** for a given plan revision.
+- **Smoke:** 5 paired episodes per condition (explicitly labeled smoke).
+- **Full sweep default:** 100 paired episodes per condition (count always written
+  into the plan and summary). One hundred episodes does **not** guarantee a
+  precise boundary.
+- Before publication, confirm any candidate boundary on **fresh** paired seeds
+  with a **preregistered** episode count and threshold. Keep exploratory sweep
+  results separate from confirmation results. No optional stopping for a desired
+  headline.
+
+### Starting grids (configurable experimental choices)
+
+Run **one axis at a time** first. Suggested starting grids:
+
+| Axis | Suggested levels |
+| --- | --- |
+| Constant added inference delay | 0, 20, 40, 60, 80, 120, 200 ms |
+| Precision | verified ONNX FP32; INT8 (static QDQ recipe); supported weight-only INT4 — **categories**, not a continuous bit-depth axis |
+| Resolution | native; 1/2 linear size; 1/4 linear size (record actual capture `HxW`) |
+| JPEG quality | bypass (native uncompressed); 95; 75; 50; 30; 10 |
+
+Isolation rules:
+
+- **Precision:** isolate numerical effects under the **same** timing schedule
+  (typically constant latency 0 or one shared measured profile).
+- **Synthetic latency:** hold precision fixed (typically verified FP32).
+- **Measured per-variant hardware timing** is a separate deployment condition,
+  not a substitute for the constant-delay axis.
+- Add explicit **small combined grids** only after isolated sweeps. Never imply
+  that effects are additive across axes.
+
+### Empirical breakpoint rule (default summary)
+
+Let \(p_b\) be the matched baseline success rate (eligible episodes only; runtime
+errors excluded from the denominator, consistent with `summarize_episodes`).
+Let \(p_c\) be the condition success rate on the same paired seeds.
+
+Default rule: a condition is **below threshold** when
+
+\[
+p_c < r \cdot p_b
+\]
+
+with default ratio \(r = 0.8\) (configurable). A baseline success rate below a
+configurable **eligibility floor** (default 50%) is **weak** for this headline
+rule: still show raw successes/episodes and intervals, but **suppress** the
+headline breakpoint decision.
+
+For an **ordered numeric severity** axis (latency ms, resolution linear scale,
+JPEG quality ordered from mild→severe):
+
+1. Show **all** tested points.
+2. Report the **first tested** below-threshold condition and its **adjacent
+   preceding** above-threshold condition as an **observed interval**.
+3. Do **not** interpolate an exact boundary.
+4. Flag recovery / non-monotonicity if a later point returns above threshold.
+5. If every tested point stays above threshold: **not reached within tested
+   range**.
+6. If baseline is weak, too few episodes complete relative to the plan, a
+   condition is incomplete, or confirmation is inconclusive: say so — do not
+   invent a cutoff.
+
+Precision recipes are **categories**: list results per recipe; do not invent a
+continuous “bit-depth breakpoint.”
+
+### Uncertainty reporting
+
+- Report `successes / eligible_episodes` (and planned totals) with **95% Wilson
+  score intervals** for each condition’s success rate.
+- For contrasts relative to baseline, use **paired bootstrap** resampling of
+  episode pairs on the statistic \(p_c - r\,p_b\). Record the bootstrap seed.
+  Identify these intervals as **pointwise**. Do not claim simultaneous coverage
+  across the whole sweep.
+- Detect degenerate resampling or very small samples and mark uncertainty
+  **unresolved**.
+- Do not turn a noisy empirical crossing into a confident universal cutoff.
+
+### Incomplete conditions
+
+A planned condition is **incomplete** when the run record is missing, episode
+count does not match the plan, or runtime errors leave the condition without a
+valid success-rate denominator under the plan’s rules. Summaries must show
+completed counts and errors and **suppress** that condition’s breakpoint
+decision rather than cherry-picking successful executions.
