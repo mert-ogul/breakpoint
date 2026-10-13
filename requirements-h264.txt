@@ -1,0 +1,6 @@
+# Optional H.264 causal streaming (not part of the lightweight core install).
+# System dependency (required): FFmpeg with libx264 on PATH.
+#   macOS:  brew install ffmpeg
+#   Debian: sudo apt-get install -y ffmpeg
+# Python binding:
+av>=12,<19
