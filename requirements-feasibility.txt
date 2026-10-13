@@ -1,10 +1,14 @@
-# Feasibility lock for ACT/ALOHA transfer probe
+# Simulator / LeRobot feasibility dependency pins (portable).
 # Python: 3.11
+# Install this file for third-party packages, then install this repo separately:
+#   pip install -r requirements-feasibility.txt
+#   pip install -e .
+# Do not put an absolute editable path here.
 # LeRobot vendor pin (not pip-installed): 3c0a209f9fac4d2a57617e686a7f2a2309144ba2
 # ACT transfer checkpoint revision (schema-compatible): 9e93545744656e57d20f8b2d631d5d72544002ce
 # Note: Hub main ba73b276... requires LeRobot >= PR #812 (device/use_amp on PreTrainedConfig)
 # Core pins: gym-aloha==0.1.1, gymnasium==0.29.1, torch==2.6.0, mujoco==2.3.7
--e file:///Users/mertogul/Desktop/breakpoint
+# This is a tested pin set from a feasibility probe, not an automatically frozen lockfile.
 absl-py==2.5.1
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.5

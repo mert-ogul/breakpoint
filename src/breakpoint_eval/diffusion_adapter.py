@@ -73,6 +73,22 @@ def diffusion_inference_provenance(policy: Any) -> dict[str, Any]:
     }
 
 
+def _populate_queues(queues: Any, batch: dict[str, Tensor]) -> Any:
+    """Match ``lerobot.common.policies.utils.populate_queues`` (LeRobot@3c0a209).
+
+    Kept local so offline unit tests do not require a LeRobot/draccus install.
+    """
+    for key in batch:
+        if key not in queues:
+            continue
+        if len(queues[key]) != queues[key].maxlen:
+            while len(queues[key]) != queues[key].maxlen:
+                queues[key].append(batch[key])
+        else:
+            queues[key].append(batch[key])
+    return queues
+
+
 def _prepare_normalized_batch(policy: Any, observation: dict[str, Tensor]) -> dict[str, Tensor]:
     batch = policy.normalize_inputs(observation)
     if policy.config.image_features:
@@ -85,14 +101,12 @@ def _prepare_normalized_batch(policy: Any, observation: dict[str, Tensor]) -> di
 
 def observe_diffusion(policy: Any, observation: dict[str, Tensor]) -> None:
     """Update observation history without generating or consuming actions."""
-    from lerobot.common.policies.utils import populate_queues
-
     if policy._queues is None:
         policy.reset()
     batch = _prepare_normalized_batch(policy, observation)
     # Populate only observation queues; leave the action queue untouched.
     obs_only = {k: v for k, v in batch.items() if k != "action"}
-    policy._queues = populate_queues(policy._queues, obs_only)
+    policy._queues = _populate_queues(policy._queues, obs_only)
 
 
 def compute_diffusion_action_chunk(
@@ -108,8 +122,6 @@ def compute_diffusion_action_chunk(
     ``n_action_steps`` chunk, and leaves the policy action queue empty so the
     scheduler owns buffering.
     """
-    from lerobot.common.policies.utils import populate_queues
-
     if policy._queues is None:
         policy.reset()
 
@@ -117,7 +129,7 @@ def compute_diffusion_action_chunk(
     policy._queues["action"].clear()
 
     batch = _prepare_normalized_batch(policy, observation)
-    policy._queues = populate_queues(policy._queues, batch)
+    policy._queues = _populate_queues(policy._queues, batch)
 
     stacked = {k: torch.stack(list(policy._queues[k]), dim=1) for k in batch if k in policy._queues}
     with torch.inference_mode():

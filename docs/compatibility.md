@@ -29,7 +29,21 @@ Nothing below invents success rates for candidates that were not evaluated.
 | FFmpeg + libx264 | host binary on `PATH` | Optional H.264 only (`requirements-h264.txt` / `[h264]`); not in core |
 | draccus | git `9b690730ca108930519f48cc5dead72a72fd27cb` | LeRobot `poetry.lock` resolved_reference |
 
-Lockfile: [`requirements-feasibility.txt`](../requirements-feasibility.txt).
+Portable simulator pins: [`requirements-feasibility.txt`](../requirements-feasibility.txt)
+(third-party packages only). Install the repo separately with `pip install -e .`.
+That file is a **tested pin set** from a feasibility probe, not an automatically
+frozen lockfile. Optional extras: `[dev]`, `[onnx]`, `[report]`, `[h264]` /
+`requirements-onnx.txt` / `requirements-h264.txt`.
+
+### Install shapes
+
+| Goal | Commands |
+| --- | --- |
+| Core CLI help only | `pip install -e .` then `breakpoint --help` |
+| Offline unit tests (torch/cv2) | `pip install -e ".[dev]"` — ONNX/report/H.264 tests **skip** without extras (`importorskip` / FFmpeg fixture) |
+| Full offline suite | `pip install -e ".[dev,onnx,report,h264]"` (+ system FFmpeg for H.264 encode) |
+| Simulator / policy runs | `pip install -r requirements-feasibility.txt` then `pip install -e .` (+ vendor LeRobot) |
+| ORT profile (no sim) | `pip install -e ".[onnx]"` |
 
 Do **not** assume `pip install lerobot` (latest) reproduces these cards. Hub issues
 [#2605](https://github.com/huggingface/lerobot/issues/2605) and
@@ -56,19 +70,23 @@ weights with current main for the ACT transfer repo (config-only commit on main)
 
 Direct mapping lives in `src/breakpoint_eval/candidate_map.py`.
 
-| Candidate | Hub revision (pinned) | Env | Policy | Card metric | loaded | ran | reproduced | camera / L=0 | ONNX FP32 | device profile |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ACT ALOHA transfer | `9e93545744656e57d20f8b2d631d5d72544002ce` | `aloha` / `AlohaTransferCube-v0` | ACT | 83.0% / 500 ep | **yes** | **no** (GL block) | **no** | **yes** | **yes** | **yes** (ORT) |
-| ACT ALOHA insertion | `2bd896d066e7a2c65c4c945d065e7f0bb1e389ca` | `aloha` / `AlohaInsertion-v0` | ACT | 20.6% / 500 ep | **yes** | **no** (GL block) | **no** | **yes** | **yes** (shared ACT export) | not attempted |
-| Diffusion PushT | `202c8695947a458d8ce08ce1c0219f2588d60b33` | `pusht` / `PushT-v0` | diffusion | 65.4% / 500 ep | **yes** | not attempted | **no** | **yes** | **unsupported** | **unsupported** (ORT); PyTorch full-denoise path available |
+Gates distinguish **implementation availability**, **synthetic/unit checks**, and
+**real simulation validation**. Claims without retained evidence are **unverified**.
+This project does **not** claim physical-robot or remote-hardware experiment runs.
+
+| Candidate | Hub revision (pinned) | Env | loaded | ran | reproduced | camera (impl / synthetic / sim) | L=0 (impl / synthetic / sim) | ONNX FP32 | device profile |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **no** (GL block) | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **yes** (export smoke) | **unverified** (no retained HW profile) |
+| ACT ALOHA insertion | `2bd896d0…` | AlohaInsertion-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unverified** | not attempted |
+| Diffusion PushT | `202c8695…` | PushT-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unsupported** | **unsupported** (ORT) |
 
 Machine-readable rows: `src/breakpoint_eval/support_status.py`. Do **not** pool
 success rates across different tasks into one policy ranking. Do **not** copy
 ACT latency profiles onto Diffusion Policy or another checkpoint.
 
-Pre-stress gates for every supported policy: native baseline load, documented
-environment success semantics, state reset, camera degradation at raw pixels,
-and zero-latency equivalence. Stress sweeps require those gates.
+Pre-stress gates (implementation): native baseline load, documented environment
+success semantics, state reset, camera degradation at raw pixels, and
+zero-latency equivalence. Stress sweeps should not proceed without those gates.
 
 Current Hub `main` tips observed during the probe (require newer LeRobot for config parse):
 

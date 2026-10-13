@@ -8,8 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from huggingface_hub import snapshot_download
-
 from breakpoint_eval.candidate_map import CANDIDATES, LEROBOT_CARD_COMMIT, CandidateSpec
 
 LOGGER = logging.getLogger("breakpoint_eval.stack")
@@ -52,6 +50,13 @@ def ensure_lerobot_checkout(repo_root: Path) -> Path:
 
 
 def download_candidate_checkpoint(spec: CandidateSpec, cache_dir: Path) -> Path:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise ImportError(
+            "huggingface_hub is required to download checkpoints "
+            "(install via requirements-feasibility.txt or LeRobot)."
+        ) from exc
     path = snapshot_download(
         repo_id=spec.hub_repo,
         revision=spec.hub_revision,

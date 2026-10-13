@@ -1,6 +1,8 @@
-# Optional H.264 causal streaming (not part of the lightweight core install).
+# Optional H.264 causal streaming (also: pip install 'breakpoint-eval[h264]').
+# Not part of the lightweight core install.
 # System dependency (required): FFmpeg with libx264 on PATH.
 #   macOS:  brew install ffmpeg
 #   Debian: sudo apt-get install -y ffmpeg
 # Python binding:
+numpy>=1.26,<3
 av>=12,<19

@@ -18,7 +18,8 @@ from breakpoint_eval.latency_trace import (
     require_unique_device_profile,
 )
 from breakpoint_eval.model_resolve import resolve_model_to_candidate
-from breakpoint_eval.run_baseline import RunRequest, build_seeds, run_baseline
+from breakpoint_eval.run_baseline import RunRequest, run_baseline
+from breakpoint_eval.seed_list import build_seeds
 from breakpoint_eval.stack import repo_root_from_package
 
 LOGGER = logging.getLogger("breakpoint_eval.run_orchestrate")

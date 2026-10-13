@@ -1,4 +1,8 @@
-"""Thin CLI for Breakpoint. Subcommands: run, report, export, profile, plan, summarize."""
+"""Thin CLI for Breakpoint. Subcommands: run, report, export, profile, plan, summarize.
+
+Heavy imports (torch, LeRobot, MuJoCo, ONNX, matplotlib) are deferred until the
+matching subcommand runs so ``breakpoint --help`` works with a core install.
+"""
 
 from __future__ import annotations
 
@@ -8,46 +12,24 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from breakpoint_eval.camera_degrade import (
-    ImageDegradeConfig,
-    ImageMode,
-    h264_smoke_configs,
-    jpeg_smoke_configs,
-    resolution_smoke_configs,
-)
+# Stdlib + dependency-free package modules only at import time.
 from breakpoint_eval.candidate_map import CANDIDATES
-from breakpoint_eval.device_profile import DEFAULT_MEASURED, DEFAULT_WARMUPS
 from breakpoint_eval.experiment_plan import (
     N_EPISODES_FULL,
     N_EPISODES_SMOKE,
     ExperimentAxis,
     PlanPhase,
-    make_isolated_plan,
-    write_experiment_plan,
 )
-from breakpoint_eval.experiment_summary import (
-    DEFAULT_BASELINE_SUCCESS_FLOOR,
-    DEFAULT_BOOTSTRAP_SEED,
-    DEFAULT_BREAKPOINT_RATIO,
-    summarize_from_plan_file,
-)
-from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
-from breakpoint_eval.latency_trace import (
-    load_latency_profile,
-    require_unique_device_profile,
-)
-from breakpoint_eval.render_report import render_report
-from breakpoint_eval.run_baseline import RunRequest, build_seeds, parse_seed_list, run_baseline
-from breakpoint_eval.run_export import ExportRequest, run_export
-from breakpoint_eval.run_orchestrate import (
-    MissingPrerequisiteError,
-    execute_resolved_run,
-    resolve_run_plan,
-    write_partial_diagnostics,
-    write_run_manifest,
-)
-from breakpoint_eval.run_profile import ProfileCliRequest, run_profile
-from breakpoint_eval.stack import repo_root_from_package
+from breakpoint_eval.seed_list import build_seeds, parse_seed_list
+
+# Keep argparse defaults free of modules that import numpy/torch.
+_PROFILE_DEFAULT_WARMUPS = 50
+_PROFILE_DEFAULT_MEASURED = 1000
+_CHUNK_ARRIVAL_POLICY = "discard_stale"
+_IMAGE_MODE_CHOICES = ("native", "downsample", "jpeg", "h264")
+_DEFAULT_BREAKPOINT_RATIO = 0.8
+_DEFAULT_BASELINE_SUCCESS_FLOOR = 0.5
+_DEFAULT_BOOTSTRAP_SEED = 20261012
 
 
 def parse_capture_hw(text: str) -> tuple[int, int]:
@@ -55,6 +37,12 @@ def parse_capture_hw(text: str) -> tuple[int, int]:
     if len(parts) != 2:
         raise ValueError("expected HxW or H,W")
     return int(parts[0]), int(parts[1])
+
+
+def _repo_root_from_package() -> Path:
+    from breakpoint_eval.stack import repo_root_from_package
+
+    return repo_root_from_package()
 
 
 def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -179,8 +167,8 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
     parser.add_argument(
         "--image-mode",
-        choices=[m.value for m in ImageMode],
-        default=ImageMode.NATIVE.value,
+        choices=list(_IMAGE_MODE_CHOICES),
+        default="native",
         help="Camera degradation at raw pixels (before policy normalization)",
     )
     parser.add_argument(
@@ -321,8 +309,8 @@ def _add_profile_parser(subparsers: argparse._SubParsersAction[argparse.Argument
     )
     parser.add_argument("--variant-label", type=str, default="onnx_fp32")
     parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--n-warmup", type=int, default=DEFAULT_WARMUPS)
-    parser.add_argument("--n-measured", type=int, default=DEFAULT_MEASURED)
+    parser.add_argument("--n-warmup", type=int, default=_PROFILE_DEFAULT_WARMUPS)
+    parser.add_argument("--n-measured", type=int, default=_PROFILE_DEFAULT_MEASURED)
     parser.add_argument(
         "--providers",
         type=str,
@@ -400,16 +388,16 @@ def _add_summarize_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     parser.add_argument(
         "--ratio",
         type=float,
-        default=DEFAULT_BREAKPOINT_RATIO,
+        default=_DEFAULT_BREAKPOINT_RATIO,
         help="Below-threshold when p_c < ratio * p_baseline (default 0.8)",
     )
     parser.add_argument(
         "--baseline-success-floor",
         type=float,
-        default=DEFAULT_BASELINE_SUCCESS_FLOOR,
+        default=_DEFAULT_BASELINE_SUCCESS_FLOOR,
         help="Weak-baseline floor for headline suppression (default 0.5)",
     )
-    parser.add_argument("--bootstrap-seed", type=int, default=DEFAULT_BOOTSTRAP_SEED)
+    parser.add_argument("--bootstrap-seed", type=int, default=_DEFAULT_BOOTSTRAP_SEED)
     parser.add_argument("--output", type=Path, required=True)
 
 
@@ -425,7 +413,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _build_image_cfg(args: argparse.Namespace) -> ImageDegradeConfig:
+def _build_image_cfg(args: argparse.Namespace) -> Any:
+    from breakpoint_eval.camera_degrade import ImageDegradeConfig, ImageMode
+
     mode = ImageMode(args.image_mode)
     capture_h = capture_w = None
     if args.capture_hw is not None:
@@ -448,7 +438,13 @@ def _build_image_cfg(args: argparse.Namespace) -> ImageDegradeConfig:
     )
 
 
-def _image_sweep_cfgs(kind: str) -> list[tuple[str, ImageDegradeConfig]]:
+def _image_sweep_cfgs(kind: str) -> list[tuple[str, Any]]:
+    from breakpoint_eval.camera_degrade import (
+        h264_smoke_configs,
+        jpeg_smoke_configs,
+        resolution_smoke_configs,
+    )
+
     if kind == "resolution":
         return resolution_smoke_configs()
     if kind == "jpeg":
@@ -462,7 +458,9 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, ImageDegradeConfig]]:
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
-    repo_root = (args.repo_root or repo_root_from_package()).resolve()
+    from breakpoint_eval.run_export import ExportRequest, run_export
+
+    repo_root = (args.repo_root or _repo_root_from_package()).resolve()
     output_dir = args.output_dir
     if output_dir is None:
         output_dir = repo_root / "artifacts" / "export" / args.candidate
@@ -526,6 +524,11 @@ def _resolve_latency_profile(
         profile_device = "rpi5"
     if args.latency_profile is not None and profile_device is not None:
         raise ValueError("use only one of --latency-profile or --device/--profile-device replay")
+    from breakpoint_eval.latency_trace import (
+        load_latency_profile,
+        require_unique_device_profile,
+    )
+
     if args.latency_profile is not None:
         return load_latency_profile(Path(args.latency_profile).resolve())
     if profile_device is not None:
@@ -553,7 +556,10 @@ def _host_compute_device(args: argparse.Namespace) -> str:
 
 
 def _cmd_profile(args: argparse.Namespace) -> int:
-    repo_root = (args.repo_root or repo_root_from_package()).resolve()
+    # onnx extra + numpy only; must not import simulator / PyTorch paths.
+    from breakpoint_eval.run_profile import ProfileCliRequest, run_profile
+
+    repo_root = (args.repo_root or _repo_root_from_package()).resolve()
     output_dir = args.output_dir
     if output_dir is None:
         output_dir = repo_root / "profiles" / args.device_label
@@ -632,7 +638,7 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.latency_ms < 0:
         parser.error("--latency-ms must be >= 0")
 
-    repo_root = (args.repo_root or repo_root_from_package()).resolve()
+    repo_root = (args.repo_root or _repo_root_from_package()).resolve()
     seeds_arg = parse_seed_list(args.seeds) if args.seeds is not None else None
     n_episodes = args.n_episodes
     if n_episodes is None and seeds_arg is not None:
@@ -675,6 +681,14 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
     # Preferred orchestration path (single condition / dry-run / rpi5 / explicit profile).
     if not using_sweep:
+        from breakpoint_eval.camera_degrade import ImageMode
+        from breakpoint_eval.run_orchestrate import (
+            MissingPrerequisiteError,
+            execute_resolved_run,
+            resolve_run_plan,
+            write_run_manifest,
+        )
+
         try:
             plan, profile = resolve_run_plan(
                 model=model,
@@ -737,7 +751,7 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                 {
                     "latency_mode": plan.latency_mode,
                     "latency_profile": plan.latency_profile_path,
-                    "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
+                    "chunk_arrival_policy": _CHUNK_ARRIVAL_POLICY,
                     "report": str(report),
                     "exit_code": exit_code,
                 }
@@ -746,6 +760,15 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         return exit_code
 
     # Sweep path (constant-delay or image sweeps) — still writes a run_manifest.
+    from breakpoint_eval.camera_degrade import ImageMode
+    from breakpoint_eval.run_baseline import RunRequest, run_baseline
+    from breakpoint_eval.run_orchestrate import (
+        MissingPrerequisiteError,
+        resolve_run_plan,
+        write_partial_diagnostics,
+        write_run_manifest,
+    )
+
     try:
         compute_device = _host_compute_device(args)
     except ValueError as exc:
@@ -867,7 +890,7 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                             "latency_mode": "constant",
                             "image_mode": image_cfg.mode.value,
                             "image_label": image_name,
-                            "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
+                            "chunk_arrival_policy": _CHUNK_ARRIVAL_POLICY,
                             "report": str(report),
                         }
                     )
@@ -896,6 +919,8 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
+    from breakpoint_eval.render_report import render_report
+
     try:
         bundle = render_report(args.run_dir.resolve())
     except (FileNotFoundError, ImportError, ValueError, OSError) as exc:
@@ -929,6 +954,8 @@ def _parse_condition_maps(items: list[str]) -> dict[str, Path]:
 
 
 def _cmd_plan(args: argparse.Namespace) -> int:
+    from breakpoint_eval.experiment_plan import make_isolated_plan, write_experiment_plan
+
     try:
         plan = make_isolated_plan(
             axis=ExperimentAxis(args.axis),
@@ -961,6 +988,8 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _cmd_summarize(args: argparse.Namespace) -> int:
+    from breakpoint_eval.experiment_summary import summarize_from_plan_file
+
     try:
         mapping = _parse_condition_maps(args.condition)
         summary = summarize_from_plan_file(

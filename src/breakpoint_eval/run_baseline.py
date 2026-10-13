@@ -13,6 +13,7 @@ from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
 from breakpoint_eval.latency_trace import LatencyProfile, LatencyTraceReplayer
 from breakpoint_eval.policy_adapter import PolicyAdapter
 from breakpoint_eval.run_episode import EpisodeOutcome, EpisodeResult, run_episode
+from breakpoint_eval.seed_list import build_seeds, parse_seed_list
 from breakpoint_eval.sim_env import (
     control_period_s,
     load_policy,
@@ -30,6 +31,15 @@ from breakpoint_eval.write_report import write_run_report, write_video
 
 LOGGER = logging.getLogger("breakpoint_eval.run_baseline")
 
+# Re-export for callers that historically imported seeds from this module.
+__all__ = [
+    "RunRequest",
+    "agreement_action_trace",
+    "build_seeds",
+    "parse_seed_list",
+    "run_baseline",
+]
+
 
 @dataclass(frozen=True)
 class RunRequest:
@@ -45,25 +55,6 @@ class RunRequest:
     latency_block_seed: int | None = None
     image_cfg: ImageDegradeConfig | None = None
     repo_root: Path | None = None
-
-
-def parse_seed_list(text: str) -> list[int]:
-    parts = [p.strip() for p in text.split(",") if p.strip()]
-    if not parts:
-        raise ValueError("seed list is empty")
-    return [int(p) for p in parts]
-
-
-def build_seeds(*, n_episodes: int | None, seeds: list[int] | None, start_seed: int) -> list[int]:
-    if seeds is not None and n_episodes is not None and len(seeds) != n_episodes:
-        raise ValueError(f"--seeds length ({len(seeds)}) must match --n-episodes ({n_episodes})")
-    if seeds is not None:
-        return seeds
-    if n_episodes is None:
-        raise ValueError("Provide --n-episodes and/or --seeds")
-    if n_episodes < 1:
-        raise ValueError("--n-episodes must be >= 1")
-    return [start_seed + i for i in range(n_episodes)]
 
 
 def run_baseline(req: RunRequest) -> Path:

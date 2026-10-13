@@ -40,8 +40,9 @@ def test_real_act_export_fp32_parity(tmp_path: Path) -> None:
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     parity = payload["comparisons"]["onnx_fp32_vs_pytorch_fp32"]
     assert parity["passed"] is True
-    assert parity["max_abs_error"] <= payload["declared_tolerances_before_measurement"][
-        "onnx_fp32_parity_max_abs"
-    ]
+    assert (
+        parity["max_abs_error"]
+        <= payload["declared_tolerances_before_measurement"]["onnx_fp32_parity_max_abs"]
+    )
     assert (out / "act_chunk_fp32.onnx").is_file()
     assert payload["variants"][0]["recipe_id"] == "torch_onnx_export_fp32_opset17"

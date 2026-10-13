@@ -1,11 +1,20 @@
-"""Tested support matrix for pinned Hub candidates (not a plugin registry)."""
+"""Support matrix for pinned Hub candidates (not a plugin registry).
+
+Status vocabulary:
+- yes: retained evidence exists for that gate
+- no: attempted and failed / blocked, with recorded reason
+- not_attempted: no retained attempt
+- unsupported: explicitly out of scope for this candidate
+- unverified: implementation or synthetic tests exist, but no retained
+  real-simulation / hardware evidence for the claim
+"""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-GateValue = Literal["yes", "no", "not_attempted", "unsupported"]
+GateValue = Literal["yes", "no", "not_attempted", "unsupported", "unverified"]
 
 
 @dataclass(frozen=True)
@@ -16,8 +25,13 @@ class CandidateSupport:
     loaded: GateValue
     ran: GateValue
     reproduced_baseline: GateValue
-    camera_degrade: GateValue
-    zero_latency_equivalence: GateValue
+    # Implementation available vs synthetic unit checks vs real sim validation.
+    camera_impl: GateValue
+    camera_synthetic: GateValue
+    camera_sim: GateValue
+    zero_latency_impl: GateValue
+    zero_latency_synthetic: GateValue
+    zero_latency_sim: GateValue
     onnx_fp32: GateValue
     onnx_int8: GateValue
     onnx_int4: GateValue
@@ -28,7 +42,8 @@ class CandidateSupport:
         return asdict(self)
 
 
-# Evidence-backed status only. Never invent success rates or copy timings across rows.
+# Evidence-backed status only. Never invent success rates, hardware runs, or
+# copy timings across rows. No physical-robot experiments are claimed.
 SUPPORT_MATRIX: dict[str, CandidateSupport] = {
     "act_aloha_transfer": CandidateSupport(
         candidate="act_aloha_transfer",
@@ -37,53 +52,67 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         loaded="yes",
         ran="no",
         reproduced_baseline="no",
-        camera_degrade="yes",
-        zero_latency_equivalence="yes",
+        camera_impl="yes",
+        camera_synthetic="yes",
+        camera_sim="unverified",
+        zero_latency_impl="yes",
+        zero_latency_synthetic="yes",
+        zero_latency_sim="unverified",
         onnx_fp32="yes",
-        onnx_int8="yes",
-        onnx_int4="yes",
-        device_profile="yes",
+        onnx_int8="unverified",
+        onnx_int4="unverified",
+        device_profile="unverified",
         notes=(
-            "ran blocked by MuJoCo GL on some hosts. ONNX/device axes verified on "
-            "ACT transfer only; do not reuse those timings for other candidates."
+            "loaded evidence retained under artifacts/feasibility_act_transfer/. "
+            "ran blocked by MuJoCo GL on some hosts. Camera/L=0 sim validation and "
+            "device-profile rows lack retained hardware evidence. Do not reuse "
+            "timings for other candidates. No hardware experiments claimed."
         ),
     ),
     "act_aloha_insertion": CandidateSupport(
         candidate="act_aloha_insertion",
         policy_type="act",
         env_task="AlohaInsertion-v0",
-        loaded="yes",
-        ran="no",
+        loaded="unverified",
+        ran="not_attempted",
         reproduced_baseline="no",
-        camera_degrade="yes",
-        zero_latency_equivalence="yes",
-        onnx_fp32="yes",
+        camera_impl="yes",
+        camera_synthetic="yes",
+        camera_sim="unverified",
+        zero_latency_impl="yes",
+        zero_latency_synthetic="yes",
+        zero_latency_sim="unverified",
+        onnx_fp32="unverified",
         onnx_int8="not_attempted",
         onnx_int4="not_attempted",
         device_profile="not_attempted",
         notes=(
-            "Shares ACT adapter/export path with transfer; FP32 parity smoked on "
-            "this checkpoint. Separate env success semantics (peg/pin). "
-            "Do not pool success with transfer."
+            "Shares ACT adapter/export implementation with transfer; integration "
+            "smoke exercised load/export but no retained load_evidence artifact. "
+            "Do not pool success with transfer. No hardware experiments claimed."
         ),
     ),
     "diffusion_pusht": CandidateSupport(
         candidate="diffusion_pusht",
         policy_type="diffusion",
         env_task="PushT-v0",
-        loaded="yes",
+        loaded="unverified",
         ran="not_attempted",
         reproduced_baseline="no",
-        camera_degrade="yes",
-        zero_latency_equivalence="yes",
+        camera_impl="yes",
+        camera_synthetic="yes",
+        camera_sim="unverified",
+        zero_latency_impl="yes",
+        zero_latency_synthetic="yes",
+        zero_latency_sim="unverified",
         onnx_fp32="unsupported",
         onnx_int8="unsupported",
         onnx_int4="unsupported",
         device_profile="unsupported",
         notes=(
-            "PyTorch simulation axes retained. Full action-generation latency "
-            "(all denoising steps) is the timing boundary; ORT action-chunk export "
-            "is unsupported. Do not copy ACT device timings."
+            "Implementation and synthetic/stub gates exist; real PushT episode "
+            "ran/reproduced not claimed. ORT action-chunk export unsupported. "
+            "Do not copy ACT device timings. No hardware experiments claimed."
         ),
     ),
 }

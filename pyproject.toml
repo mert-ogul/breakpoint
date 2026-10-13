@@ -8,26 +8,42 @@ version = "0.1.0"
 description = "Evaluate pretrained robot policies under controlled simulation stress."
 requires-python = ">=3.11,<3.13"
 license = { text = "Apache-2.0" }
+# Core: CLI help / argparse only. No torch, LeRobot, MuJoCo, or ONNX.
 dependencies = []
 
 [project.optional-dependencies]
-# Feasibility stack pins live in docs/compatibility.md and requirements-feasibility.txt.
+# Offline unit/dev checks (no MuJoCo / gym-aloha required).
+# With only [dev]: ONNX tests skip (importorskip onnx/onnxruntime), report plot
+# tests skip (importorskip matplotlib), H.264 stream encode tests skip without
+# FFmpeg+PyAV. Integration markers need requirements-feasibility.txt + vendor LeRobot.
+# Full offline suite: pip install -e ".[dev,onnx,report,h264]"
 dev = [
   "ruff>=0.8.0",
   "pytest>=8.0.0",
+  "numpy>=1.26,<3",
+  "torch==2.6.0",
+  "torchvision==0.21.0",
+  "opencv-python>=4.8,<6",
 ]
+# breakpoint profile / export ONNX paths (numpy + ORT; profile must not import sim/torch).
 onnx = [
+  "numpy>=1.26,<3",
   "onnx>=1.16,<1.19",
   "onnxruntime>=1.19,<1.23",
 ]
+# breakpoint report plots
 report = [
+  "numpy>=1.26,<3",
   "matplotlib>=3.8,<3.11",
 ]
-# Optional H.264: also requires a system FFmpeg build with libx264 on PATH.
+# Optional H.264: also requires system FFmpeg with libx264 on PATH.
 # See docs/methodology.md and breakpoint_eval.h264_ffmpeg.INSTALL_GUIDANCE.
 h264 = [
+  "numpy>=1.26,<3",
   "av>=12,<19",
 ]
+# Simulator stack pins live in requirements-feasibility.txt (install separately from
+# this editable package). Run / export / real policy smoke need that file + vendor LeRobot.
 
 [project.scripts]
 breakpoint = "breakpoint_eval.cli:main"

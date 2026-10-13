@@ -23,12 +23,7 @@ from breakpoint_eval.policy_validate import (
     validate_success_semantics,
     validate_zero_latency_equivalence,
 )
-from breakpoint_eval.stack import ensure_lerobot_on_path, repo_root_from_package
 from breakpoint_eval.support_status import SUPPORT_MATRIX, support_row
-
-
-def _ensure_lerobot() -> None:
-    ensure_lerobot_on_path(repo_root_from_package())
 
 
 def _populate_queues(queues, batch):
@@ -167,7 +162,6 @@ def test_success_semantics_documented_for_all_candidates() -> None:
 
 
 def test_tiny_diffusion_zero_latency_and_observe() -> None:
-    _ensure_lerobot()
     policy = _TinyDiffusion()
     assert is_diffusion_policy(policy)
     adapter = PolicyAdapter(policy, control_period_s=0.1, device="cpu")
@@ -217,7 +211,6 @@ def test_act_like_adapter_still_zero_latency() -> None:
 
 
 def test_run_policy_validation_gates_tiny_diffusion() -> None:
-    _ensure_lerobot()
     policy = _TinyDiffusion()
     adapter = PolicyAdapter(policy, control_period_s=0.1, device="cpu")
     pol_obs = {
