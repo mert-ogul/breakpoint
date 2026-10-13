@@ -195,6 +195,10 @@ def ordered_value_for_condition(
         if params.get("bypass"):
             return 100.0  # mild end of severity ordering (bypass > q95 > …)
         return float(params["jpeg_quality"])
+    if axis == "h264":
+        if params.get("bypass"):
+            return 1.0e9  # mild end (bypass before any bitrate)
+        return float(params["h264_bitrate_kbps"])
     if axis == "precision":
         return None  # categorical
     return None
@@ -211,6 +215,8 @@ def severity_sort_key(record: ConditionRecord, axis: str) -> tuple[int, float]:
         return (0, -v)  # decreasing linear scale
     if axis == "jpeg":
         return (0, -v)  # decreasing quality / bypass first
+    if axis == "h264":
+        return (0, -v)  # decreasing bitrate / bypass first
     return (0, v)
 
 

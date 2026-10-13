@@ -11,6 +11,7 @@ from typing import Any
 from breakpoint_eval.camera_degrade import (
     ImageDegradeConfig,
     ImageMode,
+    h264_smoke_configs,
     jpeg_smoke_configs,
     resolution_smoke_configs,
 )
@@ -195,8 +196,41 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         help="JPEG quality 1-100 for jpeg mode (100 is still encoded, not identity)",
     )
     parser.add_argument(
+        "--h264-bitrate-kbps",
+        type=float,
+        default=None,
+        help="Target H.264 bitrate (kbps) for h264 mode (requires FFmpeg+libx264+PyAV)",
+    )
+    parser.add_argument(
+        "--h264-gop",
+        type=int,
+        default=30,
+        help="H.264 GOP / keyframe interval (frames)",
+    )
+    parser.add_argument(
+        "--h264-preset",
+        type=str,
+        default="veryfast",
+        help="libx264 preset (validated against installed FFmpeg)",
+    )
+    parser.add_argument(
+        "--h264-latency-mode",
+        choices=["quality_only", "deployment"],
+        default="quality_only",
+        help=(
+            "quality_only: visual quality, codec/transport delay excluded; "
+            "deployment: model codec buffering delay separately from inference latency"
+        ),
+    )
+    parser.add_argument(
+        "--h264-deployment-buffer-frames",
+        type=int,
+        default=0,
+        help="Deployment-mode codec buffer delay in control frames (not added to latency_s)",
+    )
+    parser.add_argument(
         "--image-sweep",
-        choices=["resolution", "jpeg"],
+        choices=["resolution", "jpeg", "h264"],
         default=None,
         help="Run an isolated visual-quality smoke sweep (separate from latency)",
     )
@@ -396,11 +430,21 @@ def _build_image_cfg(args: argparse.Namespace) -> ImageDegradeConfig:
     capture_h = capture_w = None
     if args.capture_hw is not None:
         capture_h, capture_w = parse_capture_hw(args.capture_hw)
+    frame_rate_hz = None
+    if mode is ImageMode.H264:
+        # Default control rate matches ALOHA; overridden when env fps is known at run time.
+        frame_rate_hz = 50.0
     return ImageDegradeConfig(
         mode=mode,
         capture_height=capture_h,
         capture_width=capture_w,
         jpeg_quality=args.jpeg_quality,
+        frame_rate_hz=frame_rate_hz,
+        h264_bitrate_kbps=args.h264_bitrate_kbps,
+        h264_gop=args.h264_gop,
+        h264_preset=args.h264_preset,
+        h264_latency_mode=args.h264_latency_mode,
+        h264_deployment_buffer_frames=args.h264_deployment_buffer_frames,
     )
 
 
@@ -409,6 +453,11 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, ImageDegradeConfig]]:
         return resolution_smoke_configs()
     if kind == "jpeg":
         return jpeg_smoke_configs()
+    if kind == "h264":
+        from breakpoint_eval.h264_ffmpeg import require_ffmpeg_h264
+
+        require_ffmpeg_h264()
+        return h264_smoke_configs()
     raise ValueError(kind)
 
 
@@ -651,16 +700,24 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             logging.error("%s", exc)
             return 2
 
+        try:
+            base_image_cfg = _build_image_cfg(args)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if base_image_cfg.mode is ImageMode.H264:
+            try:
+                from breakpoint_eval.h264_ffmpeg import require_ffmpeg_h264
+
+                require_ffmpeg_h264()
+            except Exception as exc:  # noqa: BLE001
+                logging.error("%s", exc)
+                return 2
+
         manifest = write_run_manifest(plan)
         print(manifest)
         print(json.dumps(plan.to_dict(), indent=2, sort_keys=True))
         if args.dry_run:
             return 0
-
-        try:
-            base_image_cfg = _build_image_cfg(args)
-        except ValueError as exc:
-            parser.error(str(exc))
 
         try:
             report, exit_code = execute_resolved_run(
@@ -717,11 +774,32 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         latency_values_ms = [args.latency_ms]
 
     if args.image_sweep:
-        if args.image_mode != ImageMode.NATIVE.value or args.capture_hw or args.jpeg_quality:
+        if (
+            args.image_mode != ImageMode.NATIVE.value
+            or args.capture_hw
+            or args.jpeg_quality
+            or args.h264_bitrate_kbps
+        ):
             parser.error("--image-sweep is mutually exclusive with explicit image mode flags")
-        image_jobs = [(name, cfg) for name, cfg in _image_sweep_cfgs(args.image_sweep)]
+        try:
+            image_jobs = [(name, cfg) for name, cfg in _image_sweep_cfgs(args.image_sweep)]
+        except Exception as exc:  # noqa: BLE001 — surface missing FFmpeg clearly
+            from breakpoint_eval.h264_ffmpeg import H264UnsupportedError
+
+            if isinstance(exc, H264UnsupportedError) or args.image_sweep == "h264":
+                logging.error("%s", exc)
+                return 2
+            raise
     else:
         image_jobs = [(None, base_image_cfg)]
+        if base_image_cfg.mode is ImageMode.H264:
+            try:
+                from breakpoint_eval.h264_ffmpeg import require_ffmpeg_h264
+
+                require_ffmpeg_h264()
+            except Exception as exc:  # noqa: BLE001
+                logging.error("%s", exc)
+                return 2
 
     if len(latency_values_ms) > 1 and len(image_jobs) > 1:
         parser.error("combine only one of --latency-sweep-ms or --image-sweep per invocation")

@@ -81,7 +81,8 @@ def run_baseline(req: RunRequest) -> Path:
     policy = load_policy(spec, str(checkpoint_dir), req.device)
     adapter = PolicyAdapter(policy, control_period_s=period_s, device=req.device)
     image_cfg = req.image_cfg or ImageDegradeConfig(mode=ImageMode.NATIVE)
-    if image_cfg.frame_rate_hz is None:
+    if image_cfg.frame_rate_hz is None or image_cfg.mode is ImageMode.H264:
+        # H.264 stream rate must match the environment control / camera rate.
         image_cfg = replace(image_cfg, frame_rate_hz=float(env_cfg.fps))
 
     latency_replayer: LatencyTraceReplayer | None = None

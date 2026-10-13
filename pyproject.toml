@@ -23,6 +23,11 @@ onnx = [
 report = [
   "matplotlib>=3.8,<3.11",
 ]
+# Optional H.264: also requires a system FFmpeg build with libx264 on PATH.
+# See docs/methodology.md and breakpoint_eval.h264_ffmpeg.INSTALL_GUIDANCE.
+h264 = [
+  "av>=12,<19",
+]
 
 [project.scripts]
 breakpoint = "breakpoint_eval.cli:main"

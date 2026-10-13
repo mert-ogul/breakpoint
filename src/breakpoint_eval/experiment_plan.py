@@ -25,6 +25,8 @@ NATIVE_HW = (480, 640)
 DEFAULT_RESOLUTION_LINEAR = (1.0, 0.5, 0.25)  # native, 1/2, 1/4
 # bypass = native uncompressed; qualities are experimental choices.
 DEFAULT_JPEG_QUALITIES: tuple[str | int, ...] = ("bypass", 95, 75, 50, 30, 10)
+# Quality-only H.264 bitrate ladder (kbps); bypass = native uncompressed.
+DEFAULT_H264_BITRATES_KBPS: tuple[str | float, ...] = ("bypass", 4000.0, 2000.0, 1000.0, 500.0)
 
 DEFAULT_ENV_SEED_START = 1000
 DEFAULT_POLICY_SEED_OFFSET = 1_000_000
@@ -35,6 +37,7 @@ class ExperimentAxis(StrEnum):
     PRECISION = "precision"
     RESOLUTION = "resolution"
     JPEG = "jpeg"
+    H264 = "h264"
     COMBINED = "combined"
 
 
@@ -268,6 +271,56 @@ def jpeg_conditions(
     return out
 
 
+def h264_conditions(
+    bitrates_kbps: tuple[str | float, ...] = DEFAULT_H264_BITRATES_KBPS,
+    *,
+    frame_rate_hz: float = 50.0,
+    gop: int = 30,
+    preset: str = "veryfast",
+    latency_mode: str = "quality_only",
+) -> list[ConditionSpec]:
+    """H.264 visual-quality ladder. Quality-only excludes codec/transport delay."""
+    out: list[ConditionSpec] = []
+    for br in bitrates_kbps:
+        if br == "bypass":
+            out.append(
+                ConditionSpec(
+                    condition_id="h264_bypass",
+                    axis=ExperimentAxis.H264.value,
+                    params={
+                        "mode": "native",
+                        "h264_bitrate_kbps": None,
+                        "bypass": True,
+                        "h264_latency_mode": latency_mode,
+                    },
+                    label="H.264 bypass (native uncompressed)",
+                )
+            )
+            continue
+        kbps = float(br)
+        if kbps <= 0:
+            raise ValueError("h264 bitrate_kbps must be > 0")
+        out.append(
+            ConditionSpec(
+                condition_id=f"h264_{int(kbps)}kbps",
+                axis=ExperimentAxis.H264.value,
+                params={
+                    "mode": "h264",
+                    "h264_bitrate_kbps": kbps,
+                    "frame_rate_hz": frame_rate_hz,
+                    "h264_gop": gop,
+                    "h264_preset": preset,
+                    "h264_latency_mode": latency_mode,
+                    "h264_deployment_buffer_frames": 0,
+                    "bypass": False,
+                    "excludes_codec_transport_delay": latency_mode == "quality_only",
+                },
+                label=f"H.264 {kbps:g} kbps ({latency_mode})",
+            )
+        )
+    return out
+
+
 def make_isolated_plan(
     *,
     axis: ExperimentAxis,
@@ -313,6 +366,14 @@ def make_isolated_plan(
         conditions = jpeg_conditions()
         baseline = "jpeg_bypass"
         isolation = ["JPEG visual-quality axis only; native resolution."]
+    elif axis is ExperimentAxis.H264:
+        conditions = h264_conditions()
+        baseline = "h264_bypass"
+        isolation = [
+            "H.264 causal stream quality-only axis (libx264 zerolatency, no B-frames).",
+            "Excludes codec/transport delay from inference latency; not a prerecorded trajectory.",
+            "Unsupported without a verified FFmpeg+libx264+PyAV install.",
+        ]
     else:
         raise ValueError("use make_combined_plan for COMBINED axis")
 

@@ -161,14 +161,38 @@ simulation.
 | `native` | Uncompressed identity bypass (copy only; no codec, no resize) |
 | `downsample` | Resize to requested capture `HxW` with OpenCV `INTER_AREA`, then back to policy-native resolution with `INTER_LINEAR` |
 | `jpeg` | Real JPEG encode/decode at **native** resolution via OpenCV `imencode`/ `imdecode` (RGB↔BGR for the codec). Quality is in `[1, 100]`; quality `100` is still encoded and is **not** an uncompressed identity control |
+| `h264` | **Causal** libx264 stream via a verified FFmpeg install + PyAV. One persistent encoder/decoder per camera **per episode**; frames are fed in render order. This is **not** isolated still-frame JPEG-like encoding. State resets between episodes. |
 
 JPEG quality is a codec parameter, **not** a bitrate. Optional bandwidth estimates
 use measured JPEG payload bytes × frame rate and exclude container/RTP/TCP
 overhead. Provenance records OpenCV/NumPy versions, quality, requested and
 effective dimensions, compressed byte counts, and frame rate.
 
-CLI: `--image-mode`, `--capture-hw`, `--jpeg-quality`, and isolated smoke sweeps
-`--image-sweep resolution|jpeg` (mutually exclusive with a latency sweep).
+### H.264 (optional)
+
+Requires system FFmpeg with `libx264` on `PATH` and `pip install 'breakpoint-eval[h264]'`
+(PyAV). Core installs omit these. Unavailable environments are marked unsupported
+with install guidance — not faked.
+
+Pinned causal settings (validated against `ffmpeg -h encoder=libx264` when present):
+
+- pixel format `yuv420p`, tune `zerolatency`, `max_b_frames=0`, `rc-lookahead=0`
+- explicit resolution (with even-dimension padding, cropped back to policy-native),
+  frame rate, bitrate target, GOP/keyframe interval, and preset
+- requested bitrate **and** actual encoded bits / elapsed stream duration are both
+  recorded; short-episode overhead and target/actual gaps stay visible
+
+**Quality-only** sweeps isolate visual quality and document excluded
+encode/decode/transport delays. If a decoded frame is not yet available, use an
+explicit startup hold (zeros) or last-frame hold — never a future frame.
+**Deployment** mode may model codec buffering delay in control frames without
+adding it to inference `latency_s` (no double-counting). Closed-loop rollouts
+encode live observations; they must not replay a whole prerecorded trajectory as
+the observation stream.
+
+CLI: `--image-mode`, `--capture-hw`, `--jpeg-quality`, `--h264-bitrate-kbps`,
+`--h264-latency-mode`, and isolated smoke sweeps
+`--image-sweep resolution|jpeg|h264` (mutually exclusive with a latency sweep).
 
 ## ACT ONNX export and quantization
 

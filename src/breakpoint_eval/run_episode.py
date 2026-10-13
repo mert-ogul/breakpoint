@@ -87,6 +87,7 @@ class EpisodeResult:
     n_missed_deadlines: int = 0
     image_mode: str = ImageMode.NATIVE.value
     image_degrade_summary: dict[str, Any] = field(default_factory=dict)
+    h264_summary: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -98,9 +99,17 @@ def _policy_observation(
     observation: dict[str, Any],
     image_cfg: ImageDegradeConfig,
     frame_stats: list[FrameDegradeStats],
+    *,
+    h264_session: Any | None = None,
+    capture_timestamp_s: float | None = None,
 ) -> Any:
     """Degrade raw pixels then apply LeRobot preprocess (norms happen inside policy)."""
-    degraded = degrade_observation(observation, image_cfg)
+    degraded = degrade_observation(
+        observation,
+        image_cfg,
+        h264_session=h264_session,
+        capture_timestamp_s=capture_timestamp_s,
+    )
     frame_stats.extend(degraded.frames)
     return preprocess_observation(degraded.observation)
 
@@ -205,8 +214,15 @@ def _run_episode_with_scheduler(
     outcome = EpisodeOutcome.TERMINATED_NO_SUCCESS
     scheduler: LatencyScheduler | None = None
     frame_stats: list[FrameDegradeStats] = []
+    h264_session = None
+    h264_summary: dict[str, Any] = {}
 
     try:
+        if image_cfg.mode is ImageMode.H264:
+            from breakpoint_eval.h264_stream import EpisodeH264Session
+
+            # Fresh encoder/decoder state for this episode (not a prerecorded clip).
+            h264_session = EpisodeH264Session(image_cfg.build_h264_stream_config())
         adapter.reset()
         observation, _info = env.reset(seed=[seed])
         initial = initial_hold_command_from_obs(observation)
@@ -240,7 +256,14 @@ def _run_episode_with_scheduler(
         while not done:
             requested = False
             try:
-                obs_t = _policy_observation(observation, image_cfg, frame_stats)
+                capture_t = scheduler.sim_time_s if scheduler is not None else 0.0
+                obs_t = _policy_observation(
+                    observation,
+                    image_cfg,
+                    frame_stats,
+                    h264_session=h264_session,
+                    capture_timestamp_s=capture_t,
+                )
             except (TypeError, ValueError, RuntimeError) as exc:
                 runtime_error = f"{type(exc).__name__}: {exc}"
                 outcome = EpisodeOutcome.RUNTIME_ERROR
@@ -273,6 +296,8 @@ def _run_episode_with_scheduler(
             decision = scheduler.decide_apply(requested_this_step=requested)
             action_batch = decision.action[None, ...]
             observation, reward, terminated_arr, truncated_arr, info = env.step(action_batch)
+            if h264_session is not None:
+                h264_session.advance_time(chunk_info.control_period_s)
             reward_f = float(np.asarray(reward).reshape(-1)[0])
             terminated = bool(np.asarray(terminated_arr).reshape(-1)[0])
             truncated = bool(np.asarray(truncated_arr).reshape(-1)[0])
@@ -321,6 +346,10 @@ def _run_episode_with_scheduler(
         runtime_error = f"{type(exc).__name__}: {exc}"
         outcome = EpisodeOutcome.RUNTIME_ERROR
         LOGGER.exception("Runtime error in episode seed=%s", seed)
+    finally:
+        if h264_session is not None:
+            h264_summary = h264_session.summary()
+            h264_session.close()
 
     if max_reward == float("-inf"):
         max_reward = 0.0
@@ -358,6 +387,7 @@ def _run_episode_with_scheduler(
         n_missed_deadlines=scheduler.n_missed_deadlines if scheduler is not None else 0,
         image_mode=image_cfg.mode.value,
         image_degrade_summary=summarize_frame_stats(frame_stats, image_cfg),
+        h264_summary=h264_summary,
     )
 
 

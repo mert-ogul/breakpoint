@@ -26,6 +26,7 @@ Nothing below invents success rates for candidates that were not evaluated.
 | mujoco | 2.3.7 | Resolved with gym-aloha 0.1.1 |
 | dm-control | 1.0.14 | Resolved with gym-aloha 0.1.1 |
 | gym-pusht | 0.1.5 | `poetry.lock` at card commit; required for Diffusion PushT |
+| FFmpeg + libx264 | host binary on `PATH` | Optional H.264 only (`requirements-h264.txt` / `[h264]`); not in core |
 | draccus | git `9b690730ca108930519f48cc5dead72a72fd27cb` | LeRobot `poetry.lock` resolved_reference |
 
 Lockfile: [`requirements-feasibility.txt`](../requirements-feasibility.txt).
