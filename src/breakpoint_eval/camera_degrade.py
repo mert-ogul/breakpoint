@@ -286,9 +286,20 @@ def degrade_observation(
     )
 
 
-def resolution_smoke_configs() -> list[tuple[str, ImageDegradeConfig]]:
-    """Isolated resolution smoke: native + downsample capture sizes (ALOHA 480x640 native)."""
-    sizes = [(240, 320), (120, 160), (60, 80)]
+def resolution_smoke_configs(
+    *,
+    native_hw: tuple[int, int] | None = None,
+) -> list[tuple[str, ImageDegradeConfig]]:
+    """Isolated resolution smoke: native + downsample capture sizes.
+
+    Default sizes target ALOHA 480x640. Pass ``native_hw`` for other envs (e.g.
+    PushT rendered pixels) so capture sizes stay below the native frame.
+    """
+    if native_hw is None:
+        sizes = [(240, 320), (120, 160), (60, 80)]
+    else:
+        nh, nw = native_hw
+        sizes = [(max(1, nh // 2), max(1, nw // 2)), (max(1, nh // 4), max(1, nw // 4))]
     out: list[tuple[str, ImageDegradeConfig]] = [
         ("native", ImageDegradeConfig(mode=ImageMode.NATIVE)),
     ]

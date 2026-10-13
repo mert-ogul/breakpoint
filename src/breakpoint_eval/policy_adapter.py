@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import torch
 from torch import Tensor
+
+from breakpoint_eval.diffusion_adapter import (
+    compute_diffusion_action_chunk,
+    is_diffusion_policy,
+    observe_diffusion,
+)
 
 
 @dataclass(frozen=True)
@@ -17,6 +24,7 @@ class ChunkInfo:
     n_obs_steps: int
     temporal_ensemble_coeff: float | None
     control_period_s: float
+    policy_type: str
 
 
 @dataclass(frozen=True)
@@ -42,6 +50,15 @@ def _queue_len_before_select(policy: Any) -> int | None:
     return 0
 
 
+def _policy_type_label(policy: Any) -> str:
+    cfg = getattr(policy, "config", None)
+    if cfg is not None and getattr(cfg, "type", None):
+        return str(cfg.type)
+    if is_diffusion_policy(policy):
+        return "diffusion"
+    return "unknown"
+
+
 class PolicyAdapter:
     """Expose reset / select_action / chunk metadata without reimplementing norms."""
 
@@ -56,6 +73,7 @@ class PolicyAdapter:
             n_obs_steps=int(cfg.n_obs_steps),
             temporal_ensemble_coeff=getattr(cfg, "temporal_ensemble_coeff", None),
             control_period_s=control_period_s,
+            policy_type=_policy_type_label(policy),
         )
         self._policy.eval()
 
@@ -73,12 +91,17 @@ class PolicyAdapter:
             key: value.to(self._device, non_blocking=True) for key, value in observation.items()
         }
 
+    def observe(self, observation: dict[str, Tensor]) -> None:
+        """Update observation history without generating actions (Diffusion n_obs_steps>1)."""
+        if not is_diffusion_policy(self._policy):
+            return
+        observe_diffusion(self._policy, self._to_device(observation))
+
     def compute_action_chunk(self, observation: dict[str, Tensor]) -> np.ndarray:
         """Compute a full action chunk from a captured observation (inference_mode).
 
-        Used by the latency scheduler. Does not consume the policy's internal queue
-        across control steps; queue policies are reset around the one-shot drain so
-        the scheduler owns buffering under delay.
+        Used by the latency scheduler. Does not leave the policy action queue holding
+        the chunk; the scheduler owns buffering under delay.
         """
         if hasattr(self._policy, "compute_action_chunk"):
             chunk = self._policy.compute_action_chunk(observation)
@@ -87,6 +110,10 @@ class PolicyAdapter:
                 raise ValueError(f"compute_action_chunk must return 2-D, got {arr.shape}")
             return arr
 
+        batch = self._to_device(observation)
+        if is_diffusion_policy(self._policy):
+            return compute_diffusion_action_chunk(self._policy, batch)
+
         temporal = self.chunk_info.temporal_ensemble_coeff
         if temporal is not None:
             raise NotImplementedError(
@@ -94,7 +121,6 @@ class PolicyAdapter:
                 f"(temporal_ensemble_coeff={temporal})"
             )
 
-        batch = self._to_device(observation)
         n = self.chunk_info.n_action_steps
         saved_queue = None
         if hasattr(self._policy, "_action_queue"):
@@ -112,8 +138,6 @@ class PolicyAdapter:
                 actions.append(action.astype(np.float32, copy=False))
 
         if saved_queue is not None:
-            from collections import deque
-
             self._policy._action_queue = deque(saved_queue, maxlen=n)
         elif hasattr(self._policy, "_action_queue"):
             self._policy._action_queue.clear()

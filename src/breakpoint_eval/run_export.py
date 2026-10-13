@@ -94,19 +94,29 @@ def _assert_disjoint(calib: list[int], eval_seeds: list[int]) -> None:
 
 
 def run_export(req: ExportRequest) -> Path:
-    require_onnx()
-    if req.candidate != "act_aloha_transfer" and not req.candidate.startswith("act_"):
-        raise ValueError(
-            f"breakpoint export currently supports verified ACT adapters; got {req.candidate!r}"
-        )
     spec = resolve_candidate(req.candidate)
-    if spec.policy_type != "act":
-        raise ValueError(f"candidate {req.candidate!r} is policy_type={spec.policy_type}, not act")
-
     repo_root = (req.repo_root or repo_root_from_package()).resolve()
     ensure_lerobot_on_path(repo_root)
     output_dir = (req.output_dir or (repo_root / "artifacts" / "export" / req.candidate)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if spec.policy_type == "diffusion":
+        from breakpoint_eval.diffusion_export import run_diffusion_export_record
+
+        # ONNX/device/precision unsupported; PyTorch axes remain. No ACT timing reuse.
+        return run_diffusion_export_record(
+            candidate=req.candidate,
+            output_dir=output_dir,
+            device=req.device,
+            repo_root=repo_root,
+        )
+    if spec.policy_type != "act":
+        raise ValueError(
+            f"breakpoint export supports act and diffusion candidates; "
+            f"got {req.candidate!r} policy_type={spec.policy_type}"
+        )
+
+    require_onnx()
 
     calib_seeds = list(req.calibration_seeds or DEFAULT_CALIBRATION_SEEDS)
     eval_seeds = list(req.eval_seeds or DEFAULT_EVAL_SEEDS)

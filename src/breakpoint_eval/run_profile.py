@@ -36,6 +36,17 @@ class ProfileCliRequest:
 
 
 def run_profile(req: ProfileCliRequest) -> Path:
+    from breakpoint_eval.candidate_map import CANDIDATES
+
+    spec = CANDIDATES.get(req.candidate)
+    if spec is not None and spec.policy_type == "diffusion":
+        raise ValueError(
+            f"candidate {req.candidate!r} is Diffusion Policy: ORT action-chunk "
+            "profiling is unsupported. Profile a full PyTorch "
+            "generate_actions call (all denoising iterations) or a labeled "
+            "mixed UNet+scheduler runtime. Do not reuse ACT device timings. "
+            "See: breakpoint export --candidate diffusion_pusht"
+        )
     return run_device_profile(
         ProfileRequest(
             model_path=req.model_path,

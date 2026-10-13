@@ -105,6 +105,7 @@ def run_baseline(req: RunRequest) -> Path:
         "hub_repo": spec.hub_repo,
         "hub_revision": spec.hub_revision,
         "lerobot_commit": LEROBOT_COMMIT,
+        "policy_type": spec.policy_type,
         "env_type": spec.env_type,
         "env_task": spec.env_task,
         "device": req.device,
@@ -131,7 +132,14 @@ def run_baseline(req: RunRequest) -> Path:
         "simulator_policy_on_host_latency_may_be_from_profile_device": True,
         "image_degrade": config_provenance(image_cfg),
         "image_degrade_separate_from_latency": True,
+        "cross_task_success_pooling": False,
+        "success_semantics": spec.notes,
     }
+    if spec.policy_type == "diffusion":
+        from breakpoint_eval.diffusion_adapter import diffusion_inference_provenance
+
+        provenance["diffusion_inference"] = diffusion_inference_provenance(policy)
+        provenance["device_trace_from_act_forbidden"] = True
 
     try:
         env = make_vector_env(spec, n_envs=1)

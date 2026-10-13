@@ -216,8 +216,8 @@ def _add_export_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     parser.add_argument(
         "--candidate",
         default="act_aloha_transfer",
-        choices=sorted(c for c, s in CANDIDATES.items() if s.policy_type == "act"),
-        help="Verified ACT candidate",
+        choices=sorted(CANDIDATES),
+        help="Pinned candidate (ACT exports ONNX; Diffusion records unsupported ONNX)",
     )
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--device", choices=["cuda", "cpu", "mps"], default="cpu")
@@ -262,7 +262,8 @@ def _add_profile_parser(subparsers: argparse._SubParsersAction[argparse.Argument
     parser.add_argument(
         "--candidate",
         default="act_aloha_transfer",
-        choices=sorted(c for c, s in CANDIDATES.items() if s.policy_type == "act"),
+        choices=sorted(CANDIDATES),
+        help="Pinned candidate (Diffusion ORT profiling is unsupported)",
     )
     parser.add_argument("--model", type=Path, required=True, help="Exported ONNX model path")
     parser.add_argument(

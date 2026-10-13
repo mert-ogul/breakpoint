@@ -239,16 +239,15 @@ def _run_episode_with_scheduler(
         done = False
         while not done:
             requested = False
+            try:
+                obs_t = _policy_observation(observation, image_cfg, frame_stats)
+            except (TypeError, ValueError, RuntimeError) as exc:
+                runtime_error = f"{type(exc).__name__}: {exc}"
+                outcome = EpisodeOutcome.RUNTIME_ERROR
+                LOGGER.warning("Image degrade/preprocess failure at step %s: %s", len(steps), exc)
+                break
+
             if scheduler.needs_inference_request():
-                try:
-                    obs_t = _policy_observation(observation, image_cfg, frame_stats)
-                except (TypeError, ValueError, RuntimeError) as exc:
-                    runtime_error = f"{type(exc).__name__}: {exc}"
-                    outcome = EpisodeOutcome.RUNTIME_ERROR
-                    LOGGER.warning(
-                        "Image degrade/preprocess failure at step %s: %s", len(steps), exc
-                    )
-                    break
                 try:
                     action_chunk = adapter.compute_action_chunk(obs_t)
                 except (ValueError, NotImplementedError) as exc:
@@ -267,6 +266,9 @@ def _run_episode_with_scheduler(
                     LOGGER.warning("Latency trace exhausted at step %s: %s", len(steps), exc)
                     break
                 requested = True
+            else:
+                # Diffusion (n_obs_steps>1) must see every control-step observation.
+                adapter.observe(obs_t)
 
             decision = scheduler.decide_apply(requested_this_step=requested)
             action_batch = decision.action[None, ...]

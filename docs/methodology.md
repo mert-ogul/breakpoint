@@ -35,7 +35,11 @@ Consequences for timing:
 - Host time spent in `forward` is **not** part of simulated time.
 
 PushT (diffusion) uses 10 Hz (`Δt = 0.1 s`), `n_obs_steps = 2`,
-`n_action_steps = 8`. The same request-when-empty cadence applies.
+`n_action_steps = 8`, `horizon = 16`. The same request-when-empty cadence
+applies. Between inference requests the adapter still **observes** each
+control-step frame so the length-2 observation history matches upstream
+`select_action`. Fresh inference latency is one full `generate_actions` call
+(all denoising iterations + encode + unnormalize), not a single UNet pass.
 
 ## Action semantics (initial / fallback command)
 
@@ -291,6 +295,15 @@ count does not match the plan, or runtime errors leave the condition without a
 valid success-rate denominator under the plan’s rules. Summaries must show
 completed counts and errors and **suppress** that condition’s breakpoint
 decision rather than cherry-picking successful executions.
+
+## Multi-policy support (no plugin framework)
+
+Pinned candidates are explicit rows in `candidate_map.py` / `support_status.py`.
+ACT transfer and ACT insertion share the ACT adapter and ONNX export path; they
+remain separate tasks (do not pool success). Diffusion PushT uses a thin
+diffusion-specific chunk/observe path where queue and denoising behavior differ.
+ONNX/device/precision recipes are validated per candidate; unsupported export
+keeps PyTorch simulation axes and marks ONNX combinations unsupported.
 
 ## Reporting from saved records
 

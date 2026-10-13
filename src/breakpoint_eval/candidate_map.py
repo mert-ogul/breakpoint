@@ -59,7 +59,8 @@ CANDIDATES: dict[str, CandidateSpec] = {
         card_n_episodes=500,
         notes=(
             "Success when reward==4 (peg contacts pin). "
-            "Same ACT obs/action layout as transfer. Eval not run in this probe."
+            "Same ACT obs/action layout as transfer; separate checkpoint and task. "
+            "Do not pool success rates with transfer."
         ),
     ),
     "diffusion_pusht": CandidateSpec(
@@ -76,7 +77,9 @@ CANDIDATES: dict[str, CandidateSpec] = {
         notes=(
             "Success when max goal coverage >= 0.95. "
             "Obs: observation.image (3,96,96), observation.state (2); n_obs_steps 2; "
-            "horizon 16; n_action_steps 8; action in [0,512]^2. Eval not run."
+            "horizon 16; n_action_steps 8; action in [0,512]^2. "
+            "Inference latency = full generate_actions (all denoising steps). "
+            "Do not pool success rates with ALOHA tasks; do not reuse ACT timings."
         ),
     ),
 }

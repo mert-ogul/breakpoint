@@ -25,7 +25,7 @@ Nothing below invents success rates for candidates that were not evaluated.
 | gym-aloha | 0.1.1 | `poetry.lock` at card commit (`mujoco>=2.3.7,<3`) |
 | mujoco | 2.3.7 | Resolved with gym-aloha 0.1.1 |
 | dm-control | 1.0.14 | Resolved with gym-aloha 0.1.1 |
-| gym-pusht | 0.1.5 | `poetry.lock` at card commit (not installed in this ACT-only probe env) |
+| gym-pusht | 0.1.5 | `poetry.lock` at card commit; required for Diffusion PushT |
 | draccus | git `9b690730ca108930519f48cc5dead72a72fd27cb` | LeRobot `poetry.lock` resolved_reference |
 
 Lockfile: [`requirements-feasibility.txt`](../requirements-feasibility.txt).
@@ -55,11 +55,19 @@ weights with current main for the ACT transfer repo (config-only commit on main)
 
 Direct mapping lives in `src/breakpoint_eval/candidate_map.py`.
 
-| Candidate | Hub revision (pinned) | Env | Policy | Card metric | loaded | ran | reproduced |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| ACT ALOHA transfer | `9e93545744656e57d20f8b2d631d5d72544002ce` | `aloha` / `AlohaTransferCube-v0` | ACT | 83.0% / 500 ep | **yes** | **no** (GL block) | **no** |
-| ACT ALOHA insertion | `2bd896d066e7a2c65c4c945d065e7f0bb1e389ca` | `aloha` / `AlohaInsertion-v0` | ACT | 20.6% / 500 ep | not attempted | not attempted | not attempted |
-| Diffusion PushT | `202c8695947a458d8ce08ce1c0219f2588d60b33` | `pusht` / `PushT-v0` | diffusion | 65.4% / 500 ep | not attempted | not attempted | not attempted |
+| Candidate | Hub revision (pinned) | Env | Policy | Card metric | loaded | ran | reproduced | camera / L=0 | ONNX FP32 | device profile |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ACT ALOHA transfer | `9e93545744656e57d20f8b2d631d5d72544002ce` | `aloha` / `AlohaTransferCube-v0` | ACT | 83.0% / 500 ep | **yes** | **no** (GL block) | **no** | **yes** | **yes** | **yes** (ORT) |
+| ACT ALOHA insertion | `2bd896d066e7a2c65c4c945d065e7f0bb1e389ca` | `aloha` / `AlohaInsertion-v0` | ACT | 20.6% / 500 ep | **yes** | **no** (GL block) | **no** | **yes** | **yes** (shared ACT export) | not attempted |
+| Diffusion PushT | `202c8695947a458d8ce08ce1c0219f2588d60b33` | `pusht` / `PushT-v0` | diffusion | 65.4% / 500 ep | **yes** | not attempted | **no** | **yes** | **unsupported** | **unsupported** (ORT); PyTorch full-denoise path available |
+
+Machine-readable rows: `src/breakpoint_eval/support_status.py`. Do **not** pool
+success rates across different tasks into one policy ranking. Do **not** copy
+ACT latency profiles onto Diffusion Policy or another checkpoint.
+
+Pre-stress gates for every supported policy: native baseline load, documented
+environment success semantics, state reset, camera degradation at raw pixels,
+and zero-latency equivalence. Stress sweeps require those gates.
 
 Current Hub `main` tips observed during the probe (require newer LeRobot for config parse):
 
@@ -165,10 +173,16 @@ episode. Gate remains open.
    revisions for schema match.
 3. **Modern LeRobot success regression** — open issues report card metrics not
    reproduced on latest LeRobot even when training/eval commands look the same.
-4. **Insertion / PushT** — configs and revisions pinned; no load/eval evidence yet.
-5. **Device gap** — card used `cuda`; this host used `mps` for the load probe.
-   Reproduction should prefer CUDA to match the card, or document MPS as a
-   separate effective setting.
+4. **Insertion / PushT closed-loop** — both checkpoints **load**; MuJoCo GL still
+   blocks ALOHA `ran` on some hosts. PushT needs `gym-pusht==0.1.5`; episode
+   `ran` / card reproduction not claimed here.
+5. **Diffusion ONNX** — full action generation is a multi-step denoising loop;
+   single-shot ORT action-chunk export is **unsupported**. Profile full PyTorch
+   `generate_actions` (or a labeled mixed UNet+scheduler runtime), never one
+   UNet pass and never ACT timings.
+6. **Device gap** — card used `cuda`; this host used `mps`/`cpu` for load probes.
+   Reproduction should prefer CUDA to match the card, or document the effective
+   device separately.
 
 ## Smallest next step (gate open)
 
