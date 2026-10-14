@@ -42,6 +42,9 @@ class ResolvedRunPlan:
     latency_profile_identity: dict[str, Any] | None
     image_mode: str
     dry_run: bool
+    onnx_model: str | None = None
+    onnx_runtime: dict[str, Any] | None = None
+    policy_rng_seeds: list[int] | None = None
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -53,6 +56,7 @@ class ResolvedRunPlan:
             "plan_id": f"{self.candidate}__run__n{self.n_episodes}",
             "n_episodes": self.n_episodes,
             "env_seeds": list(self.seeds),
+            "policy_rng_seeds": list(self.policy_rng_seeds or []),
             "output_dir": str(self.output_dir),
             "repo_root": str(self.repo_root),
             "cache_dir": str(self.cache_dir),
@@ -61,6 +65,8 @@ class ResolvedRunPlan:
             "latency_s": self.latency_s if self.latency_mode == "constant" else None,
             "latency_profile_path": self.latency_profile_path,
             "latency_profile_identity": self.latency_profile_identity,
+            "onnx_model": self.onnx_model,
+            "onnx_runtime": self.onnx_runtime,
             "image_mode": self.image_mode,
             "dry_run": self.dry_run,
             "notes": list(self.notes),
@@ -93,6 +99,8 @@ def resolve_run_plan(
     image_mode: str = ImageMode.NATIVE.value,
     repo_root: Path | None = None,
     dry_run: bool = False,
+    onnx_model: Path | None = None,
+    policy_rng_seeds: list[int] | None = None,
 ) -> tuple[ResolvedRunPlan, LatencyProfile | None]:
     candidate, spec = resolve_model_to_candidate(model)
     root = (repo_root or repo_root_from_package()).resolve()
@@ -101,6 +109,9 @@ def resolve_run_plan(
     seed_list = seeds or build_seeds(n_episodes=n_episodes, seeds=None, start_seed=start_seed)
     if len(seed_list) != n_episodes:
         raise ValueError("seeds length must match n_episodes")
+    policy_seeds = policy_rng_seeds
+    if policy_seeds is not None and len(policy_seeds) != n_episodes:
+        raise ValueError("policy_rng_seeds length must match n_episodes")
 
     # Device / profile resolution
     profile_label = profile_device
@@ -115,9 +126,15 @@ def resolve_run_plan(
     identity: dict[str, Any] | None = None
     latency_mode = "constant"
     notes: list[str] = []
+    onnx_payload: dict[str, Any] | None = None
+    onnx_path_str: str | None = None
 
     if latency_profile is not None and profile_label is not None:
         raise ValueError("use only one of --latency-profile or --device/--profile-device replay")
+    if (latency_profile is not None or profile_label is not None) and onnx_model is None:
+        raise ValueError(
+            "device latency replay requires --onnx-model so timings bind to the profiled graph"
+        )
     if latency_profile is not None:
         if latency_ms != 0.0:
             raise ValueError("constant --latency-ms is distinct from --latency-profile replay")
@@ -159,6 +176,21 @@ def resolve_run_plan(
     else:
         notes.append(f"Constant simulated latency_ms={latency_ms}")
 
+    if onnx_model is not None:
+        from breakpoint_eval.export_runtime import resolve_onnx_runtime
+
+        resolved = resolve_onnx_runtime(
+            Path(onnx_model),
+            expected_candidate=candidate,
+            require_export_validation=True,
+        )
+        onnx_path_str = str(resolved.model_path)
+        onnx_payload = resolved.to_dict()
+        notes.append(
+            f"ONNX runtime {resolved.variant_label} recipe={resolved.recipe_id} "
+            f"sha256={resolved.model_sha256[:12]}…"
+        )
+
     plan = ResolvedRunPlan(
         model_input=model,
         candidate=candidate,
@@ -175,6 +207,9 @@ def resolve_run_plan(
         latency_profile_identity=identity,
         image_mode=image_mode,
         dry_run=dry_run,
+        onnx_model=onnx_path_str,
+        onnx_runtime=onnx_payload,
+        policy_rng_seeds=policy_seeds,
         notes=notes,
     )
     return plan, profile_obj
@@ -251,6 +286,8 @@ def execute_resolved_run(
                 latency_block_seed=latency_block_seed,
                 image_cfg=cfg,
                 repo_root=plan.repo_root,
+                onnx_model=Path(plan.onnx_model) if plan.onnx_model else None,
+                policy_rng_seeds=plan.policy_rng_seeds,
             )
         )
         payload = json.loads(report.read_text(encoding="utf-8"))
@@ -268,11 +305,11 @@ def execute_resolved_run(
             plan,
             extra={"completed_steps": completed, "primary_report": str(report)},
         )
-        # Execution errors (not low success): env failed or all episodes runtime-errored.
+        # Runtime-error episodes make the run incomplete (nonzero), even if some succeed.
         exit_code = 0
         if provenance.get("env_created") is False:
             exit_code = 2
-        if summary.get("n_runtime_error", 0) > 0 and summary.get("n_episodes_eligible", 0) == 0:
+        if int(summary.get("n_runtime_error") or 0) > 0:
             exit_code = 2
         return report, exit_code
     except KeyboardInterrupt:

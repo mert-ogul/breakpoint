@@ -25,9 +25,12 @@ from breakpoint_eval.act_export import (
     write_json,
 )
 from breakpoint_eval.export_corpus import (
+    SYNTHETIC_SOURCE,
+    SYNTHETIC_UNSUITABLE_NOTE,
     build_synthetic_corpus,
+    capture_simulator_rollout_corpus,
+    chunk_dict_by_sample_id,
     save_corpus,
-    try_build_simulator_corpus,
     write_corpus_sidecar,
 )
 from breakpoint_eval.export_parity import (
@@ -78,6 +81,7 @@ class ExportRequest:
     eval_seeds: list[int] | None = None
     closed_loop_seeds: list[int] | None = None
     prefer_simulator_corpus: bool = True
+    samples_per_episode: int = 2
     attempt_int8: bool = True
     attempt_int4: bool = True
     attempt_fp16: bool = True
@@ -146,27 +150,46 @@ def run_export(req: ExportRequest) -> Path:
     eval_samples = []
     calib_samples = []
     if req.prefer_simulator_corpus:
-        eval_samples, eval_meta = try_build_simulator_corpus(
+        eval_samples, eval_meta = capture_simulator_rollout_corpus(
             seeds=eval_seeds,
             candidate=req.candidate,
             repo_root=repo_root,
+            policy=policy,
+            control_period_s=period_s,
             device=req.device,
+            samples_per_episode=req.samples_per_episode,
+            capture_horizon_steps=chunk_info.n_action_steps,
         )
-        calib_samples, calib_meta = try_build_simulator_corpus(
+        calib_samples, calib_meta = capture_simulator_rollout_corpus(
             seeds=calib_seeds,
             candidate=req.candidate,
             repo_root=repo_root,
+            policy=policy,
+            control_period_s=period_s,
             device=req.device,
+            samples_per_episode=req.samples_per_episode,
+            capture_horizon_steps=chunk_info.n_action_steps,
         )
         corpus_meta["evaluation_capture"] = eval_meta
         corpus_meta["calibration_capture"] = calib_meta
-
-    if not eval_samples:
+        if not eval_samples:
+            raise RuntimeError(
+                "simulator evaluation corpus capture failed; refusing synthetic fallback. "
+                f"detail={eval_meta}. Pass --synthetic-corpus only for non-deployment tests."
+            )
+        if not calib_samples:
+            raise RuntimeError(
+                "simulator calibration corpus capture failed; refusing synthetic fallback. "
+                f"detail={calib_meta}. Pass --synthetic-corpus only for non-deployment tests."
+            )
+        corpus_meta["corpus_mode"] = "simulator_rollout"
+        corpus_meta["suitable_as_deployment_evidence"] = True
+    else:
         eval_samples = build_synthetic_corpus(eval_seeds)
-        corpus_meta["evaluation_fallback"] = "synthetic_shape_matched"
-    if not calib_samples:
         calib_samples = build_synthetic_corpus(calib_seeds)
-        corpus_meta["calibration_fallback"] = "synthetic_shape_matched"
+        corpus_meta["corpus_mode"] = SYNTHETIC_SOURCE
+        corpus_meta["suitable_as_deployment_evidence"] = False
+        corpus_meta["synthetic_note"] = SYNTHETIC_UNSUITABLE_NOTE
 
     eval_manifest = save_corpus(output_dir / "corpus_eval.npz", eval_samples, role="evaluation")
     calib_manifest = save_corpus(
@@ -203,6 +226,7 @@ def run_export(req: ExportRequest) -> Path:
         reference_chunks=pytorch_chunks,
         candidate_chunks=ort_fp32_chunks,
         seeds=[s.seed for s in eval_samples],
+        sample_ids=[s.sample_id for s in eval_samples],
         reference_label="pytorch_fp32",
         candidate_label="onnx_fp32",
         tolerances=ParityTolerances(),
@@ -332,6 +356,8 @@ def run_export(req: ExportRequest) -> Path:
                 "status": "errored",
                 "detail": f"{type(exc).__name__}: {exc}",
                 "note": "closed-loop requires simulator; not fabricated",
+                "passed": False,
+                "completed": False,
             }
         else:
             try:
@@ -349,10 +375,41 @@ def run_export(req: ExportRequest) -> Path:
                     seeds=closed_seeds,
                 )
                 closed_loop = report.to_dict()
+                closed_loop["completed"] = closed_loop.get("status") == "ok"
             finally:
                 env.close()
     else:
-        closed_loop = {"status": "skipped", "detail": "run_closed_loop=False"}
+        closed_loop = {
+            "status": "skipped",
+            "detail": "run_closed_loop=False",
+            "passed": None,
+            "completed": False,
+            "note": ("Open-loop tensor parity alone is not completed closed-loop validation."),
+        }
+
+    open_loop_passed = bool(fp32_vs_pytorch.passed)
+    closed_loop_completed = bool(closed_loop.get("completed"))
+    closed_loop_passed = closed_loop.get("passed")
+    if req.run_closed_loop:
+        closed_loop_ok = closed_loop_completed and closed_loop_passed is True
+    else:
+        closed_loop_ok = True  # not requested; does not fail the gate
+    export_validation = {
+        "open_loop_fp32_parity_passed": open_loop_passed,
+        "closed_loop_requested": req.run_closed_loop,
+        "closed_loop_completed": closed_loop_completed,
+        "closed_loop_passed": closed_loop_passed,
+        "corpus_suitable_as_deployment_evidence": bool(
+            corpus_meta.get("suitable_as_deployment_evidence")
+        ),
+        "tensor_only_is_not_closed_loop_validation": True,
+        "passed": open_loop_passed and closed_loop_ok,
+        "note": (
+            "Export validation requires FP32 open-loop parity. When closed-loop is "
+            "requested, its failure or error also fails this gate. A passed tensor-only "
+            "comparison is never recorded as completed closed-loop validation."
+        ),
+    }
 
     import onnx
     import onnxruntime as ort
@@ -407,23 +464,26 @@ def run_export(req: ExportRequest) -> Path:
         "variants": [v.to_dict() for v in variants],
         "comparisons": comparisons,
         "closed_loop_onnx_fp32_vs_pytorch": closed_loop,
+        "export_validation": export_validation,
         "notes": [
             "Precision labels alone never drive results; each variant uses its weights/runtime.",
             "INT8 recipe is static QDQ; not silently replaced after failure.",
             "INT4 is weight-only MatMulNBits when supported; not native INT4 activation timing.",
             "Quantized success-rate preservation is not required; valid labeled compute is.",
+            "Reference chunk NPZ keys are sample_id values (seed{seed}_t{step}).",
+            SYNTHETIC_UNSUITABLE_NOTE,
         ],
     }
     manifest_path = output_dir / "export_manifest.json"
     write_json(manifest_path, manifest)
-    # Also dump numpy reference chunks for inspection.
+    # Reference chunks keyed by sample_id for profile validation.
     np.savez_compressed(
         output_dir / "eval_chunks_pytorch_fp32.npz",
-        **{f"seed_{s.seed}": c for s, c in zip(eval_samples, pytorch_chunks, strict=True)},
+        **chunk_dict_by_sample_id(eval_samples, pytorch_chunks),
     )
     np.savez_compressed(
         output_dir / "eval_chunks_onnx_fp32.npz",
-        **{f"seed_{s.seed}": c for s, c in zip(eval_samples, ort_fp32_chunks, strict=True)},
+        **chunk_dict_by_sample_id(eval_samples, ort_fp32_chunks),
     )
     LOGGER.info("Wrote export manifest %s", manifest_path)
     return manifest_path

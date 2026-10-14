@@ -55,6 +55,8 @@ class RunRequest:
     latency_block_seed: int | None = None
     image_cfg: ImageDegradeConfig | None = None
     repo_root: Path | None = None
+    onnx_model: Path | None = None
+    policy_rng_seeds: list[int] | None = None
 
 
 def run_baseline(req: RunRequest) -> Path:
@@ -62,6 +64,14 @@ def run_baseline(req: RunRequest) -> Path:
         raise ValueError(
             "constant --latency-ms and measured --latency-profile are mutually exclusive"
         )
+    if req.policy_rng_seeds is not None and len(req.policy_rng_seeds) != len(req.seeds):
+        raise ValueError("policy_rng_seeds length must match env seeds length")
+    if req.latency_profile is not None and req.onnx_model is None:
+        raise ValueError(
+            "measured latency profile requires --onnx-model matching the profiled graph; "
+            "do not replay ONNX timings onto an unlabeled PyTorch FP32 rollout"
+        )
+
     repo_root = (req.repo_root or repo_root_from_package()).resolve()
     ensure_lerobot_on_path(repo_root)
     spec = resolve_candidate(req.candidate)
@@ -69,8 +79,46 @@ def run_baseline(req: RunRequest) -> Path:
 
     period_s = control_period_s(spec)
     env_cfg = make_env_config(spec)
-    policy = load_policy(spec, str(checkpoint_dir), req.device)
-    adapter = PolicyAdapter(policy, control_period_s=period_s, device=req.device)
+    onnx_runtime = None
+    policy = None
+    if req.onnx_model is not None:
+        from breakpoint_eval.act_export import (
+            OrtActChunkSession,
+            OrtPolicyAdapter,
+            chunk_info_from_policy,
+        )
+        from breakpoint_eval.export_runtime import resolve_onnx_runtime
+
+        if spec.policy_type != "act":
+            raise ValueError(
+                f"--onnx-model is only supported for ACT candidates; got {spec.policy_type}"
+            )
+        onnx_runtime = resolve_onnx_runtime(
+            Path(req.onnx_model),
+            expected_candidate=req.candidate,
+            require_export_validation=True,
+        )
+        # Load PyTorch policy only for chunk_info metadata / diffusion-forbidden checks;
+        # actions come from ORT.
+        policy = load_policy(spec, str(checkpoint_dir), req.device)
+        chunk_info = chunk_info_from_policy(policy, period_s)
+        if chunk_info.n_action_steps != onnx_runtime.chunk_horizon:
+            raise ValueError(
+                f"ONNX chunk horizon {onnx_runtime.chunk_horizon} != policy "
+                f"n_action_steps {chunk_info.n_action_steps}"
+            )
+        session = OrtActChunkSession(onnx_runtime.model_path, providers=["CPUExecutionProvider"])
+        adapter: Any = OrtPolicyAdapter(
+            session,
+            chunk_info=chunk_info,
+            image_key="observation.images.top",
+        )
+        backend = "onnxruntime"
+    else:
+        policy = load_policy(spec, str(checkpoint_dir), req.device)
+        adapter = PolicyAdapter(policy, control_period_s=period_s, device=req.device)
+        backend = "pytorch"
+
     image_cfg = req.image_cfg or ImageDegradeConfig(mode=ImageMode.NATIVE)
     if image_cfg.frame_rate_hz is None or image_cfg.mode is ImageMode.H264:
         # H.264 stream rate must match the environment control / camera rate.
@@ -80,10 +128,16 @@ def run_baseline(req: RunRequest) -> Path:
     if req.latency_profile is not None:
         from breakpoint_eval.latency_trace import EndOfTraceBehavior, assert_profile_compatible
 
+        assert onnx_runtime is not None  # enforced above
         assert_profile_compatible(
             req.latency_profile,
             candidate=req.candidate,
-            chunk_horizon=adapter.chunk_info.n_action_steps,
+            model_sha256=onnx_runtime.model_sha256,
+            precision_recipe=onnx_runtime.recipe_id,
+            variant_label=onnx_runtime.variant_label,
+            chunk_horizon=onnx_runtime.chunk_horizon,
+            hub_revision=onnx_runtime.hub_revision or None,
+            input_shapes=onnx_runtime.input_shapes,
         )
         latency_replayer = LatencyTraceReplayer.from_profile(
             req.latency_profile,
@@ -91,6 +145,12 @@ def run_baseline(req: RunRequest) -> Path:
             block_length=req.latency_block_length,
             block_resample_seed=req.latency_block_seed,
         )
+
+    policy_rng_seeds = (
+        list(req.policy_rng_seeds)
+        if req.policy_rng_seeds is not None
+        else [int(s) + 10_000 for s in req.seeds]
+    )
 
     provenance: dict[str, Any] = {
         "candidate": req.candidate,
@@ -104,6 +164,8 @@ def run_baseline(req: RunRequest) -> Path:
         "python": sys.version,
         "checkpoint_dir": str(checkpoint_dir),
         "seeds": list(req.seeds),
+        "env_seeds": list(req.seeds),
+        "policy_rng_seeds": policy_rng_seeds,
         "control_period_s": period_s,
         "fps": env_cfg.fps,
         "chunk_size": adapter.chunk_info.chunk_size,
@@ -112,6 +174,8 @@ def run_baseline(req: RunRequest) -> Path:
         "temporal_ensemble_coeff": adapter.chunk_info.temporal_ensemble_coeff,
         "save_video": req.save_video,
         "policy_loaded": True,
+        "policy_backend": backend,
+        "onnx_runtime": onnx_runtime.to_dict() if onnx_runtime is not None else None,
         "latency_s": req.latency_s if latency_replayer is None else None,
         "latency_ms": (req.latency_s * 1000.0) if latency_replayer is None else None,
         "latency_mode": "trace_replay" if latency_replayer is not None else "constant",
@@ -180,6 +244,7 @@ def run_baseline(req: RunRequest) -> Path:
                 latency_s=0.0 if latency_replayer is not None else req.latency_s,
                 latency_replayer=latency_replayer,
                 image_cfg=image_cfg,
+                policy_rng_seed=policy_rng_seeds[episode_index],
             )
             if req.save_video and frames:
                 video_path = (
@@ -189,9 +254,10 @@ def run_baseline(req: RunRequest) -> Path:
                 result.video_path = str(video_path)
             episodes.append(result)
             LOGGER.info(
-                "episode=%s seed=%s outcome=%s steps=%s inferences=%s",
+                "episode=%s seed=%s policy_rng_seed=%s outcome=%s steps=%s inferences=%s",
                 episode_index,
                 seed,
+                policy_rng_seeds[episode_index],
                 result.outcome.value,
                 result.n_control_steps,
                 result.n_inference_calls,

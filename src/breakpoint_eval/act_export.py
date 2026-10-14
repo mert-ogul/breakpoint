@@ -238,6 +238,10 @@ class OrtPolicyAdapter:
         self._action_queue = deque([], maxlen=self.chunk_info.n_action_steps)
         self._control_step_index = 0
 
+    def observe(self, observation: dict[str, Tensor]) -> None:
+        """No-op for ACT (n_obs_steps=1); required by the episode scheduler API."""
+        return None
+
     def _feeds_from_obs(self, observation: dict[str, Tensor]) -> tuple[np.ndarray, np.ndarray]:
         if self._image_key not in observation:
             raise KeyError(f"missing {self._image_key} in observation")

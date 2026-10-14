@@ -42,6 +42,7 @@ class ParityTolerances:
 @dataclass
 class SampleParity:
     seed: int
+    sample_id: str
     shape_ok: bool
     finite_ok: bool
     max_abs_error: float
@@ -84,6 +85,7 @@ def compare_chunks(
     *,
     seed: int,
     tolerances: ParityTolerances,
+    sample_id: str | None = None,
 ) -> SampleParity:
     shape_ok = reference.shape == candidate.shape
     finite_ok = bool(np.isfinite(reference).all() and np.isfinite(candidate).all())
@@ -102,6 +104,7 @@ def compare_chunks(
         allclose = False
     return SampleParity(
         seed=seed,
+        sample_id=sample_id if sample_id is not None else f"seed{seed}_t0",
         shape_ok=shape_ok,
         finite_ok=finite_ok,
         max_abs_error=max_abs,
@@ -120,14 +123,21 @@ def evaluate_corpus_parity(
     candidate_label: str,
     tolerances: ParityTolerances | None = None,
     enforce_fp32_gates: bool = True,
+    sample_ids: list[str] | None = None,
 ) -> CorpusParityReport:
     """Compare chunk lists. When enforce_fp32_gates=False, still report errors."""
     tol = tolerances or ParityTolerances()
     if not (len(reference_chunks) == len(candidate_chunks) == len(seeds)):
         raise ValueError("reference, candidate, and seeds lengths must match")
+    if sample_ids is None:
+        sample_ids = [f"seed{seed}_t0" for seed in seeds]
+    if len(sample_ids) != len(seeds):
+        raise ValueError("sample_ids length must match seeds")
     samples = [
-        compare_chunks(ref, cand, seed=seed, tolerances=tol)
-        for ref, cand, seed in zip(reference_chunks, candidate_chunks, seeds, strict=True)
+        compare_chunks(ref, cand, seed=seed, sample_id=sample_id, tolerances=tol)
+        for ref, cand, seed, sample_id in zip(
+            reference_chunks, candidate_chunks, seeds, sample_ids, strict=True
+        )
     ]
     shapes_ok = all(s.shape_ok for s in samples)
     finite_ok = all(s.finite_ok for s in samples)

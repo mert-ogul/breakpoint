@@ -1,0 +1,170 @@
+"""ONNX runtime identity resolution and profile mismatch rejection."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+from torch import nn
+
+pytest.importorskip("onnx")
+pytest.importorskip("onnxruntime")
+
+from breakpoint_eval.act_export import (  # noqa: E402
+    INPUT_IMAGES,
+    INPUT_STATE,
+    OUTPUT_CHUNK,
+    RECIPE_ONNX_FP32,
+    sha256_file,
+)
+from breakpoint_eval.export_runtime import (  # noqa: E402
+    apply_policy_rng_seed,
+    resolve_onnx_runtime,
+)
+from breakpoint_eval.latency_trace import (  # noqa: E402
+    TIMED_BOUNDARY_ORT_RUN,
+    assert_profile_compatible,
+    load_latency_profile,
+)
+
+
+class _Tiny(nn.Module):
+    def forward(self, images_top: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        b = images_top.shape[0]
+        return torch.zeros(b, 4, 2)
+
+
+def _write_export_dir(tmp_path: Path) -> tuple[Path, Path, str]:
+    mod = _Tiny().eval()
+    imgs = torch.rand(1, 3, 8, 8)
+    state = torch.randn(1, 2)
+    model_path = tmp_path / "act_chunk_fp32.onnx"
+    torch.onnx.export(
+        mod,
+        (imgs, state),
+        str(model_path),
+        input_names=[INPUT_IMAGES, INPUT_STATE],
+        output_names=[OUTPUT_CHUNK],
+        opset_version=17,
+        dynamo=False,
+    )
+    digest = sha256_file(model_path)
+    manifest = {
+        "candidate": "act_aloha_transfer",
+        "hub_revision": "deadbeef",
+        "io_spec": {
+            "image_shape": [1, 3, 8, 8],
+            "state_shape": [1, 2],
+            "action_chunk_shape": [1, 4, 2],
+        },
+        "chunk_info": {"n_action_steps": 4},
+        "corpus": {"evaluation": {"sha256": "corpushash"}},
+        "export_validation": {"passed": True},
+        "variants": [
+            {
+                "label": "onnx_fp32",
+                "recipe_id": RECIPE_ONNX_FP32,
+                "path": str(model_path),
+                "status": "ok",
+                "graph": {"sha256": digest},
+            }
+        ],
+    }
+    man_path = tmp_path / "export_manifest.json"
+    man_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return model_path, man_path, digest
+
+
+def test_resolve_onnx_runtime_from_manifest(tmp_path: Path) -> None:
+    model_path, _, digest = _write_export_dir(tmp_path)
+    resolved = resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+    assert resolved.model_sha256 == digest
+    assert resolved.recipe_id == RECIPE_ONNX_FP32
+    assert resolved.variant_label == "onnx_fp32"
+    assert resolved.chunk_horizon == 4
+
+
+def test_resolve_rejects_unvalidated_export(tmp_path: Path) -> None:
+    model_path, man_path, _ = _write_export_dir(tmp_path)
+    payload = json.loads(man_path.read_text())
+    payload["export_validation"] = {"passed": False}
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="export_validation"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
+def test_profile_rejects_pytorch_relabel_via_hash_mismatch(tmp_path: Path) -> None:
+    model_path, _, digest = _write_export_dir(tmp_path)
+    profile = {
+        "schema_version": 1,
+        "device_label": "local",
+        "candidate": "act_aloha_transfer",
+        "hub_revision": "deadbeef",
+        "timed_boundary": TIMED_BOUNDARY_ORT_RUN,
+        "chunk_horizon": 4,
+        "model": {
+            "sha256": digest,
+            "precision_recipe": RECIPE_ONNX_FP32,
+            "variant_label": "onnx_fp32",
+        },
+        "input_contract": {
+            "shapes": {INPUT_IMAGES: [1, 3, 8, 8], INPUT_STATE: [1, 2]},
+            "corpus_sha256": "corpushash",
+        },
+        "output_validation": {"passed": True},
+        "measurements": {
+            "n_measured": 2,
+            "inference_latency_s": [0.01, 0.02],
+            "summary": {
+                "count": 2,
+                "median_s": 0.015,
+                "p95_s": float(np.percentile([0.01, 0.02], 95)),
+                "p99_s": float(np.percentile([0.01, 0.02], 99)),
+            },
+        },
+        "runtime": {},
+    }
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    prof = load_latency_profile(path)
+    assert_profile_compatible(
+        prof,
+        candidate="act_aloha_transfer",
+        model_sha256=digest,
+        precision_recipe=RECIPE_ONNX_FP32,
+        variant_label="onnx_fp32",
+        chunk_horizon=4,
+        hub_revision="deadbeef",
+        input_shapes={INPUT_IMAGES: [1, 3, 8, 8], INPUT_STATE: [1, 2]},
+    )
+    with pytest.raises(ValueError, match="precision_recipe"):
+        assert_profile_compatible(
+            prof,
+            candidate="act_aloha_transfer",
+            model_sha256=digest,
+            precision_recipe="onnxruntime_static_qdq_uint8_act_qint8_weight_minmax_calibrate",
+            variant_label="int8",
+            chunk_horizon=4,
+        )
+
+
+def test_apply_policy_rng_seed_sets_torch() -> None:
+    apply_policy_rng_seed(123)
+    a = torch.randn(2)
+    apply_policy_rng_seed(123)
+    b = torch.randn(2)
+    assert torch.allclose(a, b)
+
+
+def test_plan_refuses_existing_out(tmp_path: Path) -> None:
+    from breakpoint_eval.run_plan_execute import _refuse_or_prepare_out
+
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "marker").write_text("x", encoding="utf-8")
+    with pytest.raises(FileExistsError, match="not empty"):
+        _refuse_or_prepare_out(out, allow_existing=False)
+    _refuse_or_prepare_out(out, allow_existing=True)

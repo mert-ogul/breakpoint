@@ -78,12 +78,41 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
     parser.add_argument("--start-seed", type=int, default=1000)
     parser.add_argument(
+        "--policy-seeds",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated policy RNG seeds paired with --seeds "
+            "(defaults to env_seed+10000 when omitted)"
+        ),
+    )
+    parser.add_argument(
+        "--onnx-model",
+        type=Path,
+        default=None,
+        help=(
+            "Exported ONNX graph for OrtPolicyAdapter evaluation; identity/recipe "
+            "resolved from sibling export_manifest.json"
+        ),
+    )
+    parser.add_argument(
         "--out",
         "--output-dir",
         dest="output_dir",
         type=Path,
         default=None,
         help="Directory for provenance + episode results",
+    )
+    parser.add_argument(
+        "--plan",
+        type=Path,
+        default=None,
+        help="Execute conditions from an experiment plan JSON (requires --out)",
+    )
+    parser.add_argument(
+        "--allow-existing-out",
+        action="store_true",
+        help="Allow --out to reuse a non-empty directory (default: refuse)",
     )
     parser.add_argument(
         "--dry-run",
@@ -264,7 +293,11 @@ def _add_export_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     parser.add_argument(
         "--synthetic-corpus",
         action="store_true",
-        help="Skip simulator capture; use shape-matched synthetic observations",
+        help=(
+            "Skip simulator capture; use shape-matched synthetic observations "
+            "(explicitly unsuitable as deployment evidence). Without this flag, "
+            "simulator capture failure aborts export."
+        ),
     )
     parser.add_argument("--no-int8", action="store_true")
     parser.add_argument("--no-int4", action="store_true")
@@ -488,6 +521,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
         logging.error("%s", exc)
         return 2
     payload = json.loads(manifest.read_text(encoding="utf-8"))
+    validation = payload.get("export_validation") or {}
     print(manifest)
     print(
         json.dumps(
@@ -496,6 +530,12 @@ def _cmd_export(args: argparse.Namespace) -> int:
                 "onnx_fp32_parity_passed": payload.get("comparisons", {})
                 .get("onnx_fp32_vs_pytorch_fp32", {})
                 .get("passed"),
+                "export_validation_passed": validation.get("passed"),
+                "closed_loop_completed": validation.get("closed_loop_completed"),
+                "closed_loop_passed": validation.get("closed_loop_passed"),
+                "corpus_suitable_as_deployment_evidence": validation.get(
+                    "corpus_suitable_as_deployment_evidence"
+                ),
                 "variants": [
                     {"label": v["label"], "status": v["status"], "recipe_id": v["recipe_id"]}
                     for v in payload.get("variants", [])
@@ -506,6 +546,9 @@ def _cmd_export(args: argparse.Namespace) -> int:
             }
         )
     )
+    # Fail on open-loop FP32 parity failure, or closed-loop failure/error when requested.
+    if validation.get("passed") is False:
+        return 1
     if not payload.get("comparisons", {}).get("onnx_fp32_vs_pytorch_fp32", {}).get("passed"):
         return 1
     return 0
@@ -655,6 +698,10 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    policy_seeds = parse_seed_list(args.policy_seeds) if args.policy_seeds is not None else None
+    if policy_seeds is not None and len(policy_seeds) != len(seeds):
+        parser.error("--policy-seeds length must match --seeds / --episodes")
+
     # Resolve candidate early for default output path.
     from breakpoint_eval.model_resolve import resolve_model_to_candidate
 
@@ -663,6 +710,34 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     except ValueError as exc:
         logging.error("%s", exc)
         return 2
+
+    if getattr(args, "plan", None) is not None:
+        if args.output_dir is None:
+            parser.error("--plan requires --out DIR")
+        from breakpoint_eval.run_plan_execute import execute_experiment_plan
+
+        try:
+            return execute_experiment_plan(
+                plan_path=Path(args.plan).resolve(),
+                output_dir=Path(args.output_dir).resolve(),
+                repo_root=repo_root,
+                device=args.device,
+                compute_device=args.compute_device,
+                onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
+                latency_profile=args.latency_profile,
+                profile_device=args.profile_device,
+                profile_variant=args.profile_variant,
+                profile_recipe_id=args.profile_recipe_id,
+                save_video=args.video,
+                dry_run=args.dry_run,
+                allow_existing_out=bool(args.allow_existing_out),
+                latency_end_of_trace=args.latency_end_of_trace,
+                latency_block_length=args.latency_block_length,
+                latency_block_seed=args.latency_block_seed,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            logging.error("%s", exc)
+            return 2
 
     output_dir = args.output_dir
     if output_dir is None:
@@ -706,6 +781,8 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                 image_mode=args.image_mode,
                 repo_root=repo_root,
                 dry_run=args.dry_run,
+                onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
+                policy_rng_seeds=policy_seeds,
             )
         except MissingPrerequisiteError as exc:
             logging.error("%s", exc)
@@ -838,6 +915,8 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             seeds=seeds,
             repo_root=repo_root,
             dry_run=args.dry_run,
+            onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
+            policy_rng_seeds=policy_seeds,
         )
     except (ValueError, MissingPrerequisiteError) as exc:
         logging.error("%s", exc)
@@ -880,6 +959,8 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                         latency_block_seed=args.latency_block_seed,
                         image_cfg=image_cfg,
                         repo_root=repo_root,
+                        onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
+                        policy_rng_seeds=policy_seeds,
                     )
                 )
                 print(report)

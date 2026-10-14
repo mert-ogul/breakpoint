@@ -224,7 +224,7 @@ def test_cli_dry_run_and_missing_rpi5_profile(tmp_path: Path) -> None:
     assert manifest["n_episodes"] == 2
     assert manifest["dry_run"] is True
 
-    # Missing rpi5 profiles → actionable failure (no invented timings).
+    # Device replay without --onnx-model is rejected (no PyTorch relabeling).
     code2 = main(
         [
             "run",
@@ -254,14 +254,54 @@ def test_cli_report_missing_dir(tmp_path: Path) -> None:
     assert code == 2
 
 
-def test_resolve_run_plan_explicit_profile_missing(tmp_path: Path) -> None:
-    with pytest.raises(MissingPrerequisiteError, match="latency profile not found"):
+def test_resolve_run_plan_profile_requires_onnx_model(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="onnx-model"):
         resolve_run_plan(
             model="act_aloha_transfer",
             n_episodes=1,
             output_dir=tmp_path / "o",
             device="cpu",
             latency_profile=tmp_path / "missing_profile.json",
+        )
+
+
+def test_resolve_run_plan_explicit_profile_missing(tmp_path: Path) -> None:
+    onnx = tmp_path / "act_chunk_fp32.onnx"
+    onnx.write_bytes(b"not-a-real-onnx")
+    (tmp_path / "export_manifest.json").write_text(
+        json.dumps(
+            {
+                "candidate": "act_aloha_transfer",
+                "hub_revision": "x",
+                "io_spec": {
+                    "image_shape": [1, 3, 8, 8],
+                    "state_shape": [1, 2],
+                    "action_chunk_shape": [1, 4, 2],
+                },
+                "chunk_info": {"n_action_steps": 4},
+                "export_validation": {"passed": True},
+                "variants": [
+                    {
+                        "label": "onnx_fp32",
+                        "recipe_id": "torch_onnx_export_fp32_opset17",
+                        "path": str(onnx),
+                        "status": "ok",
+                        "graph": {"sha256": "abc"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    # Manifest match fails on sha256 before profile load when graph hash mismatches.
+    with pytest.raises((MissingPrerequisiteError, ValueError)):
+        resolve_run_plan(
+            model="act_aloha_transfer",
+            n_episodes=1,
+            output_dir=tmp_path / "o",
+            device="cpu",
+            latency_profile=tmp_path / "missing_profile.json",
+            onnx_model=onnx,
         )
 
 

@@ -153,6 +153,8 @@ def assert_profile_compatible(
     corpus_sha256: str | None = None,
     input_shapes: dict[str, list[int]] | None = None,
     chunk_horizon: int | None = None,
+    hub_revision: str | None = None,
+    timed_boundary: str | None = TIMED_BOUNDARY_ORT_RUN,
 ) -> None:
     """Reject trace/artifact mismatches. A device label alone is insufficient."""
     ident = profile.identity()
@@ -160,7 +162,9 @@ def assert_profile_compatible(
     if ident.get("candidate") != candidate:
         errors.append(f"candidate: profile={ident.get('candidate')!r} requested={candidate!r}")
     if model_sha256 is not None and ident.get("model_sha256") != model_sha256:
-        errors.append("model_sha256 mismatch")
+        errors.append(
+            f"model_sha256: profile={ident.get('model_sha256')!r} requested={model_sha256!r}"
+        )
     if precision_recipe is not None and ident.get("precision_recipe") != precision_recipe:
         errors.append(
             f"precision_recipe: profile={ident.get('precision_recipe')!r} "
@@ -179,6 +183,14 @@ def assert_profile_compatible(
     if chunk_horizon is not None and int(ident.get("chunk_horizon") or -1) != int(chunk_horizon):
         errors.append(
             f"chunk_horizon: profile={ident.get('chunk_horizon')!r} requested={chunk_horizon!r}"
+        )
+    if hub_revision is not None:
+        profile_rev = profile.payload.get("hub_revision")
+        if profile_rev is not None and str(profile_rev) != str(hub_revision):
+            errors.append(f"hub_revision: profile={profile_rev!r} requested={hub_revision!r}")
+    if timed_boundary is not None and ident.get("timed_boundary") != timed_boundary:
+        errors.append(
+            f"timed_boundary: profile={ident.get('timed_boundary')!r} requested={timed_boundary!r}"
         )
     if errors:
         raise ValueError("latency profile incompatible with run artifacts: " + "; ".join(errors))

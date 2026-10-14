@@ -105,6 +105,12 @@ def load_profile_corpus(path: Path) -> dict[str, Any]:
         if "seeds" in data.files
         else list(range(len(images)))
     )
+    if "sample_ids" in data.files:
+        sample_ids = [str(x) for x in data["sample_ids"].tolist()]
+    else:
+        sample_ids = [f"seed{seed}_t0" for seed in seeds]
+    if len(sample_ids) != len(images):
+        raise ValueError("corpus sample_ids length must match images_top")
     raw = path.read_bytes()
     return {
         "path": str(path),
@@ -112,6 +118,7 @@ def load_profile_corpus(path: Path) -> dict[str, Any]:
         "images_top": images,
         "state": state,
         "seeds": seeds,
+        "sample_ids": sample_ids,
         "n_samples": int(images.shape[0]),
         "shapes": {
             INPUT_IMAGES: list(images.shape[1:]),
@@ -195,6 +202,21 @@ def _run_once(session: Any, images: np.ndarray, state: np.ndarray) -> np.ndarray
     return np.asarray(out, dtype=np.float32)
 
 
+def _resolve_reference_chunk(
+    reference_chunks: dict[str, np.ndarray],
+    *,
+    sample_id: str,
+    seed: int,
+) -> np.ndarray | None:
+    """Match export sample_id keys first; accept legacy seed_{seed} as fallback."""
+    if sample_id in reference_chunks:
+        return reference_chunks[sample_id]
+    legacy = f"seed_{seed}"
+    if legacy in reference_chunks:
+        return reference_chunks[legacy]
+    return None
+
+
 def validate_outputs_on_device(
     session: Any,
     corpus: dict[str, Any],
@@ -203,9 +225,16 @@ def validate_outputs_on_device(
     atol: float,
     rtol: float,
 ) -> dict[str, Any]:
-    """Validate representative outputs before trusting timings. Save this result."""
+    """Validate representative outputs before trusting timings. Save this result.
+
+    When ``reference_chunks`` is supplied, every corpus sample must have a
+    matching reference entry (by ``sample_id``, or legacy ``seed_{seed}``).
+    Missing matches fail validation; shape/finite-only is not enough.
+    """
     samples: list[dict[str, Any]] = []
     all_ok = True
+    missing_keys: list[str] = []
+    sample_ids = corpus.get("sample_ids") or [f"seed{s}_t0" for s in corpus["seeds"]]
     for i in range(corpus["n_samples"]):
         images = corpus["images_top"][i]
         state = corpus["state"][i]
@@ -215,42 +244,53 @@ def validate_outputs_on_device(
         ref_ok = True
         max_abs = None
         seed = corpus["seeds"][i]
-        key = f"seed_{seed}"
-        if reference_chunks is not None and key in reference_chunks:
-            ref = reference_chunks[key]
-            if ref.shape != out.shape:
-                # reference may be stored without explicit batch if exported differently
-                if ref.ndim == 2 and out.shape[0] == 1 and ref.shape == out.shape[1:]:
-                    ref = ref[None, ...]
-            if ref.shape != out.shape:
+        sample_id = sample_ids[i]
+        reference_compared = False
+        if reference_chunks is not None:
+            ref = _resolve_reference_chunk(reference_chunks, sample_id=sample_id, seed=seed)
+            if ref is None:
                 ref_ok = False
-                shape_ok = False
+                missing_keys.append(sample_id)
             else:
-                max_abs = float(np.max(np.abs(out.astype(np.float64) - ref.astype(np.float64))))
-                ref_ok = bool(np.allclose(out, ref, atol=atol, rtol=rtol))
+                reference_compared = True
+                if ref.shape != out.shape:
+                    # reference may be stored without explicit batch if exported differently
+                    if ref.ndim == 2 and out.shape[0] == 1 and ref.shape == out.shape[1:]:
+                        ref = ref[None, ...]
+                if ref.shape != out.shape:
+                    ref_ok = False
+                    shape_ok = False
+                else:
+                    max_abs = float(np.max(np.abs(out.astype(np.float64) - ref.astype(np.float64))))
+                    ref_ok = bool(np.allclose(out, ref, atol=atol, rtol=rtol))
         sample_ok = finite_ok and shape_ok and ref_ok
         all_ok = all_ok and sample_ok
         samples.append(
             {
                 "seed": seed,
+                "sample_id": sample_id,
                 "output_shape": list(out.shape),
                 "finite": finite_ok,
                 "shape_ok": shape_ok,
-                "reference_compared": reference_chunks is not None
-                and key in (reference_chunks or {}),
+                "reference_compared": reference_compared,
                 "max_abs_error_vs_reference": max_abs,
                 "passed": sample_ok,
             }
         )
+    if reference_chunks is not None and missing_keys:
+        all_ok = False
     return {
         "passed": all_ok,
         "n_samples": corpus["n_samples"],
         "atol": atol,
         "rtol": rtol,
         "reference_chunks_path": None,
+        "reference_required": reference_chunks is not None,
+        "missing_reference_sample_ids": missing_keys,
         "samples": samples,
         "note": (
             "Timings are trusted only when passed=true. "
+            "When reference chunks are supplied, every corpus sample_id must match. "
             "Simulator policy outputs may still be evaluated on the host while "
             "latency is replayed from this device profile."
         ),

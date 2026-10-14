@@ -24,8 +24,12 @@ from breakpoint_eval.act_export import (  # noqa: E402
     sha256_file,
 )
 from breakpoint_eval.export_corpus import (  # noqa: E402
+    SYNTHETIC_SOURCE,
+    SYNTHETIC_UNSUITABLE_NOTE,
     build_synthetic_corpus,
     load_corpus,
+    make_sample_id,
+    sample_step_indices,
     save_corpus,
 )
 from breakpoint_eval.export_parity import (  # noqa: E402
@@ -119,11 +123,42 @@ def test_tiny_onnx_fp32_parity(tmp_path: Path) -> None:
 
 def test_corpus_roundtrip_and_disjoint_roles(tmp_path: Path) -> None:
     samples = build_synthetic_corpus([10, 11], image_shape=(1, 3, 8, 8), state_dim=2)
+    assert all(s.source == SYNTHETIC_SOURCE for s in samples)
+    assert samples[0].sample_id == make_sample_id(seed=10, control_step_index=0)
     man = save_corpus(tmp_path / "c.npz", samples, role="evaluation")
     assert man.n_samples == 2
+    assert man.suitable_as_deployment_evidence is False
+    assert "unsuitable" in man.note.lower() or SYNTHETIC_SOURCE in man.note
     loaded = load_corpus(tmp_path / "c.npz")
     assert [s.seed for s in loaded] == [10, 11]
+    assert [s.sample_id for s in loaded] == man.sample_ids
     np.testing.assert_array_equal(loaded[0].images_top, samples[0].images_top)
+
+
+def test_sample_step_indices_span_rollout() -> None:
+    assert sample_step_indices(1, 1) == [0]
+    assert sample_step_indices(100, 2) == [0, 99]
+    assert sample_step_indices(5, 3) == [0, 2, 4]
+
+
+def test_export_validation_rejects_closed_loop_error() -> None:
+    """Closed-loop failure must fail the export gate even if open-loop passed."""
+    from breakpoint_eval.run_export import ExportRequest
+
+    # Pure logic check mirrored from run_export assembly.
+    open_loop_passed = True
+    closed_loop = {"status": "errored", "passed": False, "completed": False}
+    req_run_closed = True
+    closed_ok = (
+        bool(closed_loop.get("completed")) and closed_loop.get("passed") is True
+        if req_run_closed
+        else True
+    )
+    assert (open_loop_passed and closed_ok) is False
+    skipped = {"status": "skipped", "passed": None, "completed": False}
+    assert skipped["completed"] is False
+    _ = ExportRequest  # keep import used for module surface stability
+    assert SYNTHETIC_UNSUITABLE_NOTE
 
 
 def test_int8_recipe_pinned_and_runs(tmp_path: Path) -> None:

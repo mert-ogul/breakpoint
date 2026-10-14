@@ -57,11 +57,14 @@ def _write_tiny_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
     states = np.stack(
         [np.random.default_rng(100 + i).standard_normal((1, 2), dtype=np.float32) for i in range(4)]
     )
+    sample_ids = [f"seed{s}_t0" for s in (1, 2, 3, 4)]
     corpus_path = tmp_path / "corpus.npz"
     np.savez_compressed(
         corpus_path,
         role="evaluation",
         seeds=np.asarray([1, 2, 3, 4]),
+        sample_ids=np.asarray(sample_ids),
+        control_step_index=np.asarray([0, 0, 0, 0]),
         source="synthetic_shape_matched",
         images_top=images,
         state=states,
@@ -71,7 +74,7 @@ def _write_tiny_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     sess = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
     refs = {}
-    for i, seed in enumerate([1, 2, 3, 4]):
+    for i, sample_id in enumerate(sample_ids):
         out = sess.run(
             None,
             {
@@ -79,7 +82,7 @@ def _write_tiny_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "observation_state": states[i],
             },
         )[0]
-        refs[f"seed_{seed}"] = out
+        refs[sample_id] = out
     ref_path = tmp_path / "refs.npz"
     np.savez_compressed(ref_path, **refs)
     return model_path, corpus_path, ref_path
@@ -137,7 +140,7 @@ def test_profile_refuses_failed_validation(tmp_path: Path) -> None:
     model_path, corpus_path, _ = _write_tiny_artifacts(tmp_path)
     # Wrong-shaped reference forces validation failure.
     bad_ref = tmp_path / "bad_ref.npz"
-    np.savez_compressed(bad_ref, seed_1=np.zeros((1, 9, 9), dtype=np.float32))
+    np.savez_compressed(bad_ref, seed1_t0=np.zeros((1, 9, 9), dtype=np.float32))
     with pytest.raises(RuntimeError, match="validation failed"):
         run_device_profile(
             ProfileRequest(
@@ -148,6 +151,29 @@ def test_profile_refuses_failed_validation(tmp_path: Path) -> None:
                 candidate="act_aloha_transfer",
                 recipe_id="torch_onnx_export_fp32_opset17",
                 reference_chunks_path=bad_ref,
+                n_warmup=0,
+                n_measured=2,
+            )
+        )
+
+
+def test_profile_fails_when_reference_sample_missing(tmp_path: Path) -> None:
+    model_path, corpus_path, ref_path = _write_tiny_artifacts(tmp_path)
+    # Drop one sample_id from the reference set.
+    data = np.load(ref_path)
+    keys = [k for k in data.files if k != "seed2_t0"]
+    partial = tmp_path / "partial_refs.npz"
+    np.savez_compressed(partial, **{k: data[k] for k in keys})
+    with pytest.raises(RuntimeError, match="validation failed"):
+        run_device_profile(
+            ProfileRequest(
+                model_path=model_path,
+                corpus_path=corpus_path,
+                output_dir=tmp_path / "out_missing",
+                device_label="local",
+                candidate="act_aloha_transfer",
+                recipe_id="torch_onnx_export_fp32_opset17",
+                reference_chunks_path=partial,
                 n_warmup=0,
                 n_measured=2,
             )

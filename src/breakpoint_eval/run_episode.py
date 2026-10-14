@@ -154,13 +154,14 @@ def _classify_outcome(
 def run_episode(
     *,
     env: Any,
-    adapter: PolicyAdapter,
+    adapter: Any,
     seed: int,
     episode_index: int,
     render_frames: list[np.ndarray] | None = None,
     latency_s: float = 0.0,
     latency_replayer: LatencyTraceReplayer | None = None,
     image_cfg: ImageDegradeConfig | None = None,
+    policy_rng_seed: int | None = None,
 ) -> EpisodeResult:
     """Run one episode; uses env is_success, not reward > 0.
 
@@ -172,6 +173,9 @@ def run_episode(
     is independent of latency injection. Trace replay is distinct from constant
     delay: pass ``latency_replayer`` (with ``latency_s=0``) to inject measured
     ordered latencies.
+
+    ``policy_rng_seed`` is applied separately from the environment ``seed`` so
+    Diffusion (and other stochastic policies) can be paired across conditions.
     """
     if latency_replayer is not None and latency_s != 0.0:
         raise ValueError("trace replay requires latency_s=0 (delays come from the profile)")
@@ -188,19 +192,21 @@ def run_episode(
         latency_s=latency_s,
         latency_replayer=latency_replayer,
         image_cfg=cfg,
+        policy_rng_seed=policy_rng_seed,
     )
 
 
 def _run_episode_with_scheduler(
     *,
     env: Any,
-    adapter: PolicyAdapter,
+    adapter: Any,
     seed: int,
     episode_index: int,
     render_frames: list[np.ndarray] | None,
     latency_s: float,
     image_cfg: ImageDegradeConfig,
     latency_replayer: LatencyTraceReplayer | None = None,
+    policy_rng_seed: int | None = None,
 ) -> EpisodeResult:
     chunk_info = adapter.chunk_info
     steps: list[ControlStepRecord] = []
@@ -223,6 +229,10 @@ def _run_episode_with_scheduler(
 
             # Fresh encoder/decoder state for this episode (not a prerecorded clip).
             h264_session = EpisodeH264Session(image_cfg.build_h264_stream_config())
+        if policy_rng_seed is not None:
+            from breakpoint_eval.export_runtime import apply_policy_rng_seed
+
+            apply_policy_rng_seed(policy_rng_seed)
         adapter.reset()
         observation, _info = env.reset(seed=[seed])
         initial = initial_hold_command_from_obs(observation)
