@@ -259,6 +259,45 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
 
 
+def _add_diagnose_closed_loop_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    parser = subparsers.add_parser(
+        "diagnose-closed-loop",
+        help=(
+            "Diagnose ACT ONNX closed-loop failures: per-seed independent rollouts, "
+            "PyTorch repeatability, and same-observation shadow compares "
+            "(does not edit export manifests or change the validation gate)"
+        ),
+    )
+    parser.add_argument(
+        "--candidate",
+        default="act_aloha_transfer",
+        choices=sorted(CANDIDATES),
+    )
+    parser.add_argument(
+        "--export-dir",
+        type=Path,
+        required=True,
+        help="Existing export directory containing act_chunk_fp32.onnx",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="New directory for diagnosis JSON (must differ from --export-dir)",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=str,
+        default="2000,2001",
+        help="Comma-separated closed-loop diagnosis seeds",
+    )
+    parser.add_argument("--onnx-name", type=str, default="act_chunk_fp32.onnx")
+    parser.add_argument("--device", choices=["cuda", "cpu", "mps"], default="cpu")
+    parser.add_argument("--repo-root", type=Path, default=None)
+
+
 def _add_export_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser(
         "export",
@@ -440,6 +479,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_run_parser(sub)
     _add_report_parser(sub)
     _add_export_parser(sub)
+    _add_diagnose_closed_loop_parser(sub)
     _add_profile_parser(sub)
     _add_plan_parser(sub)
     _add_summarize_parser(sub)
@@ -490,6 +530,65 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, Any]]:
     raise ValueError(kind)
 
 
+def _cmd_diagnose_closed_loop(args: argparse.Namespace) -> int:
+    from breakpoint_eval.export_closed_loop_diagnosis import (
+        ClosedLoopDiagnosisRequest,
+        run_closed_loop_diagnosis,
+    )
+
+    try:
+        seeds = parse_seed_list(args.seeds)
+        path = run_closed_loop_diagnosis(
+            ClosedLoopDiagnosisRequest(
+                export_dir=args.export_dir,
+                output_dir=args.output_dir,
+                candidate=args.candidate,
+                seeds=tuple(seeds),
+                onnx_name=args.onnx_name,
+                device=args.device,
+                repo_root=args.repo_root,
+            )
+        )
+    except (FileNotFoundError, ValueError, RuntimeError, ImportError, OSError) as exc:
+        logging.error("%s", exc)
+        return 2
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    independent = payload.get("independent_rollouts") or {}
+    shadow = payload.get("same_observation_shadow") or []
+    print(path)
+    print(
+        json.dumps(
+            {
+                "diagnosis": str(path),
+                "independent_passed": independent.get("passed"),
+                "independent_failure_kind": independent.get("failure_kind"),
+                "independent_seeds": [
+                    {
+                        "seed": s.get("seed"),
+                        "passed": s.get("passed"),
+                        "first_divergence_step": s.get("first_divergence_step"),
+                        "max_abs_error": s.get("max_abs_error"),
+                        "pytorch_n_steps": s.get("pytorch_n_steps"),
+                        "onnx_n_steps": s.get("onnx_n_steps"),
+                        "outcomes": [s.get("pytorch_outcome"), s.get("onnx_outcome")],
+                    }
+                    for s in (independent.get("seeds") or [])
+                ],
+                "shadow_max_abs_error": max((s.get("max_abs_error") or 0.0) for s in shadow)
+                if shadow
+                else None,
+                "repeatability_all_passed": all(
+                    r.get("passed") for r in (payload.get("pytorch_repeatability") or [])
+                ),
+                "validation_gate_unchanged": (payload.get("interpretation") or {}).get(
+                    "validation_gate_unchanged"
+                ),
+            }
+        )
+    )
+    return 0
+
+
 def _cmd_export(args: argparse.Namespace) -> int:
     from breakpoint_eval.run_export import ExportRequest, run_export
 
@@ -522,6 +621,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
         return 2
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     validation = payload.get("export_validation") or {}
+    closed = payload.get("closed_loop_onnx_fp32_vs_pytorch") or {}
     print(manifest)
     print(
         json.dumps(
@@ -531,26 +631,35 @@ def _cmd_export(args: argparse.Namespace) -> int:
                 .get("onnx_fp32_vs_pytorch_fp32", {})
                 .get("passed"),
                 "export_validation_passed": validation.get("passed"),
+                "diagnostic_parity_ok": validation.get("diagnostic_parity_ok"),
                 "closed_loop_completed": validation.get("closed_loop_completed"),
                 "closed_loop_passed": validation.get("closed_loop_passed"),
+                "closed_loop_failure_kind": validation.get("closed_loop_failure_kind")
+                or closed.get("failure_kind"),
                 "corpus_suitable_as_deployment_evidence": validation.get(
                     "corpus_suitable_as_deployment_evidence"
                 ),
+                "not_passed_reasons": validation.get("not_passed_reasons"),
                 "variants": [
                     {"label": v["label"], "status": v["status"], "recipe_id": v["recipe_id"]}
                     for v in payload.get("variants", [])
                 ],
-                "closed_loop_status": payload.get("closed_loop_onnx_fp32_vs_pytorch", {}).get(
-                    "status"
-                ),
+                "closed_loop_status": closed.get("status"),
             }
         )
     )
-    # Fail on open-loop FP32 parity failure, or closed-loop failure/error when requested.
-    if validation.get("passed") is False:
+    # Process exit: fail open-loop or requested closed-loop problems. Synthetic /
+    # skipped-closed-loop diagnostic exports may leave passed=false without exiting 1.
+    open_loop_ok = bool(
+        payload.get("comparisons", {}).get("onnx_fp32_vs_pytorch_fp32", {}).get("passed")
+    )
+    if validation.get("open_loop_fp32_parity_passed") is False or not open_loop_ok:
         return 1
-    if not payload.get("comparisons", {}).get("onnx_fp32_vs_pytorch_fp32", {}).get("passed"):
-        return 1
+    if validation.get("closed_loop_requested"):
+        if validation.get("closed_loop_completed") is not True:
+            return 1
+        if validation.get("closed_loop_passed") is not True:
+            return 1
     return 0
 
 
@@ -1111,6 +1220,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_report(args)
     if args.command == "export":
         return _cmd_export(args)
+    if args.command == "diagnose-closed-loop":
+        return _cmd_diagnose_closed_loop(args)
     if args.command == "profile":
         return _cmd_profile(args)
     if args.command == "plan":

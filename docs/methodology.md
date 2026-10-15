@@ -204,9 +204,16 @@ CLI: `--image-mode`, `--capture-hw`, `--jpeg-quality`, `--h264-bitrate-kbps`,
 
 Declared FP32 parity tolerances live in `export_tolerances.py` and are recorded in the
 artifact manifest **before** measurement. ONNX FP32 must pass shapes, finite outputs,
-and per-element / action-unit error gates on a held-out corpus against PyTorch FP32.
-Export-induced failure is investigated first. Paired closed-loop rollouts compare
-action traces when the simulator is available; GL/env errors are recorded, not faked.
+and per-element / action-unit error gates on a held-out corpus against PyTorch FP32
+(**same-observation** numerical parity). Export-induced failure is investigated first.
+
+Paired closed-loop checks compare **independently controlled** episodes (same seeds,
+separate resets). That gate is not same-input export parity: tiny early action diffs
+can change simulator state and compound at later replans. Manifests record per-seed
+lengths, outcomes, unmatched trajectory tails, and first divergence. Synthetic corpus
+or skipped closed-loop may set `diagnostic_parity_ok` but must not set
+`export_validation.passed` for deployment evidence. GL/env errors are recorded, not
+faked.
 
 Quantized variants use pinned recipe ids (no silent switch after failure):
 

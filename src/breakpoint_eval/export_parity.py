@@ -26,6 +26,15 @@ from breakpoint_eval.export_tolerances import (
 )
 from breakpoint_eval.policy_adapter import PolicyAdapter
 
+# Independent episodes (separate resets) compared by applied actions. This is not
+# same-observation numerical export parity; tiny early diffs can compound.
+COMPARISON_KIND_INDEPENDENT_ROLLOUT = "independent_rollout_action_trace"
+FAILURE_KIND_TRAJECTORY_DIVERGENCE = "independent_trajectory_divergence"
+FAILURE_KIND_LENGTH_MISMATCH = "episode_length_mismatch"
+FAILURE_KIND_RUNTIME = "runtime_error"
+FAILURE_KIND_EMPTY = "no_paired_actions"
+FAILURE_KIND_SHAPE = "action_shape_mismatch"
+
 
 @dataclass
 class ParityTolerances:
@@ -200,62 +209,184 @@ def run_ort_chunks(
     return out
 
 
+def _closed_loop_tolerances() -> dict[str, float]:
+    return {
+        "atol": ONNX_FP32_CLOSED_LOOP_ATOL,
+        "rtol": ONNX_FP32_CLOSED_LOOP_RTOL,
+    }
+
+
+@dataclass
+class ClosedLoopSeedReport:
+    """One seed's independent PyTorch vs ONNX episode comparison."""
+
+    seed: int
+    pytorch_outcome: str
+    onnx_outcome: str
+    pytorch_n_steps: int
+    onnx_n_steps: int
+    length_mismatch: bool
+    unmatched_tail_steps: int
+    n_steps_compared: int
+    max_abs_error: float | None
+    first_divergence_step: int | None
+    first_divergence_max_abs_error: float | None
+    passed: bool
+    failure_kind: str | None = None
+    detail: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 @dataclass
 class ClosedLoopCompareReport:
+    """Aggregate closed-loop report across seeds (independent rollouts)."""
+
     status: str
     detail: str | None
     n_steps_compared: int
     max_abs_error: float | None
     passed: bool | None
     tolerances: dict[str, float]
+    comparison_kind: str = COMPARISON_KIND_INDEPENDENT_ROLLOUT
+    failure_kind: str | None = None
+    seeds: list[ClosedLoopSeedReport] = field(default_factory=list)
+    length_mismatch_any: bool = False
+    # Retained for older consumers; prefer per-seed fields.
     pytorch_outcome: str | None = None
     onnx_outcome: str | None = None
+    note: str = (
+        "Compares independently controlled episodes (separate resets) with the same "
+        "seeds. This is not same-observation numerical export parity; open-loop corpus "
+        "parity covers identical inputs."
+    )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        return payload
+
+
+def compare_action_traces_with_tails(
+    pytorch_actions: list[np.ndarray],
+    onnx_actions: list[np.ndarray],
+    *,
+    atol: float | None = None,
+    rtol: float | None = None,
+) -> dict[str, Any]:
+    """Compare paired action lists; never silently ignore unmatched tails."""
+    atol = ONNX_FP32_CLOSED_LOOP_ATOL if atol is None else atol
+    rtol = ONNX_FP32_CLOSED_LOOP_RTOL if rtol is None else rtol
+    n_pt = len(pytorch_actions)
+    n_ort = len(onnx_actions)
+    n = min(n_pt, n_ort)
+    unmatched = abs(n_pt - n_ort)
+    length_mismatch = unmatched > 0
+    if n == 0:
+        return {
+            "n_steps_compared": 0,
+            "max_abs_error": None,
+            "first_divergence_step": None,
+            "first_divergence_max_abs_error": None,
+            "length_mismatch": length_mismatch,
+            "unmatched_tail_steps": unmatched,
+            "passed": False,
+            "failure_kind": FAILURE_KIND_EMPTY
+            if n_pt == 0 and n_ort == 0
+            else FAILURE_KIND_LENGTH_MISMATCH,
+            "detail": "no paired actions" if n == 0 else None,
+        }
+    max_abs = 0.0
+    first_div: int | None = None
+    first_div_err: float | None = None
+    for i, (a, b) in enumerate(zip(pytorch_actions[:n], onnx_actions[:n], strict=True)):
+        if a.shape != b.shape:
+            return {
+                "n_steps_compared": i,
+                "max_abs_error": max_abs if i else None,
+                "first_divergence_step": i,
+                "first_divergence_max_abs_error": None,
+                "length_mismatch": length_mismatch,
+                "unmatched_tail_steps": unmatched,
+                "passed": False,
+                "failure_kind": FAILURE_KIND_SHAPE,
+                "detail": f"shape mismatch at step {i}: {a.shape} vs {b.shape}",
+            }
+        err = float(np.max(np.abs(a.astype(np.float64) - b.astype(np.float64))))
+        max_abs = max(max_abs, err)
+        if first_div is None and not np.allclose(a, b, atol=atol, rtol=rtol):
+            first_div = i
+            first_div_err = err
+    numeric_ok = first_div is None
+    passed = numeric_ok and not length_mismatch
+    failure_kind = None
+    detail = None
+    if length_mismatch:
+        failure_kind = FAILURE_KIND_LENGTH_MISMATCH
+        detail = (
+            f"unmatched trajectory tail: pytorch_n={n_pt} onnx_n={n_ort} "
+            f"(compared overlapping prefix of {n}; tail not discarded from the verdict)"
+        )
+    elif not numeric_ok:
+        failure_kind = FAILURE_KIND_TRAJECTORY_DIVERGENCE
+        detail = (
+            f"independent-rollout actions diverged at step {first_div} "
+            f"(max_abs={first_div_err}); not a same-observation export parity check"
+        )
+    return {
+        "n_steps_compared": n,
+        "max_abs_error": max_abs,
+        "first_divergence_step": first_div,
+        "first_divergence_max_abs_error": first_div_err,
+        "length_mismatch": length_mismatch,
+        "unmatched_tail_steps": unmatched,
+        "passed": passed,
+        "failure_kind": failure_kind,
+        "detail": detail,
+    }
 
 
 def compare_paired_action_traces(
     pytorch_actions: list[np.ndarray],
     onnx_actions: list[np.ndarray],
 ) -> ClosedLoopCompareReport:
-    tol = {
-        "atol": ONNX_FP32_CLOSED_LOOP_ATOL,
-        "rtol": ONNX_FP32_CLOSED_LOOP_RTOL,
-    }
-    n = min(len(pytorch_actions), len(onnx_actions))
-    if n == 0:
-        return ClosedLoopCompareReport(
-            status="errored",
-            detail="no paired actions",
-            n_steps_compared=0,
-            max_abs_error=None,
-            passed=False,
-            tolerances=tol,
-        )
-    max_abs = 0.0
-    for a, b in zip(pytorch_actions[:n], onnx_actions[:n], strict=True):
-        if a.shape != b.shape:
-            return ClosedLoopCompareReport(
-                status="errored",
-                detail=f"shape mismatch {a.shape} vs {b.shape}",
-                n_steps_compared=n,
-                max_abs_error=None,
-                passed=False,
-                tolerances=tol,
-            )
-        max_abs = max(max_abs, float(np.max(np.abs(a.astype(np.float64) - b.astype(np.float64)))))
-    passed = all(
-        np.allclose(a, b, atol=tol["atol"], rtol=tol["rtol"])
-        for a, b in zip(pytorch_actions[:n], onnx_actions[:n], strict=True)
+    """Backward-compatible wrapper; prefer per-seed reports from rollouts."""
+    tol = _closed_loop_tolerances()
+    result = compare_action_traces_with_tails(pytorch_actions, onnx_actions)
+    status = (
+        "ok"
+        if result["failure_kind"] not in {FAILURE_KIND_EMPTY, FAILURE_KIND_SHAPE}
+        else "errored"
     )
+    if result["failure_kind"] == FAILURE_KIND_EMPTY:
+        status = "errored"
     return ClosedLoopCompareReport(
-        status="ok",
-        detail=None,
-        n_steps_compared=n,
-        max_abs_error=max_abs,
-        passed=passed,
+        status=status,
+        detail=result["detail"],
+        n_steps_compared=int(result["n_steps_compared"]),
+        max_abs_error=result["max_abs_error"],
+        passed=bool(result["passed"]),
         tolerances=tol,
+        failure_kind=result["failure_kind"],
+        length_mismatch_any=bool(result["length_mismatch"]),
+        seeds=[
+            ClosedLoopSeedReport(
+                seed=-1,
+                pytorch_outcome="unknown",
+                onnx_outcome="unknown",
+                pytorch_n_steps=len(pytorch_actions),
+                onnx_n_steps=len(onnx_actions),
+                length_mismatch=bool(result["length_mismatch"]),
+                unmatched_tail_steps=int(result["unmatched_tail_steps"]),
+                n_steps_compared=int(result["n_steps_compared"]),
+                max_abs_error=result["max_abs_error"],
+                first_divergence_step=result["first_divergence_step"],
+                first_divergence_max_abs_error=result["first_divergence_max_abs_error"],
+                passed=bool(result["passed"]),
+                failure_kind=result["failure_kind"],
+                detail=result["detail"],
+            )
+        ],
     )
 
 
@@ -267,13 +398,12 @@ def paired_closed_loop_rollouts(
     seeds: list[int],
     max_steps: int | None = None,
 ) -> ClosedLoopCompareReport:
-    """Paired episodes: same seeds; compare applied actions while both succeed."""
+    """Paired episodes: same seeds; per-seed independent action-trace comparison."""
     from breakpoint_eval.run_episode import EpisodeOutcome, run_episode
 
-    all_pt: list[np.ndarray] = []
-    all_ort: list[np.ndarray] = []
-    pt_outcome = None
-    ort_outcome = None
+    tol = _closed_loop_tolerances()
+    seed_reports: list[ClosedLoopSeedReport] = []
+
     for seed in seeds:
         pt = run_episode(
             env=env,
@@ -295,37 +425,131 @@ def paired_closed_loop_rollouts(
             pt.outcome is EpisodeOutcome.RUNTIME_ERROR
             or ort.outcome is EpisodeOutcome.RUNTIME_ERROR
         ):
-            return ClosedLoopCompareReport(
-                status="errored",
-                detail=f"pytorch={pt.runtime_error}; onnx={ort.runtime_error}",
-                n_steps_compared=0,
-                max_abs_error=None,
-                passed=False,
-                tolerances={
-                    "atol": ONNX_FP32_CLOSED_LOOP_ATOL,
-                    "rtol": ONNX_FP32_CLOSED_LOOP_RTOL,
-                },
+            seed_reports.append(
+                ClosedLoopSeedReport(
+                    seed=seed,
+                    pytorch_outcome=pt_outcome,
+                    onnx_outcome=ort_outcome,
+                    pytorch_n_steps=len(pt.steps),
+                    onnx_n_steps=len(ort.steps),
+                    length_mismatch=len(pt.steps) != len(ort.steps),
+                    unmatched_tail_steps=abs(len(pt.steps) - len(ort.steps)),
+                    n_steps_compared=0,
+                    max_abs_error=None,
+                    first_divergence_step=None,
+                    first_divergence_max_abs_error=None,
+                    passed=False,
+                    failure_kind=FAILURE_KIND_RUNTIME,
+                    detail=f"pytorch={pt.runtime_error}; onnx={ort.runtime_error}",
+                )
+            )
+            continue
+
+        pt_actions: list[np.ndarray] = []
+        ort_actions: list[np.ndarray] = []
+        n_pt = len(pt.steps)
+        n_ort = len(ort.steps)
+        if max_steps is not None:
+            n_pt = min(n_pt, max_steps)
+            n_ort = min(n_ort, max_steps)
+        for i in range(n_pt):
+            if pt.steps[i].action is None:
+                continue
+            pt_actions.append(np.asarray(pt.steps[i].action, dtype=np.float32))
+        for i in range(n_ort):
+            if ort.steps[i].action is None:
+                continue
+            ort_actions.append(np.asarray(ort.steps[i].action, dtype=np.float32))
+
+        result = compare_action_traces_with_tails(pt_actions, ort_actions)
+        seed_reports.append(
+            ClosedLoopSeedReport(
+                seed=seed,
                 pytorch_outcome=pt_outcome,
                 onnx_outcome=ort_outcome,
+                pytorch_n_steps=len(pt_actions),
+                onnx_n_steps=len(ort_actions),
+                length_mismatch=bool(result["length_mismatch"]),
+                unmatched_tail_steps=int(result["unmatched_tail_steps"]),
+                n_steps_compared=int(result["n_steps_compared"]),
+                max_abs_error=result["max_abs_error"],
+                first_divergence_step=result["first_divergence_step"],
+                first_divergence_max_abs_error=result["first_divergence_max_abs_error"],
+                passed=bool(result["passed"]),
+                failure_kind=result["failure_kind"],
+                detail=result["detail"],
             )
-        n = min(len(pt.steps), len(ort.steps))
-        if max_steps is not None:
-            n = min(n, max_steps)
-        for i in range(n):
-            if pt.steps[i].action is None or ort.steps[i].action is None:
-                continue
-            all_pt.append(np.asarray(pt.steps[i].action, dtype=np.float32))
-            all_ort.append(np.asarray(ort.steps[i].action, dtype=np.float32))
-    report = compare_paired_action_traces(all_pt, all_ort)
-    report.pytorch_outcome = pt_outcome
-    report.onnx_outcome = ort_outcome
-    return report
+        )
+
+    if not seed_reports:
+        return ClosedLoopCompareReport(
+            status="errored",
+            detail="no closed-loop seeds",
+            n_steps_compared=0,
+            max_abs_error=None,
+            passed=False,
+            tolerances=tol,
+            failure_kind=FAILURE_KIND_EMPTY,
+        )
+
+    any_runtime = any(s.failure_kind == FAILURE_KIND_RUNTIME for s in seed_reports)
+    length_mismatch_any = any(s.length_mismatch for s in seed_reports)
+    all_passed = all(s.passed for s in seed_reports)
+    compared = [s for s in seed_reports if s.max_abs_error is not None]
+    max_abs = max((s.max_abs_error for s in compared), default=None)
+    n_compared = sum(s.n_steps_compared for s in seed_reports)
+
+    failure_kind = None
+    detail_parts: list[str] = []
+    if any_runtime:
+        failure_kind = FAILURE_KIND_RUNTIME
+        status = "errored"
+    elif not all_passed:
+        status = "ok"
+        # Prefer the earliest divergence across seeds for the aggregate label.
+        div_seeds = [s for s in seed_reports if s.first_divergence_step is not None]
+        if any(s.failure_kind == FAILURE_KIND_LENGTH_MISMATCH for s in seed_reports):
+            failure_kind = FAILURE_KIND_LENGTH_MISMATCH
+        elif div_seeds:
+            failure_kind = FAILURE_KIND_TRAJECTORY_DIVERGENCE
+        else:
+            failure_kind = next((s.failure_kind for s in seed_reports if s.failure_kind), None)
+        for s in seed_reports:
+            if not s.passed:
+                detail_parts.append(
+                    f"seed={s.seed} failure_kind={s.failure_kind} "
+                    f"first_div={s.first_divergence_step} "
+                    f"max_abs={s.max_abs_error} "
+                    f"len_pt={s.pytorch_n_steps} len_onnx={s.onnx_n_steps} "
+                    f"outcomes=({s.pytorch_outcome},{s.onnx_outcome})"
+                )
+    else:
+        status = "ok"
+
+    return ClosedLoopCompareReport(
+        status=status,
+        detail="; ".join(detail_parts) if detail_parts else None,
+        n_steps_compared=n_compared,
+        max_abs_error=max_abs,
+        passed=all_passed,
+        tolerances=tol,
+        failure_kind=failure_kind,
+        seeds=seed_reports,
+        length_mismatch_any=length_mismatch_any,
+        pytorch_outcome="see_seeds",
+        onnx_outcome="see_seeds",
+    )
 
 
 __all__ = [
+    "COMPARISON_KIND_INDEPENDENT_ROLLOUT",
     "ClosedLoopCompareReport",
+    "ClosedLoopSeedReport",
     "CorpusParityReport",
+    "FAILURE_KIND_LENGTH_MISMATCH",
+    "FAILURE_KIND_TRAJECTORY_DIVERGENCE",
     "ParityTolerances",
+    "compare_action_traces_with_tails",
     "compare_paired_action_traces",
     "evaluate_corpus_parity",
     "paired_closed_loop_rollouts",
