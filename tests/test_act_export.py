@@ -143,22 +143,97 @@ def test_sample_step_indices_span_rollout() -> None:
 
 def test_export_validation_rejects_closed_loop_error() -> None:
     """Closed-loop failure must fail the export gate even if open-loop passed."""
-    from breakpoint_eval.run_export import ExportRequest
+    from breakpoint_eval.run_export import build_export_validation
 
-    # Pure logic check mirrored from run_export assembly.
-    open_loop_passed = True
-    closed_loop = {"status": "errored", "passed": False, "completed": False}
-    req_run_closed = True
-    closed_ok = (
-        bool(closed_loop.get("completed")) and closed_loop.get("passed") is True
-        if req_run_closed
-        else True
+    failed = build_export_validation(
+        open_loop_passed=True,
+        closed_loop={
+            "status": "errored",
+            "passed": False,
+            "completed": False,
+            "failure_kind": "runtime_error",
+        },
+        closed_loop_requested=True,
+        corpus_suitable_as_deployment_evidence=True,
     )
-    assert (open_loop_passed and closed_ok) is False
-    skipped = {"status": "skipped", "passed": None, "completed": False}
-    assert skipped["completed"] is False
-    _ = ExportRequest  # keep import used for module surface stability
+    assert failed["passed"] is False
+    assert failed["diagnostic_parity_ok"] is True
+    assert "closed_loop_not_completed" in failed["not_passed_reasons"]
+
+
+def test_export_validation_rejects_skipped_closed_loop() -> None:
+    from breakpoint_eval.run_export import build_export_validation
+
+    skipped = build_export_validation(
+        open_loop_passed=True,
+        closed_loop={"status": "skipped", "passed": None, "completed": False},
+        closed_loop_requested=False,
+        corpus_suitable_as_deployment_evidence=True,
+    )
+    assert skipped["passed"] is False
+    assert skipped["diagnostic_parity_ok"] is True
+    assert "closed_loop_not_requested" in skipped["not_passed_reasons"]
+
+
+def test_export_validation_rejects_synthetic_corpus() -> None:
+    from breakpoint_eval.run_export import build_export_validation
+
+    synthetic = build_export_validation(
+        open_loop_passed=True,
+        closed_loop={
+            "status": "ok",
+            "passed": True,
+            "completed": True,
+            "comparison_kind": "independent_rollout_action_trace",
+        },
+        closed_loop_requested=True,
+        corpus_suitable_as_deployment_evidence=False,
+    )
+    assert synthetic["passed"] is False
+    assert synthetic["diagnostic_parity_ok"] is True
+    assert "corpus_not_suitable_as_deployment_evidence" in synthetic["not_passed_reasons"]
     assert SYNTHETIC_UNSUITABLE_NOTE
+
+
+def test_export_validation_passes_only_full_deployment_gate() -> None:
+    from breakpoint_eval.run_export import build_export_validation
+
+    ok = build_export_validation(
+        open_loop_passed=True,
+        closed_loop={
+            "status": "ok",
+            "passed": True,
+            "completed": True,
+            "comparison_kind": "independent_rollout_action_trace",
+        },
+        closed_loop_requested=True,
+        corpus_suitable_as_deployment_evidence=True,
+    )
+    assert ok["passed"] is True
+    assert ok["not_passed_reasons"] == []
+
+
+def test_closed_loop_reports_per_seed_and_unmatched_tails() -> None:
+    from breakpoint_eval.export_parity import (
+        FAILURE_KIND_LENGTH_MISMATCH,
+        FAILURE_KIND_TRAJECTORY_DIVERGENCE,
+        compare_action_traces_with_tails,
+    )
+
+    a = [np.zeros(2, dtype=np.float32), np.ones(2, dtype=np.float32)]
+    b_short = [np.zeros(2, dtype=np.float32)]
+    mismatch = compare_action_traces_with_tails(a, b_short)
+    assert mismatch["length_mismatch"] is True
+    assert mismatch["unmatched_tail_steps"] == 1
+    assert mismatch["passed"] is False
+    assert mismatch["failure_kind"] == FAILURE_KIND_LENGTH_MISMATCH
+
+    b_div = [np.zeros(2, dtype=np.float32), np.full(2, 9.0, dtype=np.float32)]
+    diverged = compare_action_traces_with_tails(a, b_div)
+    assert diverged["passed"] is False
+    assert diverged["first_divergence_step"] == 1
+    assert diverged["failure_kind"] == FAILURE_KIND_TRAJECTORY_DIVERGENCE
+    assert diverged["length_mismatch"] is False
 
 
 def test_int8_recipe_pinned_and_runs(tmp_path: Path) -> None:
