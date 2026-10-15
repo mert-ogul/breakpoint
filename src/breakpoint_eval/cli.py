@@ -259,6 +259,32 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
 
 
+def _add_write_export_validation_v2_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    parser = subparsers.add_parser(
+        "write-export-validation-v2",
+        help=(
+            "Write schema_version=2 export validation from an existing export "
+            "manifest + closed-loop diagnosis (does not modify export_manifest.json)"
+        ),
+    )
+    parser.add_argument("--export-dir", type=Path, required=True)
+    parser.add_argument(
+        "--diagnosis",
+        type=Path,
+        required=True,
+        help="closed_loop_diagnosis.json with shadow + outcome fields",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Defaults to <export-dir>/export_validation_v2.json",
+    )
+    parser.add_argument("--repo-root", type=Path, default=None)
+
+
 def _add_diagnose_closed_loop_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
@@ -480,6 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_report_parser(sub)
     _add_export_parser(sub)
     _add_diagnose_closed_loop_parser(sub)
+    _add_write_export_validation_v2_parser(sub)
     _add_profile_parser(sub)
     _add_plan_parser(sub)
     _add_summarize_parser(sub)
@@ -528,6 +555,49 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, Any]]:
         require_ffmpeg_h264()
         return h264_smoke_configs()
     raise ValueError(kind)
+
+
+def _cmd_write_export_validation_v2(args: argparse.Namespace) -> int:
+    from breakpoint_eval.export_validation_v2 import build_validation_v2_from_artifacts
+
+    repo_root = (args.repo_root or _repo_root_from_package()).resolve()
+    try:
+        path = build_validation_v2_from_artifacts(
+            export_dir=Path(args.export_dir).resolve(),
+            diagnosis_path=Path(args.diagnosis).resolve(),
+            repo_root=repo_root,
+            output_path=Path(args.output).resolve() if args.output else None,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        logging.error("%s", exc)
+        return 2
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    print(path)
+    print(
+        json.dumps(
+            {
+                "validation": str(path),
+                "schema_version": payload.get("schema_version"),
+                "passed": payload.get("passed"),
+                "numerical_parity_passed": (payload.get("numerical_parity") or {}).get("passed"),
+                "task_outcomes_passed": (payload.get("closed_loop_task_outcomes") or {}).get(
+                    "passed"
+                ),
+                "independent_trajectory_similar": (payload.get("independent_trajectory") or {}).get(
+                    "similar"
+                ),
+                "independent_trajectory_gates_deployment": (
+                    payload.get("independent_trajectory") or {}
+                ).get("gates_deployment_validation"),
+                "not_passed_reasons": payload.get("not_passed_reasons"),
+                "model_sha256": (payload.get("binding") or {}).get("model_sha256"),
+                "corpus_eval_sha256": (payload.get("binding") or {}).get("corpus_eval_sha256"),
+                "code_revision": (payload.get("binding") or {}).get("code_revision"),
+                "code_dirty": (payload.get("binding") or {}).get("code_dirty"),
+            }
+        )
+    )
+    return 0 if payload.get("passed") is True else 1
 
 
 def _cmd_diagnose_closed_loop(args: argparse.Namespace) -> int:
@@ -1222,6 +1292,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_export(args)
     if args.command == "diagnose-closed-loop":
         return _cmd_diagnose_closed_loop(args)
+    if args.command == "write-export-validation-v2":
+        return _cmd_write_export_validation_v2(args)
     if args.command == "profile":
         return _cmd_profile(args)
     if args.command == "plan":

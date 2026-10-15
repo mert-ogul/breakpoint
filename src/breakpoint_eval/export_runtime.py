@@ -107,38 +107,7 @@ def resolve_onnx_runtime(
             f"candidate={expected_candidate!r}"
         )
     variant = _variant_for_model(manifest, model_path)
-    validation = dict(manifest.get("export_validation") or {})
-    if require_export_validation:
-        if validation.get("passed") is not True:
-            raise ValueError(
-                "export_validation.passed is not true; refuse to evaluate an unvalidated "
-                f"export as a deployment runtime (manifest={manifest_path})"
-            )
-        # Defense for diagnostic/synthetic manifests that set passed incorrectly.
-        if validation.get("corpus_suitable_as_deployment_evidence") is False:
-            raise ValueError(
-                "export corpus is not suitable as deployment evidence "
-                f"(manifest={manifest_path}); diagnostic_parity_ok exports are not "
-                "accepted as validated deployment runtimes"
-            )
-        if validation.get("closed_loop_requested") is False:
-            raise ValueError(
-                "export closed-loop was not requested; refuse skipped closed-loop "
-                f"as deployment validation (manifest={manifest_path})"
-            )
-        if (
-            "closed_loop_completed" in validation
-            and validation.get("closed_loop_completed") is not True
-        ):
-            raise ValueError(
-                "export closed-loop was not completed; refuse as deployment runtime "
-                f"(manifest={manifest_path})"
-            )
-        if "closed_loop_passed" in validation and validation.get("closed_loop_passed") is not True:
-            raise ValueError(
-                "export closed-loop did not pass; refuse as deployment runtime "
-                f"(manifest={manifest_path})"
-            )
+    model_sha256 = sha256_file(model_path)
     io_spec = dict(manifest.get("io_spec") or {})
     image_shape = [int(x) for x in (io_spec.get("image_shape") or [])]
     state_shape = [int(x) for x in (io_spec.get("state_shape") or [])]
@@ -153,14 +122,79 @@ def resolve_onnx_runtime(
         raise ValueError("export manifest missing chunk horizon (n_action_steps)")
     corpus = manifest.get("corpus") or {}
     eval_corpus = corpus.get("evaluation") or {}
+    corpus_eval_sha256 = (
+        str(eval_corpus["sha256"]) if eval_corpus.get("sha256") is not None else None
+    )
+    hub_revision = str(manifest.get("hub_revision") or "")
+
+    from breakpoint_eval.export_validation_v2 import (
+        assert_validation_v2_acceptable,
+        find_export_validation_v2,
+        load_export_validation_v2,
+    )
+
+    v2_path = find_export_validation_v2(model_path)
+    if v2_path is not None:
+        validation = load_export_validation_v2(v2_path)
+        if require_export_validation:
+            assert_validation_v2_acceptable(
+                validation,
+                model_sha256=model_sha256,
+                corpus_eval_sha256=corpus_eval_sha256,
+                hub_revision=hub_revision or None,
+            )
+        validation = {
+            **validation,
+            "validation_schema": "v2",
+            "validation_path": str(v2_path),
+        }
+    else:
+        validation = dict(manifest.get("export_validation") or {})
+        if require_export_validation:
+            if validation.get("passed") is not True:
+                raise ValueError(
+                    "export_validation.passed is not true and export_validation_v2.json "
+                    "is missing; refuse to evaluate an unvalidated export as a deployment "
+                    f"runtime (manifest={manifest_path})"
+                )
+            # Defense for diagnostic/synthetic manifests that set passed incorrectly.
+            if validation.get("corpus_suitable_as_deployment_evidence") is False:
+                raise ValueError(
+                    "export corpus is not suitable as deployment evidence "
+                    f"(manifest={manifest_path}); diagnostic_parity_ok exports are not "
+                    "accepted as validated deployment runtimes"
+                )
+            if validation.get("closed_loop_requested") is False:
+                raise ValueError(
+                    "export closed-loop was not requested; refuse skipped closed-loop "
+                    f"as deployment validation (manifest={manifest_path})"
+                )
+            if (
+                "closed_loop_completed" in validation
+                and validation.get("closed_loop_completed") is not True
+            ):
+                raise ValueError(
+                    "export closed-loop was not completed; refuse as deployment runtime "
+                    f"(manifest={manifest_path})"
+                )
+            if (
+                "closed_loop_passed" in validation
+                and validation.get("closed_loop_passed") is not True
+            ):
+                raise ValueError(
+                    "export closed-loop did not pass; refuse as deployment runtime "
+                    f"(manifest={manifest_path})"
+                )
+        validation = {**validation, "validation_schema": "v1"}
+
     return ResolvedOnnxRuntime(
         model_path=model_path,
         manifest_path=manifest_path,
         candidate=candidate,
-        hub_revision=str(manifest.get("hub_revision") or ""),
+        hub_revision=hub_revision,
         recipe_id=str(variant.get("recipe_id") or ""),
         variant_label=str(variant.get("label") or ""),
-        model_sha256=sha256_file(model_path),
+        model_sha256=model_sha256,
         chunk_horizon=chunk_horizon,
         input_shapes={
             INPUT_IMAGES: image_shape,
@@ -168,9 +202,7 @@ def resolve_onnx_runtime(
         },
         io_spec=io_spec,
         export_validation=validation,
-        corpus_eval_sha256=(
-            str(eval_corpus["sha256"]) if eval_corpus.get("sha256") is not None else None
-        ),
+        corpus_eval_sha256=corpus_eval_sha256,
     )
 
 

@@ -208,12 +208,15 @@ and per-element / action-unit error gates on a held-out corpus against PyTorch F
 (**same-observation** numerical parity). Export-induced failure is investigated first.
 
 Paired closed-loop checks compare **independently controlled** episodes (same seeds,
-separate resets). That gate is not same-input export parity: tiny early action diffs
-can change simulator state and compound at later replans. Manifests record per-seed
-lengths, outcomes, unmatched trajectory tails, and first divergence. Synthetic corpus
-or skipped closed-loop may set `diagnostic_parity_ok` but must not set
-`export_validation.passed` for deployment evidence. GL/env errors are recorded, not
-faked.
+separate resets). Independent action equality and identical episode lengths are
+**diagnostics only**, not numerical export requirements.
+
+Deployment validation uses versioned `export_validation_v2.json` (schema_version=2):
+same-input numerical parity (held-out corpus open-loop chunks plus same-observation
+shadow compares covering every fresh action-chunk inference) and completed closed-loop
+**task outcomes** with recorded success/terminated/truncated fields. Two-seed task
+outcomes are a smoke check, not statistical performance equivalence. Synthetic corpus
+must not set deployment `passed`. GL/env errors are recorded, not faked.
 
 Quantized variants use pinned recipe ids (no silent switch after failure):
 
