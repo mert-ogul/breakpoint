@@ -234,9 +234,35 @@ class ClosedLoopSeedReport:
     passed: bool
     failure_kind: str | None = None
     detail: str | None = None
+    # Episode-end fields from run_episode (not inferred from length).
+    pytorch_success: bool | None = None
+    pytorch_terminated: bool | None = None
+    pytorch_truncated: bool | None = None
+    pytorch_n_control_steps: int | None = None
+    pytorch_n_inference_calls: int | None = None
+    pytorch_n_fresh_chunks: int | None = None
+    onnx_success: bool | None = None
+    onnx_terminated: bool | None = None
+    onnx_truncated: bool | None = None
+    onnx_n_control_steps: int | None = None
+    onnx_n_inference_calls: int | None = None
+    onnx_n_fresh_chunks: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def episode_end_fields(episode: Any, *, prefix: str) -> dict[str, Any]:
+    """Map EpisodeResult end state into flat report fields."""
+    return {
+        f"{prefix}_outcome": episode.outcome.value,
+        f"{prefix}_success": bool(episode.success),
+        f"{prefix}_terminated": bool(episode.terminated),
+        f"{prefix}_truncated": bool(episode.truncated),
+        f"{prefix}_n_control_steps": int(episode.n_control_steps),
+        f"{prefix}_n_inference_calls": int(episode.n_inference_calls),
+        f"{prefix}_n_fresh_chunks": int(episode.n_fresh_chunks),
+    }
 
 
 @dataclass
@@ -419,8 +445,8 @@ def paired_closed_loop_rollouts(
             episode_index=0,
             latency_s=0.0,
         )
-        pt_outcome = pt.outcome.value
-        ort_outcome = ort.outcome.value
+        pt_end = episode_end_fields(pt, prefix="pytorch")
+        ort_end = episode_end_fields(ort, prefix="onnx")
         if (
             pt.outcome is EpisodeOutcome.RUNTIME_ERROR
             or ort.outcome is EpisodeOutcome.RUNTIME_ERROR
@@ -428,8 +454,8 @@ def paired_closed_loop_rollouts(
             seed_reports.append(
                 ClosedLoopSeedReport(
                     seed=seed,
-                    pytorch_outcome=pt_outcome,
-                    onnx_outcome=ort_outcome,
+                    pytorch_outcome=pt_end["pytorch_outcome"],
+                    onnx_outcome=ort_end["onnx_outcome"],
                     pytorch_n_steps=len(pt.steps),
                     onnx_n_steps=len(ort.steps),
                     length_mismatch=len(pt.steps) != len(ort.steps),
@@ -441,6 +467,18 @@ def paired_closed_loop_rollouts(
                     passed=False,
                     failure_kind=FAILURE_KIND_RUNTIME,
                     detail=f"pytorch={pt.runtime_error}; onnx={ort.runtime_error}",
+                    pytorch_success=pt_end["pytorch_success"],
+                    pytorch_terminated=pt_end["pytorch_terminated"],
+                    pytorch_truncated=pt_end["pytorch_truncated"],
+                    pytorch_n_control_steps=pt_end["pytorch_n_control_steps"],
+                    pytorch_n_inference_calls=pt_end["pytorch_n_inference_calls"],
+                    pytorch_n_fresh_chunks=pt_end["pytorch_n_fresh_chunks"],
+                    onnx_success=ort_end["onnx_success"],
+                    onnx_terminated=ort_end["onnx_terminated"],
+                    onnx_truncated=ort_end["onnx_truncated"],
+                    onnx_n_control_steps=ort_end["onnx_n_control_steps"],
+                    onnx_n_inference_calls=ort_end["onnx_n_inference_calls"],
+                    onnx_n_fresh_chunks=ort_end["onnx_n_fresh_chunks"],
                 )
             )
             continue
@@ -465,8 +503,8 @@ def paired_closed_loop_rollouts(
         seed_reports.append(
             ClosedLoopSeedReport(
                 seed=seed,
-                pytorch_outcome=pt_outcome,
-                onnx_outcome=ort_outcome,
+                pytorch_outcome=pt_end["pytorch_outcome"],
+                onnx_outcome=ort_end["onnx_outcome"],
                 pytorch_n_steps=len(pt_actions),
                 onnx_n_steps=len(ort_actions),
                 length_mismatch=bool(result["length_mismatch"]),
@@ -478,6 +516,18 @@ def paired_closed_loop_rollouts(
                 passed=bool(result["passed"]),
                 failure_kind=result["failure_kind"],
                 detail=result["detail"],
+                pytorch_success=pt_end["pytorch_success"],
+                pytorch_terminated=pt_end["pytorch_terminated"],
+                pytorch_truncated=pt_end["pytorch_truncated"],
+                pytorch_n_control_steps=pt_end["pytorch_n_control_steps"],
+                pytorch_n_inference_calls=pt_end["pytorch_n_inference_calls"],
+                pytorch_n_fresh_chunks=pt_end["pytorch_n_fresh_chunks"],
+                onnx_success=ort_end["onnx_success"],
+                onnx_terminated=ort_end["onnx_terminated"],
+                onnx_truncated=ort_end["onnx_truncated"],
+                onnx_n_control_steps=ort_end["onnx_n_control_steps"],
+                onnx_n_inference_calls=ort_end["onnx_n_inference_calls"],
+                onnx_n_fresh_chunks=ort_end["onnx_n_fresh_chunks"],
             )
         )
 
@@ -551,6 +601,7 @@ __all__ = [
     "ParityTolerances",
     "compare_action_traces_with_tails",
     "compare_paired_action_traces",
+    "episode_end_fields",
     "evaluate_corpus_parity",
     "paired_closed_loop_rollouts",
     "run_ort_chunks",

@@ -108,6 +108,7 @@ def run_pytorch_repeatability(
     seed: int,
 ) -> dict[str, Any]:
     """Two PyTorch episodes with the same seed; compare applied actions."""
+    from breakpoint_eval.export_parity import episode_end_fields
     from breakpoint_eval.run_episode import run_episode
 
     first = run_episode(env=env, adapter=adapter, seed=seed, episode_index=0, latency_s=0.0)
@@ -123,6 +124,10 @@ def run_pytorch_repeatability(
     return {
         "seed": seed,
         "comparison_kind": "pytorch_vs_pytorch_repeatability",
+        "episodes": [
+            episode_end_fields(first, prefix="episode"),
+            episode_end_fields(second, prefix="episode"),
+        ],
         "outcomes": [first.outcome.value, second.outcome.value],
         "n_steps": [len(a), len(b)],
         **cmp,
@@ -138,15 +143,18 @@ def run_shadow_chunk_parity(
     seed: int,
 ) -> dict[str, Any]:
     """Driver controls the sim; ORT is shadow-only on identical observations."""
+    from breakpoint_eval.run_episode import _classify_outcome, _extract_is_success
+
     # Driver selects actions; both graphs evaluated on the same observation each step.
     driver.reset()
     obs, _info = env.reset(seed=[seed])
     errors: list[float] = []
     fresh_steps: list[int] = []
+    inference_steps: list[int] = []
     step_index = 0
-    # Bound by a normal episode horizon via a throwaway length estimate — use
-    # the same control loop structure as run_episode without duplicating success
-    # logic: run until truncated/terminated like a baseline episode.
+    terminated = False
+    truncated = False
+    is_success = False
     done = False
     while not done:
         proc = preprocess_observation(obs)
@@ -159,13 +167,24 @@ def run_shadow_chunk_parity(
         action_step = driver.select_action(proc)
         if action_step.requested_fresh_chunk:
             fresh_steps.append(step_index)
+        if action_step.inference_call:
+            inference_steps.append(step_index)
         action = np.asarray(action_step.action, dtype=np.float32).reshape(1, -1)
-        obs, _reward, terminated, truncated, _info = env.step(action)
-        done = bool(np.any(terminated) or np.any(truncated))
+        obs, _reward, terminated_arr, truncated_arr, info = env.step(action)
+        terminated = bool(np.any(terminated_arr))
+        truncated = bool(np.any(truncated_arr))
+        is_success = _extract_is_success(info)
+        done = terminated or truncated
         step_index += 1
         if step_index > 10_000:
             raise RuntimeError("shadow rollout exceeded 10000 steps")
 
+    outcome = _classify_outcome(
+        policy_failed=False,
+        is_success=is_success,
+        terminated=terminated,
+        truncated=truncated,
+    )
     summary = summarize_chunk_error_trace(
         errors,
         fresh_steps=fresh_steps,
@@ -178,11 +197,25 @@ def run_shadow_chunk_parity(
         "driver": "pytorch",
         "shadow": "onnx",
         "shadow_controls_simulation": False,
+        "driver_outcome": outcome.value,
+        "driver_success": bool(is_success and outcome.value == "success"),
+        "driver_terminated": terminated,
+        "driver_truncated": truncated,
+        "n_control_steps": step_index,
         "n_fresh_chunks": len(fresh_steps),
+        "n_inference_calls": len(inference_steps),
+        "fresh_chunk_steps": fresh_steps,
+        "inference_call_steps": inference_steps,
+        "compares_every_control_step": True,
+        "covers_every_inference_call": bool(inference_steps)
+        and all(0 <= s < len(errors) for s in inference_steps),
+        "covers_every_fresh_chunk_refresh": bool(fresh_steps)
+        and all(0 <= s < len(errors) for s in fresh_steps),
         **summary,
         "note": (
-            "PyTorch drives the environment. At each control step both graphs see "
-            "the same observation; ORT never applies actions."
+            "PyTorch drives the environment through termination/truncation. At each "
+            "control step both graphs see the same observation (including every "
+            "action-chunk refresh); ORT never applies actions."
         ),
     }
 
