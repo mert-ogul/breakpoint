@@ -74,6 +74,28 @@ def test_validation_gate_still_fails_independent_divergence() -> None:
     assert any("independent_trajectory_divergence" in r for r in validation["not_passed_reasons"])
 
 
+def test_episode_end_fields_from_result() -> None:
+    from breakpoint_eval.export_parity import episode_end_fields
+    from breakpoint_eval.run_episode import EpisodeOutcome
+
+    class _Ep:
+        outcome = EpisodeOutcome.SUCCESS
+        success = True
+        terminated = True
+        truncated = False
+        n_control_steps = 301
+        n_inference_calls = 4
+        n_fresh_chunks = 4
+
+    fields = episode_end_fields(_Ep(), prefix="pytorch")
+    assert fields["pytorch_outcome"] == "success"
+    assert fields["pytorch_success"] is True
+    assert fields["pytorch_terminated"] is True
+    assert fields["pytorch_truncated"] is False
+    assert fields["pytorch_n_control_steps"] == 301
+    assert fields["pytorch_n_inference_calls"] == 4
+
+
 def test_diagnosis_refuses_overwrite_export_dir(tmp_path: Path) -> None:
     from breakpoint_eval.export_closed_loop_diagnosis import run_closed_loop_diagnosis
 
