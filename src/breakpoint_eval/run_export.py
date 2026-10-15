@@ -97,6 +97,60 @@ def _assert_disjoint(calib: list[int], eval_seeds: list[int]) -> None:
         raise ValueError(f"calibration and evaluation seeds overlap: {sorted(overlap)}")
 
 
+def build_export_validation(
+    *,
+    open_loop_passed: bool,
+    closed_loop: dict[str, Any],
+    closed_loop_requested: bool,
+    corpus_suitable_as_deployment_evidence: bool,
+) -> dict[str, Any]:
+    """Assemble export_validation. ``passed`` means deployment evidence, not diagnostics."""
+    closed_loop_completed = bool(closed_loop.get("completed"))
+    closed_loop_passed = closed_loop.get("passed")
+    diagnostic_parity_ok = bool(open_loop_passed)
+    deployment_passed = (
+        open_loop_passed
+        and corpus_suitable_as_deployment_evidence
+        and closed_loop_completed
+        and closed_loop_passed is True
+    )
+    reasons: list[str] = []
+    if not open_loop_passed:
+        reasons.append("open_loop_fp32_parity_failed")
+    if not corpus_suitable_as_deployment_evidence:
+        reasons.append("corpus_not_suitable_as_deployment_evidence")
+    if not closed_loop_requested:
+        reasons.append("closed_loop_not_requested")
+    elif not closed_loop_completed:
+        reasons.append("closed_loop_not_completed")
+    elif closed_loop_passed is not True:
+        reasons.append("closed_loop_not_passed")
+        kind = closed_loop.get("failure_kind")
+        if kind:
+            reasons.append(f"closed_loop_failure_kind={kind}")
+    return {
+        "open_loop_fp32_parity_passed": open_loop_passed,
+        "closed_loop_requested": closed_loop_requested,
+        "closed_loop_completed": closed_loop_completed,
+        "closed_loop_passed": closed_loop_passed,
+        "closed_loop_failure_kind": closed_loop.get("failure_kind"),
+        "closed_loop_comparison_kind": closed_loop.get("comparison_kind"),
+        "corpus_suitable_as_deployment_evidence": corpus_suitable_as_deployment_evidence,
+        "tensor_only_is_not_closed_loop_validation": True,
+        "diagnostic_parity_ok": diagnostic_parity_ok,
+        "passed": deployment_passed,
+        "not_passed_reasons": [] if deployment_passed else reasons,
+        "note": (
+            "Export validation.passed is true only for deployment evidence: simulator "
+            "corpus + FP32 open-loop parity + completed closed-loop pass. "
+            "diagnostic_parity_ok may be true for synthetic or skipped-closed-loop "
+            "diagnostic exports without counting as validated deployment evidence. "
+            "Closed-loop compares independently controlled episodes (same seeds, "
+            "separate resets); it is not same-observation numerical export parity."
+        ),
+    }
+
+
 def run_export(req: ExportRequest) -> Path:
     spec = resolve_candidate(req.candidate)
     repo_root = (req.repo_root or repo_root_from_package()).resolve()
@@ -387,29 +441,14 @@ def run_export(req: ExportRequest) -> Path:
             "note": ("Open-loop tensor parity alone is not completed closed-loop validation."),
         }
 
-    open_loop_passed = bool(fp32_vs_pytorch.passed)
-    closed_loop_completed = bool(closed_loop.get("completed"))
-    closed_loop_passed = closed_loop.get("passed")
-    if req.run_closed_loop:
-        closed_loop_ok = closed_loop_completed and closed_loop_passed is True
-    else:
-        closed_loop_ok = True  # not requested; does not fail the gate
-    export_validation = {
-        "open_loop_fp32_parity_passed": open_loop_passed,
-        "closed_loop_requested": req.run_closed_loop,
-        "closed_loop_completed": closed_loop_completed,
-        "closed_loop_passed": closed_loop_passed,
-        "corpus_suitable_as_deployment_evidence": bool(
+    export_validation = build_export_validation(
+        open_loop_passed=bool(fp32_vs_pytorch.passed),
+        closed_loop=closed_loop,
+        closed_loop_requested=req.run_closed_loop,
+        corpus_suitable_as_deployment_evidence=bool(
             corpus_meta.get("suitable_as_deployment_evidence")
         ),
-        "tensor_only_is_not_closed_loop_validation": True,
-        "passed": open_loop_passed and closed_loop_ok,
-        "note": (
-            "Export validation requires FP32 open-loop parity. When closed-loop is "
-            "requested, its failure or error also fails this gate. A passed tensor-only "
-            "comparison is never recorded as completed closed-loop validation."
-        ),
-    }
+    )
 
     import onnx
     import onnxruntime as ort

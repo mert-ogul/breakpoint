@@ -96,6 +96,56 @@ def test_resolve_rejects_unvalidated_export(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+def test_resolve_rejects_synthetic_passed_bypass(tmp_path: Path) -> None:
+    """diagnostic_parity_ok / forged passed must not unlock deployment runtime."""
+    model_path, man_path, _ = _write_export_dir(tmp_path)
+    payload = json.loads(man_path.read_text())
+    payload["export_validation"] = {
+        "passed": True,
+        "diagnostic_parity_ok": True,
+        "corpus_suitable_as_deployment_evidence": False,
+        "closed_loop_requested": False,
+        "closed_loop_completed": False,
+        "closed_loop_passed": None,
+    }
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="not suitable as deployment evidence"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
+def test_resolve_rejects_skipped_closed_loop_bypass(tmp_path: Path) -> None:
+    model_path, man_path, _ = _write_export_dir(tmp_path)
+    payload = json.loads(man_path.read_text())
+    payload["export_validation"] = {
+        "passed": True,
+        "diagnostic_parity_ok": True,
+        "corpus_suitable_as_deployment_evidence": True,
+        "closed_loop_requested": False,
+        "closed_loop_completed": False,
+        "closed_loop_passed": None,
+    }
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="closed-loop was not requested"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
+def test_resolve_rejects_failed_closed_loop_bypass(tmp_path: Path) -> None:
+    model_path, man_path, _ = _write_export_dir(tmp_path)
+    payload = json.loads(man_path.read_text())
+    payload["export_validation"] = {
+        "passed": True,
+        "diagnostic_parity_ok": True,
+        "corpus_suitable_as_deployment_evidence": True,
+        "closed_loop_requested": True,
+        "closed_loop_completed": True,
+        "closed_loop_passed": False,
+        "closed_loop_failure_kind": "independent_trajectory_divergence",
+    }
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="closed-loop did not pass"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
 def test_profile_rejects_pytorch_relabel_via_hash_mismatch(tmp_path: Path) -> None:
     model_path, _, digest = _write_export_dir(tmp_path)
     profile = {

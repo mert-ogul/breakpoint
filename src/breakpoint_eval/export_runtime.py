@@ -108,11 +108,37 @@ def resolve_onnx_runtime(
         )
     variant = _variant_for_model(manifest, model_path)
     validation = dict(manifest.get("export_validation") or {})
-    if require_export_validation and validation.get("passed") is not True:
-        raise ValueError(
-            "export_validation.passed is not true; refuse to evaluate an unvalidated "
-            f"export as a deployment runtime (manifest={manifest_path})"
-        )
+    if require_export_validation:
+        if validation.get("passed") is not True:
+            raise ValueError(
+                "export_validation.passed is not true; refuse to evaluate an unvalidated "
+                f"export as a deployment runtime (manifest={manifest_path})"
+            )
+        # Defense for diagnostic/synthetic manifests that set passed incorrectly.
+        if validation.get("corpus_suitable_as_deployment_evidence") is False:
+            raise ValueError(
+                "export corpus is not suitable as deployment evidence "
+                f"(manifest={manifest_path}); diagnostic_parity_ok exports are not "
+                "accepted as validated deployment runtimes"
+            )
+        if validation.get("closed_loop_requested") is False:
+            raise ValueError(
+                "export closed-loop was not requested; refuse skipped closed-loop "
+                f"as deployment validation (manifest={manifest_path})"
+            )
+        if (
+            "closed_loop_completed" in validation
+            and validation.get("closed_loop_completed") is not True
+        ):
+            raise ValueError(
+                "export closed-loop was not completed; refuse as deployment runtime "
+                f"(manifest={manifest_path})"
+            )
+        if "closed_loop_passed" in validation and validation.get("closed_loop_passed") is not True:
+            raise ValueError(
+                "export closed-loop did not pass; refuse as deployment runtime "
+                f"(manifest={manifest_path})"
+            )
     io_spec = dict(manifest.get("io_spec") or {})
     image_shape = [int(x) for x in (io_spec.get("image_shape") or [])]
     state_shape = [int(x) for x in (io_spec.get("state_shape") or [])]
