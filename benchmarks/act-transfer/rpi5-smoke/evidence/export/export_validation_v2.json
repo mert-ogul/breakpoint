@@ -1,0 +1,115 @@
+{
+  "schema_version": 2,
+  "passed": true,
+  "not_passed_reasons": [],
+  "binding": {
+    "model_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+    "corpus_eval_sha256": "f9559ac9037385d302a99c6ec16a5327407fedd4aa3643eba2eaa9ebe8d787ea",
+    "hub_revision": "9e93545744656e57d20f8b2d631d5d72544002ce",
+    "candidate": "act_aloha_transfer",
+    "recipe_id": "torch_onnx_export_fp32_opset17",
+    "variant_label": "onnx_fp32",
+    "code_revision": "e8255f0897c69e97551fe62912bcafc1b14d7d2b",
+    "code_dirty": true,
+    "uncommitted_paths": [
+      "src/breakpoint_eval/cli.py",
+      "src/breakpoint_eval/export_runtime.py",
+      ".cursor/",
+      "AGENTS.md",
+      "artifacts-review.zip",
+      "profiles/laptop/",
+      "profiles/rpi5/",
+      "src/breakpoint_eval/export_validation_v2.py",
+      "tests/test_export_validation_v2.py"
+    ]
+  },
+  "validation_settings": {
+    "parity_atol": 0.0001,
+    "parity_rtol": 0.0001,
+    "parity_max_abs": 0.0001,
+    "parity_mean_abs": 1e-05,
+    "parity_action_unit_mean_abs": 0.0001,
+    "closed_loop_atol": 0.0001,
+    "closed_loop_rtol": 0.0001,
+    "fresh_chunk_same_input_required": true,
+    "cached_action_trace_not_numerical_parity": true,
+    "independent_trajectory_is_diagnostic_only": true,
+    "two_seed_task_outcomes_are_smoke_not_statistical": true
+  },
+  "numerical_parity": {
+    "kind": "same_input_numerical_parity",
+    "passed": true,
+    "open_loop_passed": true,
+    "shadow_fresh_chunk_passed": true,
+    "not_passed_reasons": [],
+    "note": "Requires held-out corpus open-loop chunk parity and same-observation shadow compares that cover every fresh action-chunk inference. Cached queued-action traces are not numerical export evidence."
+  },
+  "closed_loop_task_outcomes": {
+    "kind": "closed_loop_task_outcomes",
+    "passed": true,
+    "completed": true,
+    "n_seeds": 2,
+    "seeds": [
+      {
+        "seed": 2000,
+        "pytorch_outcome": "success",
+        "onnx_outcome": "success",
+        "pytorch_success": true,
+        "onnx_success": true,
+        "pytorch_terminated": true,
+        "onnx_terminated": true,
+        "pytorch_truncated": false,
+        "onnx_truncated": false,
+        "pytorch_n_control_steps": 301,
+        "onnx_n_control_steps": 302
+      },
+      {
+        "seed": 2001,
+        "pytorch_outcome": "success",
+        "onnx_outcome": "success",
+        "pytorch_success": true,
+        "onnx_success": true,
+        "pytorch_terminated": true,
+        "onnx_terminated": true,
+        "pytorch_truncated": false,
+        "onnx_truncated": false,
+        "pytorch_n_control_steps": 269,
+        "onnx_n_control_steps": 267
+      }
+    ],
+    "smoke_check": true,
+    "statistical_equivalence_claim": false,
+    "not_passed_reasons": [],
+    "note": "Requires completed baseline rollouts with recorded success/terminated/truncated fields. Two-seed results are a smoke check, not statistical evidence of performance equivalence."
+  },
+  "independent_trajectory": {
+    "kind": "independent_trajectory_similarity",
+    "similar": false,
+    "gates_deployment_validation": false,
+    "seeds": [
+      {
+        "seed": 2000,
+        "passed_similarity": false,
+        "length_mismatch": true,
+        "unmatched_tail_steps": 1,
+        "first_divergence_step": 100,
+        "max_abs_error": 0.020868360996246338,
+        "failure_kind": "episode_length_mismatch"
+      },
+      {
+        "seed": 2001,
+        "passed_similarity": false,
+        "length_mismatch": true,
+        "unmatched_tail_steps": 2,
+        "first_divergence_step": 200,
+        "max_abs_error": 0.012189865112304688,
+        "failure_kind": "episode_length_mismatch"
+      }
+    ],
+    "note": "Independent-rollout action equality and identical episode lengths are diagnostics only; they are not numerical export requirements."
+  },
+  "corpus_suitable_as_deployment_evidence": true,
+  "diagnosis_path": "/Users/mertogul/Desktop/breakpoint/artifacts/diagnostics/act-fp32-outcomes/closed_loop_diagnosis.json",
+  "source_export_manifest_path": "/Users/mertogul/Desktop/breakpoint/artifacts/export/act-fp32/export_manifest.json",
+  "note": "schema_version=2: deployment passed requires same-input numerical parity and completed closed-loop task outcomes with recorded fields. Independent trajectory similarity is diagnostic only."
+}

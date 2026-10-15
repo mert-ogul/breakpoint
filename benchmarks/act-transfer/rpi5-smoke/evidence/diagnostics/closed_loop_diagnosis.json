@@ -1,0 +1,308 @@
+{
+  "candidate": "act_aloha_transfer",
+  "export_dir": "/Users/mertogul/Desktop/breakpoint/artifacts/export/act-fp32",
+  "onnx_path": "/Users/mertogul/Desktop/breakpoint/artifacts/export/act-fp32/act_chunk_fp32.onnx",
+  "seeds": [
+    2000,
+    2001
+  ],
+  "source_export_validation": {
+    "closed_loop_completed": true,
+    "closed_loop_passed": false,
+    "closed_loop_requested": true,
+    "corpus_suitable_as_deployment_evidence": true,
+    "note": "Export validation requires FP32 open-loop parity. When closed-loop is requested, its failure or error also fails this gate. A passed tensor-only comparison is never recorded as completed closed-loop validation.",
+    "open_loop_fp32_parity_passed": true,
+    "passed": false,
+    "tensor_only_is_not_closed_loop_validation": true
+  },
+  "source_closed_loop": {
+    "completed": true,
+    "detail": null,
+    "max_abs_error": 0.020868360996246338,
+    "n_steps_compared": 568,
+    "onnx_outcome": "success",
+    "passed": false,
+    "pytorch_outcome": "success",
+    "status": "ok",
+    "tolerances": {
+      "atol": 0.0001,
+      "rtol": 0.0001
+    }
+  },
+  "interpretation": {
+    "closed_loop_gate_compares": "independent_rollout_action_trace",
+    "same_input_numerical_parity": "open-loop corpus parity and shadow chunk compares on a driver trajectory",
+    "validation_gate_unchanged": true,
+    "root_cause_if_independent_fails_and_shadow_passes": "Independent trajectory divergence under separate resets, not a same-observation ONNX numerical export failure."
+  },
+  "pytorch_repeatability": [
+    {
+      "seed": 2000,
+      "comparison_kind": "pytorch_vs_pytorch_repeatability",
+      "episodes": [
+        {
+          "episode_outcome": "success",
+          "episode_success": true,
+          "episode_terminated": true,
+          "episode_truncated": false,
+          "episode_n_control_steps": 301,
+          "episode_n_inference_calls": 4,
+          "episode_n_fresh_chunks": 4
+        },
+        {
+          "episode_outcome": "success",
+          "episode_success": true,
+          "episode_terminated": true,
+          "episode_truncated": false,
+          "episode_n_control_steps": 301,
+          "episode_n_inference_calls": 4,
+          "episode_n_fresh_chunks": 4
+        }
+      ],
+      "outcomes": [
+        "success",
+        "success"
+      ],
+      "n_steps": [
+        301,
+        301
+      ],
+      "n_steps_compared": 301,
+      "max_abs_error": 0.0,
+      "first_divergence_step": null,
+      "first_divergence_max_abs_error": null,
+      "length_mismatch": false,
+      "unmatched_tail_steps": 0,
+      "passed": true,
+      "failure_kind": null,
+      "detail": null
+    },
+    {
+      "seed": 2001,
+      "comparison_kind": "pytorch_vs_pytorch_repeatability",
+      "episodes": [
+        {
+          "episode_outcome": "success",
+          "episode_success": true,
+          "episode_terminated": true,
+          "episode_truncated": false,
+          "episode_n_control_steps": 269,
+          "episode_n_inference_calls": 3,
+          "episode_n_fresh_chunks": 3
+        },
+        {
+          "episode_outcome": "success",
+          "episode_success": true,
+          "episode_terminated": true,
+          "episode_truncated": false,
+          "episode_n_control_steps": 269,
+          "episode_n_inference_calls": 3,
+          "episode_n_fresh_chunks": 3
+        }
+      ],
+      "outcomes": [
+        "success",
+        "success"
+      ],
+      "n_steps": [
+        269,
+        269
+      ],
+      "n_steps_compared": 269,
+      "max_abs_error": 0.0,
+      "first_divergence_step": null,
+      "first_divergence_max_abs_error": null,
+      "length_mismatch": false,
+      "unmatched_tail_steps": 0,
+      "passed": true,
+      "failure_kind": null,
+      "detail": null
+    }
+  ],
+  "same_observation_shadow": [
+    {
+      "seed": 2000,
+      "comparison_kind": "same_observation_shadow_chunks",
+      "driver": "pytorch",
+      "shadow": "onnx",
+      "shadow_controls_simulation": false,
+      "driver_outcome": "success",
+      "driver_success": true,
+      "driver_terminated": true,
+      "driver_truncated": false,
+      "n_control_steps": 301,
+      "n_fresh_chunks": 4,
+      "n_inference_calls": 4,
+      "fresh_chunk_steps": [
+        0,
+        100,
+        200,
+        300
+      ],
+      "inference_call_steps": [
+        0,
+        100,
+        200,
+        300
+      ],
+      "compares_every_control_step": true,
+      "covers_every_inference_call": true,
+      "covers_every_fresh_chunk_refresh": true,
+      "n_steps": 301,
+      "max_abs_error": 2.9802322387695312e-06,
+      "first_over_atol_step": null,
+      "fresh_step_errors": [
+        {
+          "step": 0,
+          "max_abs_error": 7.152557373046875e-07
+        },
+        {
+          "step": 100,
+          "max_abs_error": 1.0728836059570312e-06
+        },
+        {
+          "step": 200,
+          "max_abs_error": 8.344650268554688e-07
+        },
+        {
+          "step": 300,
+          "max_abs_error": 5.960464477539062e-07
+        }
+      ],
+      "atol": 0.0001,
+      "rtol": 0.0001,
+      "passed_atol": true,
+      "note": "PyTorch drives the environment through termination/truncation. At each control step both graphs see the same observation (including every action-chunk refresh); ORT never applies actions."
+    },
+    {
+      "seed": 2001,
+      "comparison_kind": "same_observation_shadow_chunks",
+      "driver": "pytorch",
+      "shadow": "onnx",
+      "shadow_controls_simulation": false,
+      "driver_outcome": "success",
+      "driver_success": true,
+      "driver_terminated": true,
+      "driver_truncated": false,
+      "n_control_steps": 269,
+      "n_fresh_chunks": 3,
+      "n_inference_calls": 3,
+      "fresh_chunk_steps": [
+        0,
+        100,
+        200
+      ],
+      "inference_call_steps": [
+        0,
+        100,
+        200
+      ],
+      "compares_every_control_step": true,
+      "covers_every_inference_call": true,
+      "covers_every_fresh_chunk_refresh": true,
+      "n_steps": 269,
+      "max_abs_error": 2.6226043701171875e-06,
+      "first_over_atol_step": null,
+      "fresh_step_errors": [
+        {
+          "step": 0,
+          "max_abs_error": 5.960464477539062e-07
+        },
+        {
+          "step": 100,
+          "max_abs_error": 6.556510925292969e-07
+        },
+        {
+          "step": 200,
+          "max_abs_error": 1.1920928955078125e-06
+        }
+      ],
+      "atol": 0.0001,
+      "rtol": 0.0001,
+      "passed_atol": true,
+      "note": "PyTorch drives the environment through termination/truncation. At each control step both graphs see the same observation (including every action-chunk refresh); ORT never applies actions."
+    }
+  ],
+  "independent_rollouts": {
+    "status": "ok",
+    "detail": "seed=2000 failure_kind=episode_length_mismatch first_div=100 max_abs=0.020868360996246338 len_pt=301 len_onnx=302 outcomes=(success,success); seed=2001 failure_kind=episode_length_mismatch first_div=200 max_abs=0.012189865112304688 len_pt=269 len_onnx=267 outcomes=(success,success)",
+    "n_steps_compared": 568,
+    "max_abs_error": 0.020868360996246338,
+    "passed": false,
+    "tolerances": {
+      "atol": 0.0001,
+      "rtol": 0.0001
+    },
+    "comparison_kind": "independent_rollout_action_trace",
+    "failure_kind": "episode_length_mismatch",
+    "seeds": [
+      {
+        "seed": 2000,
+        "pytorch_outcome": "success",
+        "onnx_outcome": "success",
+        "pytorch_n_steps": 301,
+        "onnx_n_steps": 302,
+        "length_mismatch": true,
+        "unmatched_tail_steps": 1,
+        "n_steps_compared": 301,
+        "max_abs_error": 0.020868360996246338,
+        "first_divergence_step": 100,
+        "first_divergence_max_abs_error": 0.000166967511177063,
+        "passed": false,
+        "failure_kind": "episode_length_mismatch",
+        "detail": "unmatched trajectory tail: pytorch_n=301 onnx_n=302 (compared overlapping prefix of 301; tail not discarded from the verdict)",
+        "pytorch_success": true,
+        "pytorch_terminated": true,
+        "pytorch_truncated": false,
+        "pytorch_n_control_steps": 301,
+        "pytorch_n_inference_calls": 4,
+        "pytorch_n_fresh_chunks": 4,
+        "onnx_success": true,
+        "onnx_terminated": true,
+        "onnx_truncated": false,
+        "onnx_n_control_steps": 302,
+        "onnx_n_inference_calls": 4,
+        "onnx_n_fresh_chunks": 4
+      },
+      {
+        "seed": 2001,
+        "pytorch_outcome": "success",
+        "onnx_outcome": "success",
+        "pytorch_n_steps": 269,
+        "onnx_n_steps": 267,
+        "length_mismatch": true,
+        "unmatched_tail_steps": 2,
+        "n_steps_compared": 267,
+        "max_abs_error": 0.012189865112304688,
+        "first_divergence_step": 200,
+        "first_divergence_max_abs_error": 0.012189865112304688,
+        "passed": false,
+        "failure_kind": "episode_length_mismatch",
+        "detail": "unmatched trajectory tail: pytorch_n=269 onnx_n=267 (compared overlapping prefix of 267; tail not discarded from the verdict)",
+        "pytorch_success": true,
+        "pytorch_terminated": true,
+        "pytorch_truncated": false,
+        "pytorch_n_control_steps": 269,
+        "pytorch_n_inference_calls": 3,
+        "pytorch_n_fresh_chunks": 3,
+        "onnx_success": true,
+        "onnx_terminated": true,
+        "onnx_truncated": false,
+        "onnx_n_control_steps": 267,
+        "onnx_n_inference_calls": 3,
+        "onnx_n_fresh_chunks": 3
+      }
+    ],
+    "length_mismatch_any": true,
+    "pytorch_outcome": "see_seeds",
+    "onnx_outcome": "see_seeds",
+    "note": "Compares independently controlled episodes (separate resets) with the same seeds. This is not same-observation numerical export parity; open-loop corpus parity covers identical inputs."
+  },
+  "tolerances": {
+    "closed_loop_atol": 0.0001,
+    "closed_loop_rtol": 0.0001,
+    "parity_atol": 0.0001,
+    "parity_rtol": 0.0001
+  }
+}
