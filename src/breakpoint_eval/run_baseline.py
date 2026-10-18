@@ -10,7 +10,12 @@ from typing import Any
 
 from breakpoint_eval.camera_degrade import ImageDegradeConfig, ImageMode, config_provenance
 from breakpoint_eval.latency_scheduler import CHUNK_ARRIVAL_POLICY
-from breakpoint_eval.latency_trace import LatencyProfile, LatencyTraceReplayer
+from breakpoint_eval.latency_trace import (
+    EndOfTraceBehavior,
+    LatencyProfile,
+    LatencyTraceReplayer,
+    contiguous_window_starts,
+)
 from breakpoint_eval.policy_adapter import PolicyAdapter
 from breakpoint_eval.run_episode import EpisodeOutcome, EpisodeResult, run_episode
 from breakpoint_eval.seed_list import build_seeds, parse_seed_list
@@ -53,10 +58,15 @@ class RunRequest:
     latency_end_of_trace: str = "fail"
     latency_block_length: int | None = None
     latency_block_seed: int | None = None
+    latency_window_starts: list[int] | None = None
+    latency_window_length: int | None = None
     image_cfg: ImageDegradeConfig | None = None
     repo_root: Path | None = None
     onnx_model: Path | None = None
     policy_rng_seeds: list[int] | None = None
+    ort_providers: list[str] | None = None
+    ort_intra_op_num_threads: int | None = None
+    ort_inter_op_num_threads: int | None = None
 
 
 def run_baseline(req: RunRequest) -> Path:
@@ -71,6 +81,17 @@ def run_baseline(req: RunRequest) -> Path:
             "measured latency profile requires --onnx-model matching the profiled graph; "
             "do not replay ONNX timings onto an unlabeled PyTorch FP32 rollout"
         )
+    if req.latency_window_length is not None and req.latency_profile is None:
+        raise ValueError("latency_window_length requires a latency_profile")
+    if (req.latency_window_starts is None) ^ (req.latency_window_length is None):
+        raise ValueError("latency_window_starts and latency_window_length must be set together")
+    if req.latency_window_length is not None:
+        if req.latency_block_length is not None or req.latency_block_seed is not None:
+            raise ValueError(
+                "contiguous window design is not interchangeable with block resampling"
+            )
+        if req.latency_window_starts is None or len(req.latency_window_starts) != len(req.seeds):
+            raise ValueError("latency_window_starts length must match env seeds length")
 
     repo_root = (req.repo_root or repo_root_from_package()).resolve()
     ensure_lerobot_on_path(repo_root)
@@ -81,6 +102,9 @@ def run_baseline(req: RunRequest) -> Path:
     env_cfg = make_env_config(spec)
     onnx_runtime = None
     policy = None
+    ort_providers = list(req.ort_providers) if req.ort_providers else ["CPUExecutionProvider"]
+    ort_intra = req.ort_intra_op_num_threads
+    ort_inter = req.ort_inter_op_num_threads
     if req.onnx_model is not None:
         from breakpoint_eval.act_export import (
             OrtActChunkSession,
@@ -107,7 +131,12 @@ def run_baseline(req: RunRequest) -> Path:
                 f"ONNX chunk horizon {onnx_runtime.chunk_horizon} != policy "
                 f"n_action_steps {chunk_info.n_action_steps}"
             )
-        session = OrtActChunkSession(onnx_runtime.model_path, providers=["CPUExecutionProvider"])
+        session = OrtActChunkSession(
+            onnx_runtime.model_path,
+            providers=ort_providers,
+            intra_op_num_threads=ort_intra,
+            inter_op_num_threads=ort_inter,
+        )
         adapter: Any = OrtPolicyAdapter(
             session,
             chunk_info=chunk_info,
@@ -124,9 +153,11 @@ def run_baseline(req: RunRequest) -> Path:
         # H.264 stream rate must match the environment control / camera rate.
         image_cfg = replace(image_cfg, frame_rate_hz=float(env_cfg.fps))
 
+    use_windows = req.latency_window_length is not None
     latency_replayer: LatencyTraceReplayer | None = None
+    window_design: dict[str, Any] | None = None
     if req.latency_profile is not None:
-        from breakpoint_eval.latency_trace import EndOfTraceBehavior, assert_profile_compatible
+        from breakpoint_eval.latency_trace import assert_profile_compatible
 
         assert onnx_runtime is not None  # enforced above
         assert_profile_compatible(
@@ -139,12 +170,39 @@ def run_baseline(req: RunRequest) -> Path:
             hub_revision=onnx_runtime.hub_revision or None,
             input_shapes=onnx_runtime.input_shapes,
         )
-        latency_replayer = LatencyTraceReplayer.from_profile(
-            req.latency_profile,
-            end_of_trace=EndOfTraceBehavior(req.latency_end_of_trace),
-            block_length=req.latency_block_length,
-            block_resample_seed=req.latency_block_seed,
-        )
+        if use_windows:
+            assert req.latency_window_starts is not None
+            assert req.latency_window_length is not None
+            n_trace = len(req.latency_profile.latency_s)
+            expected = contiguous_window_starts(
+                n_trace,
+                window_length=req.latency_window_length,
+                n_episodes=len(req.seeds),
+            )
+            if list(req.latency_window_starts) != expected:
+                raise ValueError(
+                    "latency_window_starts must match the predeclared evenly-spaced design "
+                    f"floor(i*(N-W)/(n-1)); got {list(req.latency_window_starts)} "
+                    f"expected {expected}"
+                )
+            window_design = {
+                "design": "contiguous_evenly_spaced_starts",
+                "formula": "floor(i*(N-window_length)/(n_episodes-1))",
+                "window_length": req.latency_window_length,
+                "window_starts": list(req.latency_window_starts),
+                "n_trace": n_trace,
+                "n_episodes": len(req.seeds),
+                "end_of_trace": "fail",
+                "not_continuous_full_trace_replay": True,
+                "not_block_resample": True,
+            }
+        else:
+            latency_replayer = LatencyTraceReplayer.from_profile(
+                req.latency_profile,
+                end_of_trace=EndOfTraceBehavior(req.latency_end_of_trace),
+                block_length=req.latency_block_length,
+                block_resample_seed=req.latency_block_seed,
+            )
 
     policy_rng_seeds = (
         list(req.policy_rng_seeds)
@@ -176,12 +234,20 @@ def run_baseline(req: RunRequest) -> Path:
         "policy_loaded": True,
         "policy_backend": backend,
         "onnx_runtime": onnx_runtime.to_dict() if onnx_runtime is not None else None,
-        "latency_s": req.latency_s if latency_replayer is None else None,
-        "latency_ms": (req.latency_s * 1000.0) if latency_replayer is None else None,
-        "latency_mode": "trace_replay" if latency_replayer is not None else "constant",
+        "ort_runtime_settings": {
+            "providers": ort_providers if backend == "onnxruntime" else None,
+            "intra_op_num_threads": ort_intra if backend == "onnxruntime" else None,
+            "inter_op_num_threads": ort_inter if backend == "onnxruntime" else None,
+            "host_device": req.device,
+            "fixed_across_comparisons": True,
+        },
+        "latency_s": req.latency_s if req.latency_profile is None else None,
+        "latency_ms": (req.latency_s * 1000.0) if req.latency_profile is None else None,
+        "latency_mode": "trace_replay" if req.latency_profile is not None else "constant",
         "latency_profile_identity": (
             req.latency_profile.identity() if req.latency_profile is not None else None
         ),
+        "latency_trace_window_design": window_design,
         "chunk_arrival_policy": CHUNK_ARRIVAL_POLICY,
         "host_compute_added_to_latency": False,
         "constant_delay_distinct_from_device_replay": True,
@@ -235,14 +301,25 @@ def run_baseline(req: RunRequest) -> Path:
     try:
         for episode_index, seed in enumerate(req.seeds):
             frames: list[Any] | None = [] if req.save_video else None
+            episode_replayer = latency_replayer
+            if use_windows:
+                assert req.latency_profile is not None
+                assert req.latency_window_starts is not None
+                assert req.latency_window_length is not None
+                episode_replayer = LatencyTraceReplayer.from_profile(
+                    req.latency_profile,
+                    end_of_trace=EndOfTraceBehavior.FAIL,
+                    window_start=req.latency_window_starts[episode_index],
+                    window_length=req.latency_window_length,
+                )
             result = run_episode(
                 env=env,
                 adapter=adapter,
                 seed=seed,
                 episode_index=episode_index,
                 render_frames=frames,
-                latency_s=0.0 if latency_replayer is not None else req.latency_s,
-                latency_replayer=latency_replayer,
+                latency_s=0.0 if episode_replayer is not None else req.latency_s,
+                latency_replayer=episode_replayer,
                 image_cfg=image_cfg,
                 policy_rng_seed=policy_rng_seeds[episode_index],
             )

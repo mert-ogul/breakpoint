@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "protocol": "v0.1",
+  "candidate": "act_aloha_transfer",
+  "artifacts": {
+    "export_dir": "artifacts/export/act-v1",
+    "fp32_onnx_name": "act_chunk_fp32.onnx",
+    "int8_onnx_name": "act_chunk_int8_qdq.onnx",
+    "expected_fp32_sha256": null,
+    "expected_int8_sha256": null,
+    "profiles": {
+      "laptop-m3": {
+        "device_label": "laptop-m3",
+        "dir": "profiles/laptop-m3/fp32",
+        "variant_label": "onnx_fp32",
+        "expected_model_sha256": null
+      },
+      "rpi5": {
+        "device_label": "rpi5",
+        "dir": "profiles/rpi5/fp32",
+        "variant_label": "onnx_fp32",
+        "expected_model_sha256": null
+      }
+    }
+  },
+  "host": {
+    "compute_device": "cpu",
+    "ort_providers": ["CPUExecutionProvider"],
+    "intra_op_num_threads": 4,
+    "inter_op_num_threads": 1,
+    "note": "Simulation and ONNX inference run on laptop CPU; do not inherit CLI MPS default."
+  },
+  "trace_window": {
+    "length": 32,
+    "design": "contiguous_evenly_spaced_starts",
+    "formula": "floor(i*(N-32)/(n_episodes-1))",
+    "end_of_trace": "fail",
+    "not_block_resample": true,
+    "not_continuous_full_trace_replay": true
+  },
+  "scheduler": {
+    "chunk_arrival_policy": "discard_stale",
+    "latency_end_of_trace": "fail",
+    "run_conditions_sequentially": true
+  },
+  "statistics": {
+    "breakpoint_ratio": 0.8,
+    "baseline_success_floor": 0.5,
+    "wilson_z": 1.959963984540054,
+    "n_bootstrap": 2000,
+    "bootstrap_seed": 20261012,
+    "coverage": "pointwise",
+    "show_n_and_uncertainty": true,
+    "show_weak_baseline_and_unresolved": true,
+    "confirmation_fresh_seeds_separate": true
+  },
+  "smoke": {
+    "phase": "smoke",
+    "env_seeds": [3000, 3001, 3002, 3003, 3004],
+    "policy_seed_offset": 10000,
+    "latency_ms": [0, 640],
+    "resolution_hw": [[60, 80]],
+    "jpeg_qualities": [10],
+    "precision_variants": ["onnx_fp32", "int8"],
+    "device_profiles": ["laptop-m3", "rpi5"],
+    "include_baseline": true,
+    "note": "Smoke checklist; not for publication claims."
+  },
+  "full": {
+    "phase": "exploratory",
+    "env_seed_start": 5000,
+    "n_episodes": 30,
+    "policy_seed_offset": 10000,
+    "latency_ms": [0, 40, 80, 160, 320, 640],
+    "resolution_hw": [[480, 640], [240, 320], [120, 160], [60, 80]],
+    "jpeg_qualities": ["bypass", 95, 75, 50, 25, 10],
+    "precision_variants": ["onnx_fp32", "int8"],
+    "device_profiles": ["laptop-m3", "rpi5"],
+    "isolate_axes": true,
+    "native_bypass_is_not_jpeg_quality_100": true,
+    "note": "Isolated axis sweeps; confirmation with fresh seeds stays separate."
+  },
+  "baseline_reuse": {
+    "enabled": true,
+    "by_explicit_reference_only": true,
+    "fingerprint": {
+      "latency_s": 0.0,
+      "image_mode": "native",
+      "variant_label": "onnx_fp32",
+      "no_device_profile": true
+    }
+  }
+}

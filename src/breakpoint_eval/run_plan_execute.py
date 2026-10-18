@@ -90,6 +90,11 @@ def _condition_run_request(
     onnx_model: Path | None,
     latency_profile: Path | None,
     save_video: bool,
+    ort_providers: list[str] | None = None,
+    ort_intra_op_num_threads: int | None = None,
+    ort_inter_op_num_threads: int | None = None,
+    latency_window_starts: list[int] | None = None,
+    latency_window_length: int | None = None,
 ) -> RunRequest:
     params = dict(condition.params)
     env_seeds = [s.env_seed for s in plan.seed_pairs]
@@ -100,6 +105,8 @@ def _condition_run_request(
     profile = None
     image_cfg = ImageDegradeConfig(mode=ImageMode.NATIVE)
     model_path = onnx_model
+    window_starts = latency_window_starts
+    window_length = latency_window_length
 
     if axis == "latency_ms":
         latency_s = float(params["latency_s"])
@@ -122,6 +129,23 @@ def _condition_run_request(
             profile = load_latency_profile(Path(latency_profile).resolve())
     elif axis in {"resolution", "jpeg", "h264"}:
         image_cfg = _image_cfg_from_params(params)
+    elif axis == "device_profile":
+        profile_path = params.get("latency_profile_path") or latency_profile
+        if profile_path is None:
+            raise ValueError("device_profile axis requires latency_profile_path in condition params")
+        if onnx_model is None:
+            raise ValueError("device_profile axis requires --onnx-model (FP32 graph matching profile)")
+        profile = load_latency_profile(Path(profile_path).resolve())
+        model_path = Path(onnx_model).resolve()
+        resolve_onnx_runtime(
+            model_path,
+            expected_candidate=plan.candidate,
+            require_export_validation=True,
+        )
+        if "window_length" in params:
+            window_length = int(params["window_length"])
+        if "window_starts" in params:
+            window_starts = [int(x) for x in params["window_starts"]]
     elif axis == "combined":
         # Combined plans encode nested params; require explicit supported keys.
         if "latency_s" in params:
@@ -134,6 +158,12 @@ def _condition_run_request(
             )
         if params.get("mode") and params.get("mode") != ImageMode.NATIVE.value:
             image_cfg = _image_cfg_from_params(params)
+        if params.get("latency_profile_path"):
+            profile = load_latency_profile(Path(params["latency_profile_path"]).resolve())
+            if "window_length" in params:
+                window_length = int(params["window_length"])
+            if "window_starts" in params:
+                window_starts = [int(x) for x in params["window_starts"]]
     else:
         raise ValueError(f"unsupported plan axis {axis!r}")
 
@@ -145,10 +175,15 @@ def _condition_run_request(
         save_video=save_video,
         latency_s=latency_s,
         latency_profile=profile,
+        latency_window_starts=window_starts,
+        latency_window_length=window_length,
         image_cfg=image_cfg,
         repo_root=repo_root,
         onnx_model=model_path,
         policy_rng_seeds=policy_seeds,
+        ort_providers=ort_providers,
+        ort_intra_op_num_threads=ort_intra_op_num_threads,
+        ort_inter_op_num_threads=ort_inter_op_num_threads,
     )
 
 
@@ -170,6 +205,9 @@ def execute_experiment_plan(
     latency_end_of_trace: str = "fail",
     latency_block_length: int | None = None,
     latency_block_seed: int | None = None,
+    ort_providers: list[str] | None = None,
+    ort_intra_op_num_threads: int | None = None,
+    ort_inter_op_num_threads: int | None = None,
 ) -> int:
     """Run each plan condition into ``output_dir/conditions/<id>/``.
 
@@ -208,6 +246,9 @@ def execute_experiment_plan(
             onnx_model=onnx_model,
             latency_profile=latency_profile,
             save_video=save_video,
+            ort_providers=ort_providers,
+            ort_intra_op_num_threads=ort_intra_op_num_threads,
+            ort_inter_op_num_threads=ort_inter_op_num_threads,
         )
         planned = {
             "condition_id": condition.condition_id,
@@ -217,7 +258,16 @@ def execute_experiment_plan(
             "policy_rng_seeds": req.policy_rng_seeds,
             "onnx_model": str(req.onnx_model) if req.onnx_model else None,
             "latency_s": req.latency_s,
-            "latency_profile": str(latency_profile) if latency_profile else None,
+            "latency_profile": (
+                str(req.latency_profile.path)
+                if req.latency_profile is not None and req.latency_profile.path is not None
+                else (str(latency_profile) if latency_profile else None)
+            ),
+            "latency_window_starts": req.latency_window_starts,
+            "latency_window_length": req.latency_window_length,
+            "ort_providers": req.ort_providers,
+            "ort_intra_op_num_threads": req.ort_intra_op_num_threads,
+            "ort_inter_op_num_threads": req.ort_inter_op_num_threads,
             "image_mode": req.image_cfg.mode.value if req.image_cfg else "native",
             "device": host,
         }
@@ -241,10 +291,15 @@ def execute_experiment_plan(
                     latency_end_of_trace=latency_end_of_trace,
                     latency_block_length=latency_block_length,
                     latency_block_seed=latency_block_seed,
+                    latency_window_starts=req.latency_window_starts,
+                    latency_window_length=req.latency_window_length,
                     image_cfg=req.image_cfg,
                     repo_root=req.repo_root,
                     onnx_model=req.onnx_model,
                     policy_rng_seeds=req.policy_rng_seeds,
+                    ort_providers=req.ort_providers,
+                    ort_intra_op_num_threads=req.ort_intra_op_num_threads,
+                    ort_inter_op_num_threads=req.ort_inter_op_num_threads,
                 )
             report = run_baseline(req)
         except (ValueError, FileNotFoundError, RuntimeError, OSError) as exc:

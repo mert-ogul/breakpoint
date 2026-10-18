@@ -95,6 +95,11 @@ print("parent", (rt.export_validation.get("binding") or {}).get("parent_fp32_sha
 PY
 ```
 
+## 5. Fixed v0.1 protocol (smoke / full / profile)
+
+See [v1_protocol.md](v1_protocol.md) for `scripts/run_v1.py`, `scripts/profile_v1.py`,
+and `configs/v1.json`. Prefer `--dry-run` before any long eval.
+
 ## Notes
 
 - Do not start long stress sweeps from this document.

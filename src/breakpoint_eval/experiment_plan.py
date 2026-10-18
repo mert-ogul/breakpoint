@@ -38,6 +38,7 @@ class ExperimentAxis(StrEnum):
     RESOLUTION = "resolution"
     JPEG = "jpeg"
     H264 = "h264"
+    DEVICE_PROFILE = "device_profile"
     COMBINED = "combined"
 
 

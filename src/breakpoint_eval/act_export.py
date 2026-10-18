@@ -169,6 +169,8 @@ def create_ort_session(
     path: Path,
     *,
     providers: list[str] | None = None,
+    intra_op_num_threads: int | None = None,
+    inter_op_num_threads: int | None = None,
 ) -> Any:
     import onnxruntime as ort
 
@@ -181,7 +183,12 @@ def create_ort_session(
             raise RuntimeError(
                 f"requested execution provider {p!r} not available; have {available}"
             )
-    return ort.InferenceSession(str(path), providers=providers)
+    opts = ort.SessionOptions()
+    if intra_op_num_threads is not None:
+        opts.intra_op_num_threads = int(intra_op_num_threads)
+    if inter_op_num_threads is not None:
+        opts.inter_op_num_threads = int(inter_op_num_threads)
+    return ort.InferenceSession(str(path), sess_options=opts, providers=providers)
 
 
 @dataclass
@@ -193,10 +200,24 @@ class OrtRunResult:
 class OrtActChunkSession:
     """Run an exported ACT chunk graph. Precision comes from the loaded weights."""
 
-    def __init__(self, path: Path, *, providers: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        providers: list[str] | None = None,
+        intra_op_num_threads: int | None = None,
+        inter_op_num_threads: int | None = None,
+    ) -> None:
         require_onnx()
         self.path = Path(path)
-        self.session = create_ort_session(self.path, providers=providers)
+        self.intra_op_num_threads = intra_op_num_threads
+        self.inter_op_num_threads = inter_op_num_threads
+        self.session = create_ort_session(
+            self.path,
+            providers=providers,
+            intra_op_num_threads=intra_op_num_threads,
+            inter_op_num_threads=inter_op_num_threads,
+        )
         self.providers = list(self.session.get_providers())
         self.input_names = [i.name for i in self.session.get_inputs()]
         self.output_names = [o.name for o in self.session.get_outputs()]

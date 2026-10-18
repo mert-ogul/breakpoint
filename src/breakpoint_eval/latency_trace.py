@@ -196,6 +196,47 @@ def assert_profile_compatible(
         raise ValueError("latency profile incompatible with run artifacts: " + "; ".join(errors))
 
 
+def contiguous_window_starts(
+    n_trace: int,
+    *,
+    window_length: int,
+    n_episodes: int,
+) -> list[int]:
+    """Evenly spaced contiguous-window starts: floor(i*(N-W)/(n_episodes-1)).
+
+    Deterministic sampling across the measured run — not continuous full-trace
+    replay. Distinct from block resampling.
+    """
+    if window_length < 1:
+        raise ValueError("window_length must be >= 1")
+    if n_episodes < 1:
+        raise ValueError("n_episodes must be >= 1")
+    if n_trace < window_length:
+        raise ValueError(
+            f"trace length {n_trace} is shorter than window_length {window_length}"
+        )
+    if n_episodes == 1:
+        return [0]
+    span = n_trace - window_length
+    return [int(math.floor(i * span / (n_episodes - 1))) for i in range(n_episodes)]
+
+
+def extract_contiguous_window(
+    values: list[float],
+    *,
+    start: int,
+    length: int,
+) -> list[float]:
+    if start < 0:
+        raise ValueError(f"window start must be >= 0, got {start}")
+    if length < 1:
+        raise ValueError("window length must be >= 1")
+    end = start + length
+    if end > len(values):
+        raise ValueError(f"window [{start}, {end}) exceeds trace length {len(values)}")
+    return list(values[start:end])
+
+
 class LatencyTraceReplayer:
     """Replay measured latencies in order to preserve jitter bursts."""
 
@@ -206,6 +247,8 @@ class LatencyTraceReplayer:
         end_of_trace: EndOfTraceBehavior = EndOfTraceBehavior.FAIL,
         block_length: int | None = None,
         block_resample_seed: int | None = None,
+        window_start: int | None = None,
+        window_length: int | None = None,
         source_path: str | None = None,
     ) -> None:
         self._base = validate_latency_sequence(latency_s)
@@ -213,9 +256,33 @@ class LatencyTraceReplayer:
         self.source_path = source_path
         self._index = 0
         self._emitted = 0
+        self._consumed_trace_indices: list[int] = []
+        self._consumed_delays_s: list[float] = []
+        self._window_start: int | None = None
+        self._window_length: int | None = None
+        self._sampling_design = "full_trace"
         self._sequence = list(self._base)
 
-        if block_length is not None:
+        using_window = window_start is not None or window_length is not None
+        using_block = block_length is not None or block_resample_seed is not None
+        if using_window and using_block:
+            raise ValueError(
+                "contiguous window sampling and block resampling are mutually exclusive; "
+                "they are not interchangeable designs"
+            )
+
+        if using_window:
+            if window_start is None or window_length is None:
+                raise ValueError("contiguous window requires both window_start and window_length")
+            if self.end_of_trace is EndOfTraceBehavior.CYCLE:
+                raise ValueError("contiguous window replay must fail on exhaustion (not cycle)")
+            self._window_start = int(window_start)
+            self._window_length = int(window_length)
+            self._sequence = extract_contiguous_window(
+                self._base, start=self._window_start, length=self._window_length
+            )
+            self._sampling_design = "contiguous_window"
+        elif block_length is not None:
             if block_length < 1:
                 raise ValueError("block_length must be >= 1")
             if block_resample_seed is None:
@@ -225,6 +292,7 @@ class LatencyTraceReplayer:
                 block_length=block_length,
                 seed=block_resample_seed,
             )
+            self._sampling_design = "block_resample"
         elif block_resample_seed is not None:
             raise ValueError("block_resample_seed requires block_length")
 
@@ -236,12 +304,16 @@ class LatencyTraceReplayer:
         end_of_trace: EndOfTraceBehavior = EndOfTraceBehavior.FAIL,
         block_length: int | None = None,
         block_resample_seed: int | None = None,
+        window_start: int | None = None,
+        window_length: int | None = None,
     ) -> LatencyTraceReplayer:
         return cls(
             profile.latency_s,
             end_of_trace=end_of_trace,
             block_length=block_length,
             block_resample_seed=block_resample_seed,
+            window_start=window_start,
+            window_length=window_length,
             source_path=str(profile.path) if profile.path else None,
         )
 
@@ -253,6 +325,12 @@ class LatencyTraceReplayer:
     def n_emitted(self) -> int:
         return self._emitted
 
+    @property
+    def window_bounds(self) -> tuple[int, int] | None:
+        if self._window_start is None or self._window_length is None:
+            return None
+        return self._window_start, self._window_start + self._window_length
+
     def next_latency_s(self) -> float:
         if self._index >= len(self._sequence):
             if self.end_of_trace is EndOfTraceBehavior.CYCLE:
@@ -262,14 +340,33 @@ class LatencyTraceReplayer:
             else:
                 raise TraceExhaustedError(
                     f"latency trace exhausted after {len(self._sequence)} samples "
-                    f"(end_of_trace={self.end_of_trace.value})"
+                    f"(end_of_trace={self.end_of_trace.value}, "
+                    f"sampling_design={self._sampling_design})"
                 )
         value = self._sequence[self._index]
+        if self._window_start is not None:
+            abs_idx = self._window_start + self._index
+        else:
+            abs_idx = self._index
+        self._consumed_trace_indices.append(int(abs_idx))
+        self._consumed_delays_s.append(float(value))
         self._index += 1
         self._emitted += 1
         return float(value)
 
     def provenance(self) -> dict[str, Any]:
+        used_stats = (
+            summarize_latency_s(self._consumed_delays_s).to_dict()
+            if self._consumed_delays_s
+            else None
+        )
+        full_stats = summarize_latency_s(self._base).to_dict()
+        window_stats = (
+            summarize_latency_s(self._sequence).to_dict()
+            if self._sampling_design == "contiguous_window"
+            else None
+        )
+        bounds = self.window_bounds
         return {
             "mode": "trace_replay",
             "source_path": self.source_path,
@@ -278,7 +375,24 @@ class LatencyTraceReplayer:
             "end_of_trace": self.end_of_trace.value,
             "preserves_order": True,
             "synthetic_distribution": False,
+            "sampling_design": self._sampling_design,
+            "block_resample_interchangeable_with_contiguous_window": False,
+            "window_start": self._window_start,
+            "window_length": self._window_length,
+            "window_end_exclusive": bounds[1] if bounds else None,
+            "consumed_trace_indices": list(self._consumed_trace_indices),
+            "consumed_delays_s": list(self._consumed_delays_s),
+            "used_sample_stats": used_stats,
+            "window_sample_stats": window_stats,
+            "full_profile_stats": full_stats,
             "summary": summarize_latency_s(self._sequence).to_dict(),
+            "note": (
+                "used_sample_stats covers delays actually consumed; "
+                "full_profile_stats covers the entire measured profile sequence; "
+                "contiguous_window is not continuous full-trace replay"
+                if self._sampling_design == "contiguous_window"
+                else None
+            ),
         }
 
 
