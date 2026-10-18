@@ -19,6 +19,7 @@ from breakpoint_eval.latency_trace import (
     contiguous_window_starts,
     extract_contiguous_window,
 )
+from breakpoint_eval.source_revision import read_source_revision
 from breakpoint_eval.v1_protocol import (
     assert_lock_matches,
     build_full_axis_plans,
@@ -27,7 +28,6 @@ from breakpoint_eval.v1_protocol import (
     freeze_protocol_lock,
     host_settings_from_config,
     load_v1_config,
-    read_source_revision,
     resolve_profile_by_identity,
 )
 

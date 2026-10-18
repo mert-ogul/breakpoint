@@ -22,7 +22,7 @@ from breakpoint_eval.device_profile import (
     run_device_profile,
     sha256_file,
 )
-from breakpoint_eval.v1_protocol import read_source_revision
+from breakpoint_eval.source_revision import read_source_revision
 
 LOGGER = logging.getLogger("breakpoint_eval.v1_profile")
 

@@ -22,6 +22,7 @@ from breakpoint_eval.experiment_summary import (  # noqa: E402
 from breakpoint_eval.render_report import render_report  # noqa: E402
 from breakpoint_eval.run_baseline import RunRequest, run_baseline  # noqa: E402
 from breakpoint_eval.run_plan_execute import _condition_run_request  # noqa: E402
+from breakpoint_eval.source_revision import read_source_revision  # noqa: E402
 from breakpoint_eval.v1_protocol import (  # noqa: E402
     PROTOCOL_LOCK_NAME,
     assert_lock_matches,
@@ -33,7 +34,6 @@ from breakpoint_eval.v1_protocol import (  # noqa: E402
     freeze_protocol_lock,
     host_settings_from_config,
     load_v1_config,
-    read_source_revision,
     resolve_v1_artifacts,
     write_plan_bundle,
     write_unsupported_int8_record,
