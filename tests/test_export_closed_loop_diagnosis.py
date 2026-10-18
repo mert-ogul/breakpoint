@@ -29,8 +29,23 @@ def test_summarize_chunk_error_trace_reports_first_over_atol() -> None:
     assert summary["n_steps"] == 4
     assert summary["first_over_atol_step"] == 2
     assert summary["passed_atol"] is False
+    assert summary["finite_ok"] is True
+    assert summary["shapes_ok"] is True
     assert summary["fresh_step_errors"][1]["step"] == 2
     assert summary["max_abs_error"] == pytest.approx(5e-3)
+
+
+def test_summarize_chunk_error_trace_rejects_nan() -> None:
+    """NaN must not pass via failed `e > atol` comparisons."""
+    summary = summarize_chunk_error_trace(
+        [1e-7, float("nan"), 1e-7],
+        fresh_steps=[0, 1],
+        atol=1e-4,
+        rtol=1e-4,
+    )
+    assert summary["passed_atol"] is False
+    assert summary["finite_ok"] is False
+    assert summary["first_over_atol_step"] == 1
 
 
 def test_summarize_chunk_error_trace_empty() -> None:

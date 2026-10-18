@@ -25,6 +25,7 @@ from breakpoint_eval.act_export import (
     write_json,
 )
 from breakpoint_eval.export_corpus import (
+    PLANNED_CORPUS_CONTROL_STEPS,
     SYNTHETIC_SOURCE,
     SYNTHETIC_UNSUITABLE_NOTE,
     build_synthetic_corpus,
@@ -66,10 +67,11 @@ from breakpoint_eval.stack import (
 
 LOGGER = logging.getLogger("breakpoint_eval.run_export")
 
-# Disjoint seed pools (calibration never overlaps evaluation).
+# Disjoint seed pools (calibration never overlaps evaluation / diagnosis).
+# Closed-loop diagnosis uses 2100–2101 via diagnose-closed-loop (not export eval).
 DEFAULT_CALIBRATION_SEEDS = list(range(9000, 9008))
-DEFAULT_EVAL_SEEDS = list(range(1000, 1008))
-DEFAULT_CLOSED_LOOP_SEEDS = [1000]
+DEFAULT_EVAL_SEEDS = list(range(2000, 2008))
+DEFAULT_CLOSED_LOOP_SEEDS = [2100, 2101]
 
 
 @dataclass(frozen=True)
@@ -83,8 +85,9 @@ class ExportRequest:
     prefer_simulator_corpus: bool = True
     samples_per_episode: int = 2
     attempt_int8: bool = True
-    attempt_int4: bool = True
-    attempt_fp16: bool = True
+    # Release path disables INT4/FP16 by default; opt in explicitly if needed.
+    attempt_int4: bool = False
+    attempt_fp16: bool = False
     run_closed_loop: bool = True
     providers: tuple[str, ...] = ("CPUExecutionProvider",)
     repo_root: Path | None = None
@@ -204,6 +207,7 @@ def run_export(req: ExportRequest) -> Path:
     eval_samples = []
     calib_samples = []
     if req.prefer_simulator_corpus:
+        capture_horizon = max(PLANNED_CORPUS_CONTROL_STEPS) + 1
         eval_samples, eval_meta = capture_simulator_rollout_corpus(
             seeds=eval_seeds,
             candidate=req.candidate,
@@ -212,7 +216,8 @@ def run_export(req: ExportRequest) -> Path:
             control_period_s=period_s,
             device=req.device,
             samples_per_episode=req.samples_per_episode,
-            capture_horizon_steps=chunk_info.n_action_steps,
+            capture_horizon_steps=capture_horizon,
+            planned_steps=PLANNED_CORPUS_CONTROL_STEPS,
         )
         calib_samples, calib_meta = capture_simulator_rollout_corpus(
             seeds=calib_seeds,
@@ -222,7 +227,8 @@ def run_export(req: ExportRequest) -> Path:
             control_period_s=period_s,
             device=req.device,
             samples_per_episode=req.samples_per_episode,
-            capture_horizon_steps=chunk_info.n_action_steps,
+            capture_horizon_steps=capture_horizon,
+            planned_steps=PLANNED_CORPUS_CONTROL_STEPS,
         )
         corpus_meta["evaluation_capture"] = eval_meta
         corpus_meta["calibration_capture"] = calib_meta
@@ -332,6 +338,7 @@ def run_export(req: ExportRequest) -> Path:
                 reference_chunks=ort_fp32_chunks,
                 candidate_chunks=int8_chunks,
                 seeds=[s.seed for s in eval_samples],
+                sample_ids=[s.sample_id for s in eval_samples],
                 reference_label="onnx_fp32",
                 candidate_label="int8",
                 enforce_fp32_gates=False,
@@ -340,10 +347,17 @@ def run_export(req: ExportRequest) -> Path:
                 reference_chunks=pytorch_chunks,
                 candidate_chunks=int8_chunks,
                 seeds=[s.seed for s in eval_samples],
+                sample_ids=[s.sample_id for s in eval_samples],
                 reference_label="pytorch_fp32",
                 candidate_label="int8",
                 enforce_fp32_gates=False,
             ).to_dict()
+        elif int8.status != "ok":
+            LOGGER.warning(
+                "INT8 variant status=%s detail=%s (no silent recipe fallback)",
+                int8.status,
+                int8.detail,
+            )
 
     if req.attempt_int4:
         int4 = quantize_int4_weight_only(
@@ -524,5 +538,10 @@ def run_export(req: ExportRequest) -> Path:
         output_dir / "eval_chunks_onnx_fp32.npz",
         **chunk_dict_by_sample_id(eval_samples, ort_fp32_chunks),
     )
+    if req.attempt_int8:
+        from breakpoint_eval.export_validation_v2 import write_int8_validation_from_export
+
+        int8_val = write_int8_validation_from_export(output_dir)
+        LOGGER.info("Wrote INT8 validation sidecar %s", int8_val)
     LOGGER.info("Wrote export manifest %s", manifest_path)
     return manifest_path

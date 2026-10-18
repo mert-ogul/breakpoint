@@ -319,8 +319,8 @@ def _add_diagnose_closed_loop_parser(
     parser.add_argument(
         "--seeds",
         type=str,
-        default="2000,2001",
-        help="Comma-separated closed-loop diagnosis seeds",
+        default="2100,2101",
+        help="Comma-separated closed-loop diagnosis seeds (default 2100,2101)",
     )
     parser.add_argument("--onnx-name", type=str, default="act_chunk_fp32.onnx")
     parser.add_argument("--device", choices=["cuda", "cpu", "mps"], default="cpu")
@@ -367,9 +367,27 @@ def _add_export_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
             "simulator capture failure aborts export."
         ),
     )
-    parser.add_argument("--no-int8", action="store_true")
-    parser.add_argument("--no-int4", action="store_true")
-    parser.add_argument("--no-fp16", action="store_true")
+    parser.add_argument("--no-int8", action="store_true", help="Skip static QDQ INT8")
+    parser.add_argument(
+        "--int4",
+        action="store_true",
+        help="Attempt INT4 weight-only (off by default for release)",
+    )
+    parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Attempt FP16 convert (off by default for release)",
+    )
+    parser.add_argument(
+        "--no-int4",
+        action="store_true",
+        help="Deprecated no-op; INT4 is off unless --int4 is passed",
+    )
+    parser.add_argument(
+        "--no-fp16",
+        action="store_true",
+        help="Deprecated no-op; FP16 is off unless --fp16 is passed",
+    )
     parser.add_argument("--no-closed-loop", action="store_true")
     parser.add_argument("--repo-root", type=Path, default=None)
 
@@ -683,8 +701,8 @@ def _cmd_export(args: argparse.Namespace) -> int:
                 closed_loop_seeds=closed,
                 prefer_simulator_corpus=not args.synthetic_corpus,
                 attempt_int8=not args.no_int8,
-                attempt_int4=not args.no_int4,
-                attempt_fp16=not args.no_fp16,
+                attempt_int4=bool(getattr(args, "int4", False)),
+                attempt_fp16=bool(getattr(args, "fp16", False)),
                 run_closed_loop=not args.no_closed_loop,
                 repo_root=repo_root,
             )

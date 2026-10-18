@@ -63,20 +63,32 @@ def _variant_for_model(manifest: dict[str, Any], model_path: Path) -> dict[str, 
         if graph.get("sha256") == digest:
             by_hash.append(variant)
         path = variant.get("path")
+        path_match = False
         if path is not None and Path(path).resolve() == model_path:
-            by_path.append(variant)
+            path_match = True
         elif path is not None and Path(path).name == model_path.name:
             # Same filename under the export output dir.
             if Path(path).resolve().parent == model_path.parent:
-                by_path.append(variant)
-    matched = by_hash or by_path
-    if not matched:
+                path_match = True
+        if path_match:
+            graph_sha = graph.get("sha256")
+            if graph_sha and graph_sha != digest:
+                raise ValueError(
+                    "export manifest model-hash mismatch for path-matched variant: "
+                    f"path={path!r} manifest_sha256={graph_sha!r} file_sha256={digest!r}. "
+                    "Refuse path-only authorization when hashes disagree."
+                )
+            by_path.append(variant)
+    # Prefer cryptographic match. Path-only is allowed only when hash is absent.
+    if by_hash:
+        matched = by_hash
+    elif by_path:
+        matched = by_path
+    else:
         raise ValueError(
             f"ONNX model {model_path} is not listed in export manifest variants "
             f"(sha256={digest}). Refusing unlabeled/unmatched graph."
         )
-    if len(matched) > 1 and by_hash:
-        matched = by_hash
     if len(matched) > 1:
         raise ValueError(f"ambiguous export manifest match for {model_path}")
     variant = matched[0]
@@ -128,27 +140,54 @@ def resolve_onnx_runtime(
     hub_revision = str(manifest.get("hub_revision") or "")
 
     from breakpoint_eval.export_validation_v2 import (
+        assert_int8_validation_acceptable,
         assert_validation_v2_acceptable,
         find_export_validation_v2,
         load_export_validation_v2,
     )
 
-    v2_path = find_export_validation_v2(model_path)
+    variant_label = str(variant.get("label") or "")
+    v2_path = find_export_validation_v2(model_path, variant_label=variant_label)
     if v2_path is not None:
         validation = load_export_validation_v2(v2_path)
         if require_export_validation:
-            assert_validation_v2_acceptable(
-                validation,
-                model_sha256=model_sha256,
-                corpus_eval_sha256=corpus_eval_sha256,
-                hub_revision=hub_revision or None,
-            )
+            if variant_label == "int8":
+                parent = next(
+                    (
+                        v
+                        for v in (manifest.get("variants") or [])
+                        if isinstance(v, dict) and v.get("label") == "onnx_fp32"
+                    ),
+                    None,
+                )
+                parent_sha = str(((parent or {}).get("graph") or {}).get("sha256") or "") or None
+                calib_sha = str(
+                    ((manifest.get("corpus") or {}).get("calibration") or {}).get("sha256") or ""
+                ) or None
+                assert_int8_validation_acceptable(
+                    validation,
+                    model_sha256=model_sha256,
+                    parent_fp32_sha256=parent_sha,
+                    calibration_sha256=calib_sha,
+                )
+            else:
+                assert_validation_v2_acceptable(
+                    validation,
+                    model_sha256=model_sha256,
+                    corpus_eval_sha256=corpus_eval_sha256,
+                    hub_revision=hub_revision or None,
+                )
         validation = {
             **validation,
-            "validation_schema": "v2",
+            "validation_schema": "v2_int8" if variant_label == "int8" else "v2",
             "validation_path": str(v2_path),
         }
     else:
+        if require_export_validation and variant_label == "int8":
+            raise ValueError(
+                "INT8 deployment requires export_validation_v2_int8.json next to the "
+                f"graph (missing beside {model_path}); refuse FP32 sidecar authorization"
+            )
         validation = dict(manifest.get("export_validation") or {})
         if require_export_validation:
             if validation.get("passed") is not True:
@@ -187,12 +226,20 @@ def resolve_onnx_runtime(
                 )
         validation = {**validation, "validation_schema": "v1"}
 
+    recipe_id = str(variant.get("recipe_id") or "")
+    if require_export_validation and not recipe_id:
+        raise ValueError(f"export variant missing recipe_id for {model_path}")
+    if require_export_validation and not hub_revision:
+        raise ValueError(f"export manifest missing hub_revision ({manifest_path})")
+    if require_export_validation and not candidate:
+        raise ValueError(f"export manifest missing candidate ({manifest_path})")
+
     return ResolvedOnnxRuntime(
         model_path=model_path,
         manifest_path=manifest_path,
         candidate=candidate,
         hub_revision=hub_revision,
-        recipe_id=str(variant.get("recipe_id") or ""),
+        recipe_id=recipe_id,
         variant_label=str(variant.get("label") or ""),
         model_sha256=model_sha256,
         chunk_horizon=chunk_horizon,

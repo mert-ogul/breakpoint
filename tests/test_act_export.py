@@ -141,6 +141,21 @@ def test_sample_step_indices_span_rollout() -> None:
     assert sample_step_indices(5, 3) == [0, 2, 4]
 
 
+def test_planned_reachable_steps_no_padding() -> None:
+    from breakpoint_eval.export_corpus import (
+        PLANNED_CORPUS_CONTROL_STEPS,
+        planned_reachable_steps,
+    )
+
+    assert planned_reachable_steps(0) == []
+    assert planned_reachable_steps(1) == [0]
+    assert planned_reachable_steps(50) == [0, 49]
+    assert planned_reachable_steps(100) == [0, 49, 99]
+    assert planned_reachable_steps(400) == list(PLANNED_CORPUS_CONTROL_STEPS)
+    # Early terminate before later planned times: do not invent missing steps.
+    assert 349 not in planned_reachable_steps(200)
+
+
 def test_export_validation_rejects_closed_loop_error() -> None:
     """Closed-loop failure must fail the export gate even if open-loop passed."""
     from breakpoint_eval.run_export import build_export_validation

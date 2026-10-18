@@ -146,6 +146,82 @@ def test_resolve_rejects_failed_closed_loop_bypass(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+def test_resolve_rejects_path_match_when_manifest_hash_disagrees(tmp_path: Path) -> None:
+    model_path, man_path, digest = _write_export_dir(tmp_path)
+    payload = json.loads(man_path.read_text())
+    payload["variants"][0]["graph"]["sha256"] = "0" * 64
+    assert payload["variants"][0]["graph"]["sha256"] != digest
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="model-hash mismatch"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
+def test_resolve_int8_refuses_fp32_validation_sidecar(tmp_path: Path) -> None:
+    model_path, man_path, digest = _write_export_dir(tmp_path)
+    # Relabel the only graph as int8; FP32 v2 sidecar must not authorize it.
+    payload = json.loads(man_path.read_text())
+    payload["variants"][0]["label"] = "int8"
+    payload["variants"][0]["recipe_id"] = (
+        "onnxruntime_static_qdq_uint8_act_qint8_weight_minmax_calibrate"
+    )
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    from breakpoint_eval.act_export import RECIPE_ONNX_FP32
+    from breakpoint_eval.export_validation_v2 import (
+        VALIDATION_FILENAME,
+        ValidationBinding,
+        build_export_validation_v2,
+    )
+
+    v2 = build_export_validation_v2(
+        binding=ValidationBinding(
+            model_sha256=digest,
+            corpus_eval_sha256="corpushash",
+            hub_revision="deadbeef",
+            candidate="act_aloha_transfer",
+            recipe_id=RECIPE_ONNX_FP32,
+            variant_label="onnx_fp32",
+            code_revision="x",
+            code_dirty=False,
+            uncommitted_paths=(),
+        ),
+        open_loop_report={"passed": True, "finite_ok": True, "shapes_ok": True},
+        shadow_reports=[
+            {
+                "seed": 2100,
+                "passed_atol": True,
+                "finite_ok": True,
+                "shapes_ok": True,
+                "compares_every_control_step": True,
+                "covers_every_fresh_chunk_refresh": True,
+                "covers_every_inference_call": True,
+                "shadow_controls_simulation": False,
+                "n_fresh_chunks": 1,
+                "n_inference_calls": 1,
+            }
+        ],
+        independent_seed_reports=[
+            {
+                "seed": 2100,
+                "pytorch_outcome": "success",
+                "onnx_outcome": "success",
+                "pytorch_success": True,
+                "onnx_success": True,
+                "pytorch_terminated": True,
+                "onnx_terminated": True,
+                "pytorch_truncated": False,
+                "onnx_truncated": False,
+                "pytorch_n_control_steps": 10,
+                "onnx_n_control_steps": 10,
+                "passed": True,
+            }
+        ],
+        corpus_suitable_as_deployment_evidence=True,
+    )
+    (tmp_path / VALIDATION_FILENAME).write_text(json.dumps(v2), encoding="utf-8")
+    with pytest.raises(ValueError, match="export_validation_v2_int8"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
 def test_profile_rejects_pytorch_relabel_via_hash_mismatch(tmp_path: Path) -> None:
     model_path, _, digest = _write_export_dir(tmp_path)
     profile = {

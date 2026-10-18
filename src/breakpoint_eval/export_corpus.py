@@ -14,6 +14,9 @@ import numpy as np
 LOGGER = logging.getLogger("breakpoint_eval.export_corpus")
 
 DEFAULT_SAMPLES_PER_EPISODE = 2
+# Planned capture times for early/mid/late reachable states (ALOHA transfer 400-step
+# horizon). Only steps actually reached are recorded; no padding / synthesis.
+PLANNED_CORPUS_CONTROL_STEPS: tuple[int, ...] = (0, 49, 99, 149, 199, 249, 299, 349)
 SYNTHETIC_SOURCE = "synthetic_shape_matched"
 SIMULATOR_SOURCE = "simulator"
 SYNTHETIC_UNSUITABLE_NOTE = (
@@ -65,6 +68,16 @@ def sample_step_indices(n_steps: int, n_samples: int) -> list[int]:
         return [0]
     last = n_steps - 1
     return sorted({int(round(i * last / (n_samples - 1))) for i in range(n_samples)})
+
+
+def planned_reachable_steps(
+    n_steps_run: int,
+    planned: tuple[int, ...] | list[int] = PLANNED_CORPUS_CONTROL_STEPS,
+) -> list[int]:
+    """Return planned step indices that were actually reached (no padding)."""
+    if n_steps_run < 0:
+        raise ValueError("n_steps_run must be >= 0")
+    return [int(t) for t in planned if int(t) < int(n_steps_run)]
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -186,12 +199,14 @@ def capture_simulator_rollout_corpus(
     device: str = "cpu",
     samples_per_episode: int = DEFAULT_SAMPLES_PER_EPISODE,
     capture_horizon_steps: int | None = None,
+    planned_steps: tuple[int, ...] | list[int] | None = None,
 ) -> tuple[list[CorpusSample], dict[str, Any]]:
     """Capture observations across policy rollouts (not reset-only).
 
-    For each episode seed, runs the policy for ``capture_horizon_steps`` control
-    steps and records ``samples_per_episode`` observations at distinct step
-    indices, each with a unique ``sample_id``.
+    By default records planned steps ``PLANNED_CORPUS_CONTROL_STEPS`` that are
+    actually reached. Early termination does **not** pad or synthesize missing
+    planned samples. Pass ``planned_steps=()`` and ``samples_per_episode`` to use
+    uniform spacing instead (tests / legacy).
     """
     from breakpoint_eval.policy_adapter import PolicyAdapter
     from breakpoint_eval.sim_env import make_vector_env, preprocess_observation
@@ -200,11 +215,21 @@ def capture_simulator_rollout_corpus(
     if samples_per_episode < 1:
         raise ValueError("samples_per_episode must be >= 1")
 
+    use_planned = planned_steps is None or len(tuple(planned_steps)) > 0
+    planned = (
+        tuple(PLANNED_CORPUS_CONTROL_STEPS)
+        if planned_steps is None
+        else tuple(int(t) for t in planned_steps)
+    )
+
     meta: dict[str, Any] = {
         "attempted": True,
         "env_created": False,
         "samples_per_episode": samples_per_episode,
         "capture_mode": "policy_rollout",
+        "planned_steps": list(planned) if use_planned else None,
+        "pad_terminated_episodes": False,
+        "synthesize_missing_samples": False,
     }
     ensure_lerobot_on_path(repo_root)
     spec = resolve_candidate(candidate)
@@ -217,11 +242,12 @@ def capture_simulator_rollout_corpus(
 
     meta["env_created"] = True
     n_action_steps = int(getattr(policy.config, "n_action_steps", 1))
-    horizon = (
-        int(capture_horizon_steps)
-        if capture_horizon_steps is not None
-        else max(n_action_steps, samples_per_episode)
-    )
+    if capture_horizon_steps is not None:
+        horizon = int(capture_horizon_steps)
+    elif use_planned and planned:
+        horizon = max(planned) + 1
+    else:
+        horizon = max(n_action_steps, samples_per_episode)
     meta["capture_horizon_steps"] = horizon
     adapter = PolicyAdapter(policy, control_period_s=control_period_s, device=device)
     samples: list[CorpusSample] = []
@@ -231,10 +257,15 @@ def capture_simulator_rollout_corpus(
             adapter.reset()
             observation, _info = env.reset(seed=[seed])
             recorded: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-            want = set(sample_step_indices(horizon, samples_per_episode))
             episode_steps = 0
             for step_index in range(horizon):
-                if step_index in want and step_index not in recorded:
+                if use_planned:
+                    if step_index in planned and step_index not in recorded:
+                        processed = preprocess_observation(observation)
+                        recorded[step_index] = _processed_arrays(processed)
+                else:
+                    # Deferred: compute wanted indices after we know run length is
+                    # not available mid-loop; capture every step then subsample.
                     processed = preprocess_observation(observation)
                     recorded[step_index] = _processed_arrays(processed)
                 obs_t = preprocess_observation(observation)
@@ -244,14 +275,13 @@ def capture_simulator_rollout_corpus(
                 episode_steps += 1
                 if bool(terminated_arr[0]) or bool(truncated_arr[0]):
                     break
-            # If the episode ended early, still fill remaining wanted steps from
-            # the last observation so sample_id count stays stable per seed.
-            if len(recorded) < samples_per_episode:
-                processed = preprocess_observation(observation)
-                arrays = _processed_arrays(processed)
-                for step_index in sorted(want):
-                    if step_index not in recorded:
-                        recorded[step_index] = arrays
+            if use_planned:
+                requested_steps = list(planned)
+                keep_steps = planned_reachable_steps(episode_steps, planned)
+                recorded = {t: recorded[t] for t in keep_steps if t in recorded}
+            else:
+                requested_steps = sample_step_indices(max(episode_steps, 1), samples_per_episode)
+                recorded = {t: recorded[t] for t in requested_steps if t in recorded}
             seed_ids: list[str] = []
             for step_index in sorted(recorded):
                 images, state = recorded[step_index]
@@ -271,8 +301,11 @@ def capture_simulator_rollout_corpus(
                 {
                     "seed": seed,
                     "n_control_steps_run": episode_steps,
+                    "n_samples_captured": len(seed_ids),
                     "sample_ids": seed_ids,
                     "step_indices": sorted(recorded),
+                    "planned_steps_requested": requested_steps,
+                    "planned_steps_reached": sorted(recorded),
                 }
             )
     except Exception as exc:  # noqa: BLE001 — record capture failure without fabricating
@@ -283,6 +316,7 @@ def capture_simulator_rollout_corpus(
         env.close()
 
     meta["n_captured"] = len(samples)
+    meta["n_seeds"] = len(seeds)
     meta["device_requested"] = device
     meta["episodes"] = per_seed
     return samples, meta

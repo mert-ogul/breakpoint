@@ -51,6 +51,8 @@ def _shadow(seed: int = 2000, **overrides: object) -> dict:
     payload = {
         "seed": seed,
         "passed_atol": True,
+        "finite_ok": True,
+        "shapes_ok": True,
         "compares_every_control_step": True,
         "covers_every_fresh_chunk_refresh": True,
         "covers_every_inference_call": True,
@@ -107,7 +109,24 @@ def test_numerical_parity_rejects_nonfinite_or_failed_open_loop() -> None:
         shadow_reports=shadow,
     )
     assert bad["passed"] is False
-    assert "open_loop_nonfinite" in bad["not_passed_reasons"]
+    assert "open_loop_nonfinite_or_missing" in bad["not_passed_reasons"]
+
+
+def test_numerical_parity_rejects_missing_shape_or_finite_fields() -> None:
+    shadow = [_shadow()]
+    missing_shape = evaluate_numerical_parity(
+        open_loop_report={"passed": True, "finite_ok": True},
+        shadow_reports=shadow,
+    )
+    assert missing_shape["passed"] is False
+    assert "open_loop_shape_mismatch_or_missing" in missing_shape["not_passed_reasons"]
+
+    missing_shadow_finite = evaluate_numerical_parity(
+        open_loop_report={"passed": True, "finite_ok": True, "shapes_ok": True},
+        shadow_reports=[_shadow(finite_ok=None)],  # type: ignore[arg-type]
+    )
+    assert missing_shadow_finite["passed"] is False
+    assert any("nonfinite_or_missing" in r for r in missing_shadow_finite["not_passed_reasons"])
 
 
 def test_numerical_parity_rejects_missing_evidence() -> None:
@@ -151,12 +170,40 @@ def test_task_outcomes_require_recorded_fields() -> None:
     assert ok["completed"] is True
     assert ok["smoke_check"] is True
     assert ok["statistical_equivalence_claim"] is False
+    assert ok["task_success_match_required"] is False
 
     missing = evaluate_closed_loop_task_outcomes(
         [{"seed": 1, "pytorch_outcome": "success", "onnx_outcome": "success"}]
     )
     assert missing["passed"] is False
     assert any("missing_outcome_fields" in r for r in missing["not_passed_reasons"])
+
+
+def test_task_outcomes_reject_unfinished_or_arbitrary_outcomes() -> None:
+    unfinished = evaluate_closed_loop_task_outcomes(
+        [
+            _seed_outcome(
+                2100,
+                pytorch_terminated=False,
+                pytorch_truncated=False,
+                pytorch_outcome="success",
+            )
+        ]
+    )
+    assert unfinished["passed"] is False
+    assert any("incomplete_or_invalid" in r for r in unfinished["not_passed_reasons"])
+
+    arbitrary = evaluate_closed_loop_task_outcomes(
+        [_seed_outcome(2100, pytorch_outcome="policy_failed", pytorch_success=False)]
+    )
+    assert arbitrary["passed"] is False
+
+    # Mismatched task success still counts as completed smoke (not a numerical gate).
+    mismatch = evaluate_closed_loop_task_outcomes(
+        [_seed_outcome(2100, pytorch_success=True, onnx_success=False, onnx_outcome="time_limit_truncation", onnx_terminated=False, onnx_truncated=True)]
+    )
+    assert mismatch["passed"] is True
+    assert mismatch["seeds"][0]["task_success_match"] is False
 
 
 def test_independent_trajectory_does_not_gate() -> None:
