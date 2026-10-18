@@ -50,7 +50,7 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         policy_type="act",
         env_task="AlohaTransferCube-v0",
         loaded="yes",
-        ran="no",
+        ran="yes",
         reproduced_baseline="no",
         camera_impl="yes",
         camera_synthetic="yes",
@@ -63,10 +63,12 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         onnx_int4="unverified",
         device_profile="unverified",
         notes=(
-            "loaded evidence retained under artifacts/feasibility_act_transfer/. "
-            "ran blocked by MuJoCo GL on some hosts. Camera/L=0 sim validation and "
-            "device-profile rows lack retained hardware evidence. Do not reuse "
-            "timings for other candidates. No hardware experiments claimed."
+            "loaded evidence under artifacts/feasibility_act_transfer/. "
+            "Short CPU FP32 ran evidence: outputs/v1/setup-baseline-m3-rerun/ "
+            "(seeds 1000–1001, L=0, native camera; 1/2 success). Card-scale "
+            "reproduction not claimed. Camera/L=0 sim gates and device-profile "
+            "rows still lack retained sweep evidence. Do not reuse timings for "
+            "other candidates. No hardware experiments claimed."
         ),
     ),
     "act_aloha_insertion": CandidateSupport(

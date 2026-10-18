@@ -108,7 +108,9 @@ def run_upstream_eval(
     env["PYTHONPATH"] = (
         str(lerobot_root) if not existing else f"{lerobot_root}{os.pathsep}{existing}"
     )
-    # Prefer onscreen/offscreen GLFW on macOS; callers may override MUJOCO_GL.
+    # Prefer GLFW on macOS. Direct MUJOCO_GL=glfw still breaks mujoco 2.3.7 CGL
+    # import on dyld-cache OpenGL hosts; upstream eval.py does not run
+    # prepare_mujoco_macos_gl (breakpoint sim_env does).
     env.setdefault("MUJOCO_GL", "glfw")
 
     cmd = [

@@ -7,11 +7,56 @@ a ``[dev]`` install without the simulator stack.
 
 from __future__ import annotations
 
+import logging
+import os
+import platform
+import sys
 from typing import Any
 
 import numpy as np
 
 from breakpoint_eval.candidate_map import CandidateSpec
+
+LOGGER = logging.getLogger("breakpoint_eval.sim_env")
+
+# mujoco 2.3.7 Darwin CGL uses ctypes.CDLL on OpenGL.framework; that path is a
+# broken symlink when the binary lives only in the dyld shared cache (macOS 14+).
+# Import mujoco with GL disabled, then point dm_control at GLFW (verified here).
+_MUJOCO_DISABLE = frozenset({"disable", "disabled", "off", "false", "0"})
+_MUJOCO_GLFW_ALIASES = frozenset({"", "glfw", "cgl", "enable", "enabled", "on", "true", "1"})
+
+
+def prepare_mujoco_macos_gl() -> None:
+    """Make MuJoCo + dm_control importable for rendering on Apple Silicon macOS.
+
+    No-op on non-Darwin. Does not change preprocessing, action scaling, success
+    semantics, or episode limits. Does not synthesize a fake environment.
+    """
+    if platform.system() != "Darwin":
+        return
+    if "mujoco" in sys.modules:
+        return
+    requested = os.environ.get("MUJOCO_GL", "glfw").strip().lower()
+    if requested in _MUJOCO_DISABLE:
+        return
+    os.environ["MUJOCO_GL"] = "disable"
+    import mujoco  # noqa: F401
+
+    if requested in _MUJOCO_GLFW_ALIASES:
+        if requested == "cgl":
+            LOGGER.warning(
+                "MUJOCO_GL=cgl is unreliable on this macOS (OpenGL.framework "
+                "ctypes load); using glfw for dm_control rendering"
+            )
+        os.environ["MUJOCO_GL"] = "glfw"
+    else:
+        os.environ["MUJOCO_GL"] = requested
+    LOGGER.info(
+        "macOS MuJoCo prepare: imported mujoco %s with GL disabled, "
+        "MUJOCO_GL=%s for dm_control",
+        getattr(sys.modules["mujoco"], "__version__", "?"),
+        os.environ["MUJOCO_GL"],
+    )
 
 
 def make_env_config(spec: CandidateSpec) -> Any:
@@ -21,6 +66,7 @@ def make_env_config(spec: CandidateSpec) -> Any:
 
 
 def make_vector_env(spec: CandidateSpec, *, n_envs: int = 1) -> Any:
+    prepare_mujoco_macos_gl()
     from lerobot.common.envs.factory import make_env
 
     if n_envs != 1:

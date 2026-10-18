@@ -53,6 +53,11 @@ Mac notes:
   `uv pip check` on this host (use as `uv pip install -r requirements-feasibility.txt -c constraints-macos-arm64.txt` when re-resolving).
 - LeRobot is a **vendor checkout** under `vendor/lerobot@3c0a209…`, not a pip
   package. Reuse an existing pin; never force-checkout over local edits.
+  **git-lfs is not required**: checkout uses `git init` + shallow fetch of the
+  pin with LFS filters neutralized (`filter.lfs.process` cleared) before any
+  worktree materialization. Incomplete clones (``.git`` without
+  `lerobot/__init__.py`, e.g. after a prior LFS checkout failure) are removed
+  and re-fetched.
 - Writable caches/artifacts default to the source checkout. Non-editable
   site-packages installs use `BREAKPOINT_ROOT` or `~/.local/share/breakpoint-eval`
   so user data is never written into site-packages.
@@ -104,7 +109,7 @@ This project does **not** claim physical-robot or remote-hardware experiment run
 
 | Candidate | Hub revision (pinned) | Env | loaded | ran | reproduced | camera (impl / synthetic / sim) | L=0 (impl / synthetic / sim) | ONNX FP32 | device profile |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **no** (GL block) | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **yes** (export smoke) | **unverified** (no retained HW profile) |
+| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **yes** (2-ep CPU L=0) | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **yes** (export smoke) | **unverified** (no retained HW profile) |
 | ACT ALOHA insertion | `2bd896d0…` | AlohaInsertion-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unverified** | not attempted |
 | Diffusion PushT | `202c8695…` | PushT-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unsupported** | **unsupported** (ORT) |
 
@@ -163,6 +168,24 @@ Result recorded in `artifacts/feasibility_act_transfer/load_evidence.json`:
 Upstream eval **parsed** the same checkpoint and printed the full
 `EvalPipelineConfig` (policy features, env task, `use_amp: False`) before env
 construction.
+
+### Environment / render boundary (macOS 14 arm64)
+
+Two distinct setup failures were observed on Apple Silicon:
+
+1. **Vendor LeRobot checkout** — `git clone` invoked `git-lfs filter-process` before
+   LFS filters were neutralized (`git-lfs` not installed). Fixed by shallow
+   `git init` + pin fetch with `filter.lfs.process` cleared; incomplete trees
+   (no `lerobot/__init__.py`) are removed and re-fetched. **No pip dependency
+   change; git-lfs is not required.**
+2. **MuJoCo import / dm_control render** — `mujoco==2.3.7` Darwin CGL does
+   `ctypes.CDLL('/System/Library/Frameworks/OpenGL.framework/OpenGL')`. On macOS
+   14.6 that path is a broken symlink (binary only in the dyld shared cache), so
+   import fails after native extensions load. **Smallest supported fix:**
+   `prepare_mujoco_macos_gl()` imports mujoco with `MUJOCO_GL=disable`, then sets
+   `MUJOCO_GL=glfw` so dm_control uses GLFW (verified to create a hidden context
+   and render AlohaTransferCube pixels). Not a synthetic env fallback; pins
+   unchanged (`mujoco==2.3.7`, `gym-aloha==0.1.1`).
 
 ### ran — no (blocked)
 

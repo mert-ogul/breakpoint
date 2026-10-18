@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,9 @@ LEROBOT_COMMIT = LEROBOT_CARD_COMMIT
 
 # Env override for writable workspace when the package is not a source checkout.
 _BREAKPOINT_ROOT_ENV = "BREAKPOINT_ROOT"
+
+# Marker that a vendor checkout finished enough to import (not merely .git present).
+_LEROBOT_PACKAGE_INIT = Path("lerobot") / "__init__.py"
 
 
 def _is_under_site_packages(path: Path) -> bool:
@@ -95,11 +99,27 @@ def _git_is_dirty(dest: Path) -> bool:
     return bool(status.strip())
 
 
+def _lerobot_tree_ready(dest: Path) -> bool:
+    return (dest / _LEROBOT_PACKAGE_INIT).is_file()
+
+
 def _configure_lfs_filters(dest: Path, env: dict[str, str]) -> None:
-    # Neutralize LFS filters when git-lfs is unavailable (common on minimal hosts).
+    # Neutralize LFS before any checkout. Missing git-lfs otherwise fails with
+    # ``git-lfs filter-process: git-lfs: command not found`` during clone/checkout.
     _run(["git", "config", "--local", "filter.lfs.smudge", "cat"], cwd=dest, env=env)
     _run(["git", "config", "--local", "filter.lfs.clean", "cat"], cwd=dest, env=env)
+    _run(["git", "config", "--local", "filter.lfs.process", ""], cwd=dest, env=env)
     _run(["git", "config", "--local", "filter.lfs.required", "false"], cwd=dest, env=env)
+
+
+def _clone_lerobot_at_pin(dest: Path, env: dict[str, str]) -> None:
+    """Shallow-fetch the card pin without a default-branch checkout (no git-lfs)."""
+    dest.mkdir(parents=True, exist_ok=False)
+    _run(["git", "init"], cwd=dest, env=env)
+    _configure_lfs_filters(dest, env)
+    _run(["git", "remote", "add", "origin", LEROBOT_GIT], cwd=dest, env=env)
+    _run(["git", "fetch", "--depth", "1", "origin", LEROBOT_COMMIT], cwd=dest, env=env)
+    _run(["git", "checkout", LEROBOT_COMMIT], cwd=dest, env=env)
 
 
 def ensure_lerobot_checkout(repo_root: Path) -> Path:
@@ -107,21 +127,28 @@ def ensure_lerobot_checkout(repo_root: Path) -> Path:
 
     Reuses an existing pin without re-fetching. Never force-checkouts over
     local modifications; refuses when the tree is dirty and at the wrong commit.
+    An incomplete clone (``.git`` present but package tree missing, e.g. after a
+    git-lfs checkout failure) is removed and replaced — that is not user work.
     """
     dest = repo_root / "vendor" / "lerobot"
     dest.parent.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "GIT_LFS_SKIP_SMUDGE": "1"}
 
+    if (dest / ".git").exists() and not _lerobot_tree_ready(dest):
+        LOGGER.warning(
+            "Incomplete vendor/lerobot at %s (missing %s); removing to re-fetch pin",
+            dest,
+            _LEROBOT_PACKAGE_INIT,
+        )
+        shutil.rmtree(dest)
+
     if not (dest / ".git").exists():
-        _run(["git", "clone", LEROBOT_GIT, str(dest)], env=env)
-        _configure_lfs_filters(dest, env)
-        _run(["git", "fetch", "--depth", "1", "origin", LEROBOT_COMMIT], cwd=dest, env=env)
-        _run(["git", "checkout", LEROBOT_COMMIT], cwd=dest, env=env)
+        _clone_lerobot_at_pin(dest, env)
     else:
         _configure_lfs_filters(dest, env)
         head = _git_head(dest)
         dirty = _git_is_dirty(dest)
-        if head == LEROBOT_COMMIT:
+        if head == LEROBOT_COMMIT and _lerobot_tree_ready(dest):
             if dirty:
                 LOGGER.warning(
                     "vendor/lerobot is at pin %s with local modifications; "
@@ -148,6 +175,8 @@ def ensure_lerobot_checkout(repo_root: Path) -> Path:
     head = _git_head(dest)
     if head != LEROBOT_COMMIT:
         raise RuntimeError(f"Expected LeRobot HEAD {LEROBOT_COMMIT}, got {head}")
+    if not _lerobot_tree_ready(dest):
+        raise RuntimeError(f"LeRobot checkout missing package file {_LEROBOT_PACKAGE_INIT}")
     return dest
 
 
