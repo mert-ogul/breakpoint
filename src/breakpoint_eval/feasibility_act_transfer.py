@@ -17,11 +17,13 @@ from pathlib import Path
 
 from huggingface_hub import snapshot_download
 
+from breakpoint_eval.candidate_map import LEROBOT_CARD_COMMIT
+from breakpoint_eval.stack import ensure_lerobot_checkout
+
 LOGGER = logging.getLogger("breakpoint_eval.feasibility")
 
 # Card-trained stack: all three candidate cards cite this LeRobot commit.
-LEROBOT_GIT = "https://github.com/huggingface/lerobot.git"
-LEROBOT_COMMIT = "3c0a209f9fac4d2a57617e686a7f2a2309144ba2"
+LEROBOT_COMMIT = LEROBOT_CARD_COMMIT
 
 # Immutable Hub revision compatible with LeRobot@3c0a209 config schema.
 # Current Hub main (ba73b276...) moved device/use_amp into policy config for
@@ -46,28 +48,6 @@ class FeasibilityRequest:
 def _run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
     LOGGER.info("Running: %s", " ".join(cmd))
     subprocess.run(cmd, check=True, cwd=cwd, env=env)
-
-
-def ensure_lerobot_checkout(repo_root: Path) -> Path:
-    """Clone/check out the card-pinned LeRobot commit under vendor/lerobot."""
-    dest = repo_root / "vendor" / "lerobot"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "GIT_LFS_SKIP_SMUDGE": "1"}
-
-    if not (dest / ".git").exists():
-        _run(["git", "clone", LEROBOT_GIT, str(dest)], env=env)
-
-    # Neutralize LFS filters when git-lfs is unavailable (common on minimal hosts).
-    _run(["git", "config", "--local", "filter.lfs.smudge", "cat"], cwd=dest, env=env)
-    _run(["git", "config", "--local", "filter.lfs.clean", "cat"], cwd=dest, env=env)
-    _run(["git", "config", "--local", "filter.lfs.required", "false"], cwd=dest, env=env)
-    _run(["git", "fetch", "--depth", "1", "origin", LEROBOT_COMMIT], cwd=dest, env=env)
-    _run(["git", "checkout", "-f", LEROBOT_COMMIT], cwd=dest, env=env)
-
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=dest, text=True).strip()
-    if head != LEROBOT_COMMIT:
-        raise RuntimeError(f"Expected LeRobot HEAD {LEROBOT_COMMIT}, got {head}")
-    return dest
 
 
 def download_checkpoint(cache_dir: Path) -> Path:

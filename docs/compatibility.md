@@ -35,6 +35,34 @@ That file is a **tested pin set** from a feasibility probe, not an automatically
 frozen lockfile. Optional extras: `[dev]`, `[onnx]`, `[report]`, `[h264]` /
 `requirements-onnx.txt` / `requirements-h264.txt`.
 
+### Dependency strategy (Mac vs Pi)
+
+Do **not** invent new pins or upgrade the whole stack. Policy/LeRobot pins stay as
+documented above (`torch==2.6.0`, `gym-aloha==0.1.1`, vendor LeRobot
+`3c0a209…`, Hub ACT transfer `9e935457…`).
+
+| Profile | Purpose | Authoritative pins | Install |
+| --- | --- | --- | --- |
+| **macOS Apple Silicon (CPU eval / sim)** | Offline tests + optional MuJoCo/LeRobot runs | `requirements-feasibility.txt` + `requirements-onnx.txt` | `uv venv --python 3.11 .venv && uv pip install -r requirements-feasibility.txt -r requirements-onnx.txt && uv pip install -e '.[dev,report]' && uv pip check` |
+| **Pi / edge ORT profile** | `breakpoint profile` only | `requirements-pi-profile.txt` (= `requirements-onnx.txt`) | `uv pip install -r requirements-pi-profile.txt && uv pip install -e '.[onnx]' && uv pip check` |
+
+Mac notes:
+
+- Use the project `.venv` (Python 3.11, arm64). After a successful Mac install,
+  `constraints-macos-arm64.txt` records the third-party freeze that passed
+  `uv pip check` on this host (use as `uv pip install -r requirements-feasibility.txt -c constraints-macos-arm64.txt` when re-resolving).
+- LeRobot is a **vendor checkout** under `vendor/lerobot@3c0a209…`, not a pip
+  package. Reuse an existing pin; never force-checkout over local edits.
+- Writable caches/artifacts default to the source checkout. Non-editable
+  site-packages installs use `BREAKPOINT_ROOT` or `~/.local/share/breakpoint-eval`
+  so user data is never written into site-packages.
+
+Pi notes:
+
+- Keep the profile **free of Torch, MuJoCo, gym-*, and LeRobot**. Ship the ONNX
+  graph + corpus from a Mac/desktop export; measure ORT latency on device only.
+- Do not install `requirements-feasibility.txt` into the Pi profile venv.
+
 ### Install shapes
 
 | Goal | Commands |
@@ -42,8 +70,8 @@ frozen lockfile. Optional extras: `[dev]`, `[onnx]`, `[report]`, `[h264]` /
 | Core CLI help only | `pip install -e .` then `breakpoint --help` |
 | Offline unit tests (torch/cv2) | `pip install -e ".[dev]"` — ONNX/report/H.264 tests **skip** without extras (`importorskip` / FFmpeg fixture) |
 | Full offline suite | `pip install -e ".[dev,onnx,report,h264]"` (+ system FFmpeg for H.264 encode) |
-| Simulator / policy runs | `pip install -r requirements-feasibility.txt` then `pip install -e .` (+ vendor LeRobot) |
-| ORT profile (no sim) | `pip install -e ".[onnx]"` |
+| Simulator / policy runs (Mac) | `pip install -r requirements-feasibility.txt` then `pip install -e '.[dev,report]'` (+ vendor LeRobot) |
+| ORT profile (no sim; Mac or Pi) | `pip install -r requirements-pi-profile.txt` then `pip install -e '.[onnx]'` |
 
 Do **not** assume `pip install lerobot` (latest) reproduces these cards. Hub issues
 [#2605](https://github.com/huggingface/lerobot/issues/2605) and

@@ -255,7 +255,10 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         "--repo-root",
         type=Path,
         default=None,
-        help="Repo root containing vendor/ and .cache/",
+        help=(
+            "Workspace root for vendor/ and .cache/ (default: source checkout, "
+            "or BREAKPOINT_ROOT / user data dir when installed under site-packages)"
+        ),
     )
 
 
