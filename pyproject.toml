@@ -44,6 +44,7 @@ h264 = [
 ]
 # Simulator stack pins live in requirements-feasibility.txt (install separately from
 # this editable package). Run / export / real policy smoke need that file + vendor LeRobot.
+# Pi/edge ORT profile: requirements-pi-profile.txt + [onnx] only (no torch/sim).
 
 [project.scripts]
 breakpoint = "breakpoint_eval.cli:main"
