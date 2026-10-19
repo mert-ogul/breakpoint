@@ -288,6 +288,7 @@ def run_baseline(req: RunRequest) -> Path:
                 control_period_s=period_s,
                 chunk_size=adapter.chunk_info.chunk_size,
                 n_action_steps=adapter.chunk_info.n_action_steps,
+                policy_rng_seed=policy_rng_seeds[i],
                 latency_s=req.latency_s,
                 chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
                 image_mode=image_cfg.mode.value,
