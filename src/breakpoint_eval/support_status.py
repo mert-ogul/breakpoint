@@ -54,21 +54,22 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         reproduced_baseline="no",
         camera_impl="yes",
         camera_synthetic="yes",
-        camera_sim="unverified",
+        camera_sim="yes",
         zero_latency_impl="yes",
         zero_latency_synthetic="yes",
-        zero_latency_sim="unverified",
+        zero_latency_sim="yes",
         onnx_fp32="yes",
-        onnx_int8="unverified",
+        onnx_int8="yes",
         onnx_int4="unverified",
-        device_profile="unverified",
+        device_profile="yes",
         notes=(
             "loaded evidence under artifacts/feasibility_act_transfer/. "
-            "Short CPU FP32 ran evidence: outputs/v1/setup-baseline-m3-rerun/ "
-            "(seeds 1000–1001, L=0, native camera; 1/2 success). Card-scale "
-            "reproduction not claimed. Camera/L=0 sim gates and device-profile "
-            "rows still lack retained sweep evidence. Do not reuse timings for "
-            "other candidates. No hardware experiments claimed."
+            "v0.1 evaluation packaged in benchmarks/act-transfer/v1: 600 CPU episodes "
+            "(seeds 5000-5029), ONNX FP32 baseline 25/30, static QDQ INT8 24/30, "
+            "constant delay, resolution, JPEG, and laptop-m3 / rpi5 latency replay. "
+            "Card-scale reproduction not claimed. The rpi5 profile was captured under "
+            "reported throttling. Do not reuse timings for other candidates. "
+            "No hardware experiments claimed."
         ),
     ),
     "act_aloha_insertion": CandidateSupport(

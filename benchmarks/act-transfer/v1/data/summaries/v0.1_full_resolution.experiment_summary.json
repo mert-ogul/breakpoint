@@ -1,0 +1,404 @@
+{
+  "axis": "resolution",
+  "axis_summary": {
+    "baseline_success_floor": 0.5,
+    "baseline_success_rate": 0.8333333333333334,
+    "breakpoint": {
+      "first_below": "resolution_capture_60x80",
+      "non_monotonic": false,
+      "observed_interval": {
+        "above_condition_id": "resolution_capture_120x160",
+        "above_ordered_value": 1.0,
+        "below_condition_id": "resolution_capture_60x80",
+        "below_ordered_value": 1.0,
+        "interpolated": false
+      },
+      "preceding_above": "resolution_capture_120x160",
+      "recovery_condition_ids": [],
+      "status": "observed_interval"
+    },
+    "breakpoint_exploratory_only": null,
+    "headline_suppressed": false,
+    "note": "Observed interval only; not an interpolated exact boundary.",
+    "points": [
+      {
+        "below_threshold": false,
+        "condition_id": "resolution_native",
+        "eligible": 30,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "resolution native 480x640",
+        "n_runtime_error": 0,
+        "ordered_value": 1.0,
+        "planned": 30,
+        "success_rate": 0.8333333333333334,
+        "successes": 25,
+        "wilson_95": {
+          "high": 0.9266345762815145,
+          "level": 0.95,
+          "low": 0.6643564949358398,
+          "method": "wilson",
+          "n": 30,
+          "point": 0.8333333333333334,
+          "successes": 25,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": false,
+        "condition_id": "resolution_capture_240x320",
+        "eligible": 30,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "resolution capture 240x320",
+        "n_runtime_error": 0,
+        "ordered_value": 1.0,
+        "planned": 30,
+        "success_rate": 0.8666666666666667,
+        "successes": 26,
+        "wilson_95": {
+          "high": 0.9469034451594525,
+          "level": 0.95,
+          "low": 0.7031867331796371,
+          "method": "wilson",
+          "n": 30,
+          "point": 0.8666666666666667,
+          "successes": 26,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": false,
+        "condition_id": "resolution_capture_120x160",
+        "eligible": 30,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "resolution capture 120x160",
+        "n_runtime_error": 0,
+        "ordered_value": 1.0,
+        "planned": 30,
+        "success_rate": 0.7333333333333333,
+        "successes": 22,
+        "wilson_95": {
+          "high": 0.8581733668040368,
+          "level": 0.95,
+          "low": 0.555520383048111,
+          "method": "wilson",
+          "n": 30,
+          "point": 0.7333333333333333,
+          "successes": 22,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": true,
+        "condition_id": "resolution_capture_60x80",
+        "eligible": 30,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "resolution capture 60x80",
+        "n_runtime_error": 0,
+        "ordered_value": 1.0,
+        "planned": 30,
+        "success_rate": 0.3333333333333333,
+        "successes": 10,
+        "wilson_95": {
+          "high": 0.5121994835545616,
+          "level": 0.95,
+          "low": 0.19230498083676134,
+          "method": "wilson",
+          "n": 30,
+          "point": 0.3333333333333333,
+          "successes": 10,
+          "unresolved": false
+        }
+      }
+    ],
+    "ratio": 0.8,
+    "reason": null
+  },
+  "baseline_condition_id": "resolution_native",
+  "baseline_success_floor": 0.5,
+  "candidate": "act_aloha_transfer",
+  "conditions": [
+    {
+      "condition_id": "resolution_native",
+      "eligible": 30,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "resolution native 480x640",
+      "n_runtime_error": 0,
+      "params": {
+        "capture_hw": [
+          480,
+          640
+        ],
+        "effective_policy_hw": [
+          480,
+          640
+        ],
+        "linear_scale": 1.0,
+        "mode": "native",
+        "native_hw": [
+          480,
+          640
+        ]
+      },
+      "planned": 30,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_native/run_report.json",
+      "success_rate": 0.8333333333333334,
+      "successes": 25,
+      "wilson_95": {
+        "high": 0.9266345762815145,
+        "level": 0.95,
+        "low": 0.6643564949358398,
+        "method": "wilson",
+        "n": 30,
+        "point": 0.8333333333333334,
+        "successes": 25,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "resolution_capture_240x320",
+      "eligible": 30,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "resolution capture 240x320",
+      "n_runtime_error": 0,
+      "params": {
+        "capture_hw": [
+          240,
+          320
+        ],
+        "effective_policy_hw": [
+          480,
+          640
+        ],
+        "mode": "downsample",
+        "native_hw": [
+          480,
+          640
+        ]
+      },
+      "planned": 30,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_240x320/run_report.json",
+      "success_rate": 0.8666666666666667,
+      "successes": 26,
+      "wilson_95": {
+        "high": 0.9469034451594525,
+        "level": 0.95,
+        "low": 0.7031867331796371,
+        "method": "wilson",
+        "n": 30,
+        "point": 0.8666666666666667,
+        "successes": 26,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "resolution_capture_120x160",
+      "eligible": 30,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "resolution capture 120x160",
+      "n_runtime_error": 0,
+      "params": {
+        "capture_hw": [
+          120,
+          160
+        ],
+        "effective_policy_hw": [
+          480,
+          640
+        ],
+        "mode": "downsample",
+        "native_hw": [
+          480,
+          640
+        ]
+      },
+      "planned": 30,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_120x160/run_report.json",
+      "success_rate": 0.7333333333333333,
+      "successes": 22,
+      "wilson_95": {
+        "high": 0.8581733668040368,
+        "level": 0.95,
+        "low": 0.555520383048111,
+        "method": "wilson",
+        "n": 30,
+        "point": 0.7333333333333333,
+        "successes": 22,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "resolution_capture_60x80",
+      "eligible": 30,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "resolution capture 60x80",
+      "n_runtime_error": 0,
+      "params": {
+        "capture_hw": [
+          60,
+          80
+        ],
+        "effective_policy_hw": [
+          480,
+          640
+        ],
+        "mode": "downsample",
+        "native_hw": [
+          480,
+          640
+        ]
+      },
+      "planned": 30,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_60x80/run_report.json",
+      "success_rate": 0.3333333333333333,
+      "successes": 10,
+      "wilson_95": {
+        "high": 0.5121994835545616,
+        "level": 0.95,
+        "low": 0.19230498083676134,
+        "method": "wilson",
+        "n": 30,
+        "point": 0.3333333333333333,
+        "successes": 10,
+        "unresolved": false
+      }
+    }
+  ],
+  "confirms_plan_id": null,
+  "conventions": {
+    "exploratory_separate_from_confirmation": true,
+    "hundred_episodes_not_precise_boundary": true,
+    "no_interpolated_exact_boundary": true,
+    "no_optional_stopping": true,
+    "not_safety_criteria": true,
+    "pointwise_bootstrap_not_simultaneous": true
+  },
+  "env_seeds": [
+    5000,
+    5001,
+    5002,
+    5003,
+    5004,
+    5005,
+    5006,
+    5007,
+    5008,
+    5009,
+    5010,
+    5011,
+    5012,
+    5013,
+    5014,
+    5015,
+    5016,
+    5017,
+    5018,
+    5019,
+    5020,
+    5021,
+    5022,
+    5023,
+    5024,
+    5025,
+    5026,
+    5027,
+    5028,
+    5029
+  ],
+  "isolation_notes": [
+    "Resolution axis only; latency and precision at defaults."
+  ],
+  "n_episodes_planned": 30,
+  "paired_contrasts_vs_baseline": [
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "resolution_capture_240x320",
+      "coverage": "pointwise",
+      "high": 0.34683333333333244,
+      "level": 0.95,
+      "low": 0.046666666666666634,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 30,
+      "point": 0.19999999999999996,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "resolution_capture_120x160",
+      "coverage": "pointwise",
+      "high": 0.2333333333333334,
+      "level": 0.95,
+      "low": -0.1200000000000001,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 30,
+      "point": 0.06666666666666654,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "resolution_capture_60x80",
+      "coverage": "pointwise",
+      "high": -0.1266666666666666,
+      "level": 0.95,
+      "low": -0.5266666666666667,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 30,
+      "point": -0.3333333333333334,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    }
+  ],
+  "phase": "exploratory",
+  "plan_id": "v0.1_full_resolution",
+  "policy_rng_seeds": [
+    15000,
+    15001,
+    15002,
+    15003,
+    15004,
+    15005,
+    15006,
+    15007,
+    15008,
+    15009,
+    15010,
+    15011,
+    15012,
+    15013,
+    15014,
+    15015,
+    15016,
+    15017,
+    15018,
+    15019,
+    15020,
+    15021,
+    15022,
+    15023,
+    15024,
+    15025,
+    15026,
+    15027,
+    15028,
+    15029
+  ],
+  "ratio": 0.8
+}

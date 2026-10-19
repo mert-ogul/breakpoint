@@ -1,0 +1,449 @@
+{
+  "breakpoint_eval_version": "0.1.0",
+  "derived_by_report": [
+    "device_profile axis counts and paired tables",
+    "threshold-inside-interval flags",
+    "timing statistics",
+    "Pi telemetry summary"
+  ],
+  "displayed_counts": [
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_0",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_latency",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_40",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_latency",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_80",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_latency",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_160",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_latency",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 23,
+      "wilson_high": 0.8820761185551049,
+      "wilson_low": 0.5907167384187784
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_320",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_latency",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 18,
+      "wilson_high": 0.7540937188319815,
+      "wilson_low": 0.42320360253322475
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_640",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_latency",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 14,
+      "wilson_high": 0.638577003801267,
+      "wilson_low": 0.3023238890769976
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_native",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_240x320",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 26,
+      "wilson_high": 0.9469034451594525,
+      "wilson_low": 0.7031867331796371
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_120x160",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 22,
+      "wilson_high": 0.8581733668040368,
+      "wilson_low": 0.555520383048111
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_60x80",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 10,
+      "wilson_high": 0.5121994835545616,
+      "wilson_low": 0.19230498083676134
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_bypass",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q95",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q75",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 26,
+      "wilson_high": 0.9469034451594525,
+      "wilson_low": 0.7031867331796371
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q50",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 26,
+      "wilson_high": 0.9469034451594525,
+      "wilson_low": 0.7031867331796371
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q25",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q10",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 23,
+      "wilson_high": 0.8820761185551049,
+      "wilson_low": 0.5907167384187784
+    },
+    {
+      "axis": "precision",
+      "condition_id": "precision_onnx_fp32",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_precision",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "precision",
+      "condition_id": "precision_int8",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_precision",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 24,
+      "wilson_high": 0.9049489282271013,
+      "wilson_low": 0.6269430358685175
+    },
+    {
+      "axis": "device_profile",
+      "condition_id": "latency_ms_0",
+      "derived_by_report": true,
+      "eligible": 30,
+      "plan_id": "v0.1_full_device_profile",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "device_profile",
+      "condition_id": "device_profile_laptop-m3_fp32",
+      "derived_by_report": true,
+      "eligible": 30,
+      "plan_id": "v0.1_full_device_profile",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 24,
+      "wilson_high": 0.9049489282271013,
+      "wilson_low": 0.6269430358685175
+    },
+    {
+      "axis": "device_profile",
+      "condition_id": "device_profile_rpi5_fp32",
+      "derived_by_report": true,
+      "eligible": 30,
+      "plan_id": "v0.1_full_device_profile",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 9,
+      "wilson_high": 0.47875787458714947,
+      "wilson_low": 0.1666474826824379
+    }
+  ],
+  "files": [
+    {
+      "bytes": 88603,
+      "path": "index.html",
+      "sha256": "8914a6593cc7aff4813172d853309bc2f68848710ae5fed8b6ae8aee43109ef2"
+    },
+    {
+      "bytes": 76950,
+      "path": "plots/latency_trace_laptop-m3.dark.svg",
+      "sha256": "64efa3f66a961a0a6b1e1bf22b2462ba69573e2786574dfff80f4fd93072fe16"
+    },
+    {
+      "bytes": 91985,
+      "path": "plots/latency_trace_laptop-m3.png",
+      "sha256": "d3885e4feccfe9b4df20e3868e7b2a1f910de0e1ff337922dc00b93094e2aa11"
+    },
+    {
+      "bytes": 76950,
+      "path": "plots/latency_trace_laptop-m3.svg",
+      "sha256": "81c517504b63459ff47612eaad4a630f13269a01314fc51f60eec37a01b2809b"
+    },
+    {
+      "bytes": 81264,
+      "path": "plots/latency_trace_rpi5.dark.svg",
+      "sha256": "612ee069558ef6ace55268f03b4c7d3305aaf5784a9121376606a37a0a6a5d39"
+    },
+    {
+      "bytes": 220661,
+      "path": "plots/latency_trace_rpi5.png",
+      "sha256": "908ada8d4f9daf1e12237106893d7894918f9f8a33eeadec13b67389e1cf6801"
+    },
+    {
+      "bytes": 81264,
+      "path": "plots/latency_trace_rpi5.svg",
+      "sha256": "1d9e600d3beadf8e41eaee22b8c8d85f25f3f6e0c337d387e60ff29ad3322e87"
+    },
+    {
+      "bytes": 14782,
+      "path": "plots/success_device_profile.dark.svg",
+      "sha256": "7286ab5b635ca05e7a6a591ec11b2fe606508131408e0668edbcbb9e3adfc553"
+    },
+    {
+      "bytes": 60021,
+      "path": "plots/success_device_profile.png",
+      "sha256": "13ca7a6c27a0948827f33b89a7ea51a618933d3bc3e03831af040e729263b32b"
+    },
+    {
+      "bytes": 14782,
+      "path": "plots/success_device_profile.svg",
+      "sha256": "e00cd41a5279ebd5ed5a5c44509d41850a6775cd4b86f95d0e4380e7cca4856e"
+    },
+    {
+      "bytes": 18876,
+      "path": "plots/success_jpeg.dark.svg",
+      "sha256": "002cbcdb808a1b346d13daacffcfe3a23e46abb81dc311c354526dcb5faa9ac5"
+    },
+    {
+      "bytes": 58143,
+      "path": "plots/success_jpeg.png",
+      "sha256": "6369e1140663267f5186823ea2f650f672fd8fbfc440dc409eab58fab07a48a2"
+    },
+    {
+      "bytes": 18876,
+      "path": "plots/success_jpeg.svg",
+      "sha256": "06fe1ec880e8fedec3ca8ca0bca646cd82b8977809d4e97a8a7c944c33b4021b"
+    },
+    {
+      "bytes": 19074,
+      "path": "plots/success_latency_ms.dark.svg",
+      "sha256": "d9daa1e8317d2a8d3fb833451610eff49a46e2ae9657374f6ddf3694d0dcf759"
+    },
+    {
+      "bytes": 60049,
+      "path": "plots/success_latency_ms.png",
+      "sha256": "6ed883e105b6fa27976286f3aabfee402757cb609310731aeb5d508dc7a9e6ba"
+    },
+    {
+      "bytes": 19074,
+      "path": "plots/success_latency_ms.svg",
+      "sha256": "70666937e1bd18d6b859560d7181a5e75a629cf56eec756aa29c89fa68cf32eb"
+    },
+    {
+      "bytes": 12776,
+      "path": "plots/success_precision.dark.svg",
+      "sha256": "d59dcd36ef96feb03bf5520255a6f22419d803603c85add34a9de685d837d210"
+    },
+    {
+      "bytes": 50906,
+      "path": "plots/success_precision.png",
+      "sha256": "32ffbaa0364176df1f3079bbc56aea1f6045d5857a34efb4a2ace303ca99a871"
+    },
+    {
+      "bytes": 12776,
+      "path": "plots/success_precision.svg",
+      "sha256": "f508626098ab402e145b2d2f36b65224246d0769b03d1e7e4e803e389313fdc9"
+    },
+    {
+      "bytes": 16179,
+      "path": "plots/success_resolution.dark.svg",
+      "sha256": "5cb6b5c9612306c5f338487d88a92dbf55f898fb6d9a6b473144547de6b7c731"
+    },
+    {
+      "bytes": 62765,
+      "path": "plots/success_resolution.png",
+      "sha256": "7c9919912ebca9e1580353015dc9115276c7f90a60d0d0ddf088d450bd157c73"
+    },
+    {
+      "bytes": 16179,
+      "path": "plots/success_resolution.svg",
+      "sha256": "2af166435ffe25d3ff25d5b058ab643cbc427bd5370d9050f078ecb6fc7fc154"
+    },
+    {
+      "bytes": 11534,
+      "path": "report.md",
+      "sha256": "c41d2c285c62a5d7094e5f97116e8136f5ab6679d204b522f9c86a7e8ea77de8"
+    }
+  ],
+  "generator": "scripts/render_v1.py",
+  "input": {
+    "episode_rows": 600,
+    "manifest_sha256": "696b73a06d637b3951a1fb2d961edd10e588b54b6b25b357a0a60f2ffd307b2a",
+    "simulated_runs": 18
+  },
+  "schema_version": 1,
+  "validation": [
+    {
+      "detail": "61 files hashed",
+      "name": "packaged files match manifest sha256",
+      "passed": true
+    },
+    {
+      "detail": "600 rows",
+      "name": "episode rows: planned seeds, policy RNG seeds, success flag vs outcome",
+      "passed": true
+    },
+    {
+      "detail": "outcomes: success, time_limit_truncation",
+      "name": "no runtime errors or policy failures in any episode",
+      "passed": true
+    },
+    {
+      "detail": "21 condition rows",
+      "name": "displayed counts: every axis lists each planned condition once",
+      "passed": true
+    },
+    {
+      "detail": "6 conditions",
+      "name": "v0.1_full_latency: saved summary counts and Wilson intervals equal episode records",
+      "passed": true
+    },
+    {
+      "detail": "4 conditions",
+      "name": "v0.1_full_resolution: saved summary counts and Wilson intervals equal episode records",
+      "passed": true
+    },
+    {
+      "detail": "6 conditions",
+      "name": "v0.1_full_jpeg: saved summary counts and Wilson intervals equal episode records",
+      "passed": true
+    },
+    {
+      "detail": "2 conditions",
+      "name": "v0.1_full_precision: saved summary counts and Wilson intervals equal episode records",
+      "passed": true
+    },
+    {
+      "detail": "90 referenced rows; differing: []",
+      "name": "shared baseline outcomes equal the latency axis 0 ms condition seed by seed",
+      "passed": true
+    },
+    {
+      "detail": "all episodes",
+      "name": "latency axis: recorded constant delay equals the condition label",
+      "passed": true
+    },
+    {
+      "detail": "2 profiles",
+      "name": "device replay: windows follow the locked design and consumed delays equal profile samples",
+      "passed": true
+    },
+    {
+      "detail": "fp32 sha256 27bf9278030e",
+      "name": "device profiles were measured on the locked FP32 graph",
+      "passed": true
+    }
+  ]
+}

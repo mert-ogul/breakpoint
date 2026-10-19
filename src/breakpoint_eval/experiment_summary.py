@@ -14,8 +14,8 @@ from typing import Any
 
 import numpy as np
 
+from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.experiment_plan import ExperimentPlan, load_experiment_plan
-from breakpoint_eval.run_episode import EpisodeOutcome
 
 # Project conventions (not safety criteria) — methodology.md
 DEFAULT_BREAKPOINT_RATIO = 0.8

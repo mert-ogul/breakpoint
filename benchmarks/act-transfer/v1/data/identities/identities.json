@@ -1,0 +1,82 @@
+{
+  "lock_keys": [
+    "artifacts",
+    "baseline_reuse",
+    "candidate",
+    "host",
+    "phase",
+    "phase_config",
+    "protocol",
+    "scheduler",
+    "schema_version",
+    "source_revision",
+    "statistics",
+    "trace_window"
+  ],
+  "model_fp32": {
+    "recipe_id": "torch_onnx_export_fp32_opset17",
+    "sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba"
+  },
+  "model_int8_qdq": {
+    "sha256": "792e9adc992405676317200cfa199176280be1eff152800604af4af7dac3b035",
+    "status": "ok"
+  },
+  "profile_identities": {
+    "laptop-m3": {
+      "candidate": "act_aloha_transfer",
+      "chunk_horizon": 100,
+      "corpus_hash": "ce5cd7ce7967f6f0d0e0cb97683e140faa03b1868f79211c9b5acd089833f621",
+      "device_label": "laptop-m3",
+      "input_shapes": {
+        "observation_images_top": [
+          1,
+          3,
+          480,
+          640
+        ],
+        "observation_state": [
+          1,
+          14
+        ]
+      },
+      "inter_op_num_threads": 1,
+      "intra_op_num_threads": 4,
+      "model_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+      "precision_recipe": "torch_onnx_export_fp32_opset17",
+      "runtime_provider": [
+        "CPUExecutionProvider"
+      ],
+      "schema_version": 1,
+      "timed_boundary": "ort_session_run_action_chunk",
+      "variant_label": "onnx_fp32"
+    },
+    "rpi5": {
+      "candidate": "act_aloha_transfer",
+      "chunk_horizon": 100,
+      "corpus_hash": "ce5cd7ce7967f6f0d0e0cb97683e140faa03b1868f79211c9b5acd089833f621",
+      "device_label": "rpi5",
+      "input_shapes": {
+        "observation_images_top": [
+          1,
+          3,
+          480,
+          640
+        ],
+        "observation_state": [
+          1,
+          14
+        ]
+      },
+      "inter_op_num_threads": 1,
+      "intra_op_num_threads": 4,
+      "model_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+      "precision_recipe": "torch_onnx_export_fp32_opset17",
+      "runtime_provider": [
+        "CPUExecutionProvider"
+      ],
+      "schema_version": 1,
+      "timed_boundary": "ort_session_run_action_chunk",
+      "variant_label": "onnx_fp32"
+    }
+  }
+}
