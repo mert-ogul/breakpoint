@@ -78,6 +78,7 @@ class EpisodeResult:
     n_action_steps: int
     steps: list[ControlStepRecord] = field(default_factory=list)
     video_path: str | None = None
+    policy_rng_seed: int | None = None
     latency_s: float = 0.0
     latency_mode: str = LatencyMode.CONSTANT.value
     chunk_arrival_policy: str = CHUNK_ARRIVAL_POLICY
@@ -382,6 +383,7 @@ def _run_episode_with_scheduler(
         chunk_size=chunk_info.chunk_size,
         n_action_steps=chunk_info.n_action_steps,
         steps=steps,
+        policy_rng_seed=policy_rng_seed,
         latency_s=latency_s,
         latency_mode=(
             LatencyMode.TRACE_REPLAY.value
