@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "variant_label": "int8",
+  "passed": true,
+  "not_passed_reasons": [],
+  "binding": {
+    "model_sha256": "792e9adc992405676317200cfa199176280be1eff152800604af4af7dac3b035",
+    "corpus_eval_sha256": "ce5cd7ce7967f6f0d0e0cb97683e140faa03b1868f79211c9b5acd089833f621",
+    "hub_revision": "9e93545744656e57d20f8b2d631d5d72544002ce",
+    "candidate": "act_aloha_transfer",
+    "recipe_id": "onnxruntime_static_qdq_uint8_act_qint8_weight_minmax_calibrate",
+    "variant_label": "int8",
+    "parent_fp32_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+    "calibration_sha256": "4306d03b5916da3699dd8e8a61b67f044d70a244454e20eb092f97071fac6a21"
+  },
+  "runtime_checks": {
+    "passed": true,
+    "shapes_ok": true,
+    "finite_ok": true,
+    "max_abs_error": 0.49049466848373413,
+    "mean_abs_error": 0.008442451900023466,
+    "action_unit_mean_abs_error": 0.008442451900023466,
+    "fp32_allclose_required": false,
+    "task_success_required": false,
+    "not_passed_reasons": []
+  },
+  "quantization_coverage": {
+    "calibration_n": 51,
+    "calibration_sha256": "4306d03b5916da3699dd8e8a61b67f044d70a244454e20eb092f97071fac6a21",
+    "full_model_int8_claim": false,
+    "has_matmul_nbits": false,
+    "has_qdq": true,
+    "op_counts": {
+      "Add": 77,
+      "Cast": 1,
+      "Concat": 10,
+      "Constant": 1304,
+      "Conv": 21,
+      "Cos": 2,
+      "CumSum": 2,
+      "DequantizeLinear": 2266,
+      "Div": 6,
+      "Gather": 1,
+      "Gemm": 8,
+      "Identity": 1,
+      "LayerNormalization": 12,
+      "MatMul": 41,
+      "MaxPool": 1,
+      "Mul": 29,
+      "QuantizeLinear": 2102,
+      "Reshape": 34,
+      "Shape": 2,
+      "Sin": 2,
+      "Slice": 9,
+      "Softmax": 6,
+      "Split": 3,
+      "Squeeze": 602,
+      "Sub": 2,
+      "Transpose": 28,
+      "Unsqueeze": 611
+    },
+    "partial_ok_label": true,
+    "quant_related_ops": {
+      "DequantizeLinear": 2266,
+      "QuantizeLinear": 2102
+    },
+    "remaining_float_conv": 21,
+    "remaining_float_gemm": 8,
+    "remaining_float_matmul": 41
+  },
+  "numeric_errors": {
+    "vs_onnx_fp32": {
+      "max_abs_error": 0.49049466848373413,
+      "mean_abs_error": 0.008442451900023466,
+      "action_unit_mean_abs_error": 0.008442451900023466,
+      "shapes_ok": true,
+      "finite_ok": true,
+      "fp32_allclose_enforced": false
+    }
+  },
+  "task_success_required": false,
+  "fp32_allclose_required": false,
+  "fp32_validation_sidecar_authorizes_int8": false,
+  "source_export_manifest_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/export_manifest.json",
+  "note": "INT8 validation is separate from FP32. Requires runnable QDQ graph with finite matching shapes vs the FP32 parent, recorded calibration corpus, and quantization coverage. Does not require FP32-level allclose or task success; reduced task performance is measured later."
+}

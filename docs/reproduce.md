@@ -100,6 +100,11 @@ PY
 See [v1_protocol.md](v1_protocol.md) for `scripts/run_v1.py`, `scripts/profile_v1.py`,
 and `configs/v1.json`. Prefer `--dry-run` before any long eval.
 
+## 6. Package, report, and media for the completed full run
+
+See [`benchmarks/act-transfer/v1/REPRODUCE.md`](../benchmarks/act-transfer/v1/REPRODUCE.md)
+for `scripts/package_v1.py`, `scripts/render_v1.py`, and `scripts/media_v1.py`.
+
 ## Notes
 
 - Do not start long stress sweeps from this document.

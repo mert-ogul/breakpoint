@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass, field
-from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -16,6 +15,7 @@ from breakpoint_eval.camera_degrade import (
     degrade_observation,
     summarize_frame_stats,
 )
+from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.latency_scheduler import (
     CHUNK_ARRIVAL_POLICY,
     LatencyConfig,
@@ -28,14 +28,6 @@ from breakpoint_eval.policy_adapter import ActionStep, PolicyAdapter
 from breakpoint_eval.sim_env import preprocess_observation
 
 LOGGER = logging.getLogger("breakpoint_eval.run_episode")
-
-
-class EpisodeOutcome(StrEnum):
-    SUCCESS = "success"
-    TERMINATED_NO_SUCCESS = "terminated_no_success"
-    TIME_LIMIT_TRUNCATION = "time_limit_truncation"
-    POLICY_FAILED = "policy_failed"
-    RUNTIME_ERROR = "runtime_error"
 
 
 @dataclass

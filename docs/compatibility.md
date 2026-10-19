@@ -1,6 +1,7 @@
 # Compatibility baseline
 
-Status date: 2026-10-12 (local probe on Apple M3, macOS 14.6).
+Status date: 2026-10-12 (local probe on Apple M3, macOS 14.6), updated 2026-10-19 with the
+v0.1 ACT transfer evaluation (see "Current evidence").
 
 Breakpoint evaluates pretrained policies in simulation. This document records one
 explicit Python / LeRobot / simulator stack and what was actually verified for
@@ -109,7 +110,7 @@ This project does **not** claim physical-robot or remote-hardware experiment run
 
 | Candidate | Hub revision (pinned) | Env | loaded | ran | reproduced | camera (impl / synthetic / sim) | L=0 (impl / synthetic / sim) | ONNX FP32 | device profile |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **yes** (2-ep CPU L=0) | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **yes** (export smoke) | **unverified** (no retained HW profile) |
+| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **yes** (v0.1: 600 episodes, CPU, ONNX FP32) | **no** (not run at card scale with upstream eval) | yes / yes / **yes** | yes / yes / **yes** | **yes** (export validation v2; 25/30 baseline) | **yes** (laptop-m3, rpi5; Pi throttled) |
 | ACT ALOHA insertion | `2bd896d0…` | AlohaInsertion-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unverified** | not attempted |
 | Diffusion PushT | `202c8695…` | PushT-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unsupported** | **unsupported** (ORT) |
 
@@ -148,7 +149,30 @@ Insertion uses the same ACT layout; success is reward == 4 when peg contacts pin
 PushT (card / `gym-pusht`): image `(3,96,96)`, state `(2,)`, `n_obs_steps=2`,
 horizon 16 / `n_action_steps=8`, success if coverage ≥ 0.95; actions in `[0, 512]^2`.
 
-## Evidence (ACT transfer)
+## Current evidence: ACT transfer v0.1 (2026-10-19)
+
+Source: [`benchmarks/act-transfer/v1`](../benchmarks/act-transfer/v1/README.md) (packaged
+from the completed full run). Simulation only.
+
+| Item | Evidence |
+| --- | --- |
+| Environment boundary | MuJoCo 2.3.7 renders AlohaTransferCube on macOS 14 arm64 through the GLFW setting in `prepare_mujoco_macos_gl()`; 600 episode records ran with 0 runtime errors |
+| Host | CPU (`CPUExecutionProvider`, intra-op 4, inter-op 1); not MPS |
+| Interpreter and packages | Python 3.11.17, torch 2.6.0, gymnasium 0.29.1, gym-aloha 0.1.1, mujoco 2.3.7, dm-control 1.0.14, onnxruntime 1.22.1, numpy 2.4.6, opencv 5.0.0 (Python, opencv, and numpy are recorded in run provenance; the rest are the installed versions at packaging time) |
+| Models | ONNX FP32 `27bf9278030e…` (export validation v2 passed); static QDQ INT8 `792e9adc992405…` ran in all 30 episodes, no FP32 numerical parity required, full-model INT8 not claimed |
+| Baseline | 25/30 (83.3%) at ONNX FP32, native image, 0 ms. Not a card-scale reproduction (card: 83% over 500 CUDA FP32 episodes), so the **reproduced** gate stays open |
+| Camera and L=0 (simulation) | Resolution, JPEG, and 0 ms baseline conditions ran with 30 paired episodes each |
+| Device profiles | `laptop-m3` and `rpi5`, 1000 timed samples each. The Pi reported throttling in most telemetry samples; cooling and power not recorded |
+| Not run | ACT insertion, Diffusion PushT, H.264 |
+
+The interpreter was 3.11.17; the pin table above lists 3.11.14 from the earlier probe.
+
+## Earlier probe evidence (ACT transfer, 2026-10-12)
+
+The sections below record the first probe on a host where the environment did not
+construct. They are kept as history. The `ran` blocker described in them is superseded for
+ACT transfer by the evidence above.
+
 
 ### loaded — yes
 
@@ -236,8 +260,9 @@ episode. Gate remains open.
 
 ## Unresolved problems
 
-1. **OpenGL / MuJoCo on this agent host** — mujoco 2.3.7 cannot create a GL
-   context here; blocks `ran` and `reproduced` for ALOHA.
+1. **OpenGL / MuJoCo on the probe host** — mujoco 2.3.7 could not create a GL
+   context there. Resolved for ACT transfer on macOS 14 arm64 by the GLFW
+   setting (see Current evidence); `reproduced` remains open.
 2. **Hub main vs card LeRobot** — current Hub configs need LeRobot ≥ PR #812;
    cards still advertise training at `3c0a209`. Baseline uses older Hub
    revisions for schema match.
@@ -254,7 +279,7 @@ episode. Gate remains open.
    Reproduction should prefer CUDA to match the card, or document the effective
    device separately.
 
-## Smallest next step (gate open)
+## Smallest next step (card-scale reproduction gate open)
 
 On a machine where MuJoCo can open a GL context (typical interactive macOS
 session or Linux with EGL/OSMesa):

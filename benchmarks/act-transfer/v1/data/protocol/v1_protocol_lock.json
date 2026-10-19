@@ -1,0 +1,176 @@
+{
+  "artifacts": {
+    "export_dir": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1",
+    "fp32_external_weights": [],
+    "fp32_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/act_chunk_fp32.onnx",
+    "fp32_recipe_id": "torch_onnx_export_fp32_opset17",
+    "fp32_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+    "int8_detail": null,
+    "int8_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/act_chunk_int8_qdq.onnx",
+    "int8_sha256": "792e9adc992405676317200cfa199176280be1eff152800604af4af7dac3b035",
+    "int8_status": "ok",
+    "profile_identities": {
+      "laptop-m3": {
+        "candidate": "act_aloha_transfer",
+        "chunk_horizon": 100,
+        "corpus_hash": "ce5cd7ce7967f6f0d0e0cb97683e140faa03b1868f79211c9b5acd089833f621",
+        "device_label": "laptop-m3",
+        "input_shapes": {
+          "observation_images_top": [
+            1,
+            3,
+            480,
+            640
+          ],
+          "observation_state": [
+            1,
+            14
+          ]
+        },
+        "inter_op_num_threads": 1,
+        "intra_op_num_threads": 4,
+        "model_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+        "precision_recipe": "torch_onnx_export_fp32_opset17",
+        "runtime_provider": [
+          "CPUExecutionProvider"
+        ],
+        "schema_version": 1,
+        "timed_boundary": "ort_session_run_action_chunk",
+        "variant_label": "onnx_fp32"
+      },
+      "rpi5": {
+        "candidate": "act_aloha_transfer",
+        "chunk_horizon": 100,
+        "corpus_hash": "ce5cd7ce7967f6f0d0e0cb97683e140faa03b1868f79211c9b5acd089833f621",
+        "device_label": "rpi5",
+        "input_shapes": {
+          "observation_images_top": [
+            1,
+            3,
+            480,
+            640
+          ],
+          "observation_state": [
+            1,
+            14
+          ]
+        },
+        "inter_op_num_threads": 1,
+        "intra_op_num_threads": 4,
+        "model_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+        "precision_recipe": "torch_onnx_export_fp32_opset17",
+        "runtime_provider": [
+          "CPUExecutionProvider"
+        ],
+        "schema_version": 1,
+        "timed_boundary": "ort_session_run_action_chunk",
+        "variant_label": "onnx_fp32"
+      }
+    },
+    "profiles": {
+      "laptop-m3": "/Users/mertogul/Desktop/breakpoint-1/profiles/laptop-m3/fp32/act_aloha_transfer__onnx_fp32__laptop-m3__27bf9278030e.json",
+      "rpi5": "/Users/mertogul/Desktop/breakpoint-1/profiles/rpi5/fp32/act_aloha_transfer__onnx_fp32__rpi5__27bf9278030e.json"
+    }
+  },
+  "baseline_reuse": {
+    "by_explicit_reference_only": true,
+    "enabled": true,
+    "fingerprint": {
+      "image_mode": "native",
+      "latency_s": 0.0,
+      "no_device_profile": true,
+      "variant_label": "onnx_fp32"
+    }
+  },
+  "candidate": "act_aloha_transfer",
+  "host": {
+    "compute_device": "cpu",
+    "inter_op_num_threads": 1,
+    "intra_op_num_threads": 4,
+    "ort_providers": [
+      "CPUExecutionProvider"
+    ]
+  },
+  "phase": "full",
+  "phase_config": {
+    "device_profiles": [
+      "laptop-m3",
+      "rpi5"
+    ],
+    "env_seed_start": 5000,
+    "isolate_axes": true,
+    "jpeg_qualities": [
+      "bypass",
+      95,
+      75,
+      50,
+      25,
+      10
+    ],
+    "latency_ms": [
+      0,
+      40,
+      80,
+      160,
+      320,
+      640
+    ],
+    "n_episodes": 30,
+    "native_bypass_is_not_jpeg_quality_100": true,
+    "note": "Isolated axis sweeps; confirmation with fresh seeds stays separate.",
+    "phase": "exploratory",
+    "policy_seed_offset": 10000,
+    "precision_variants": [
+      "onnx_fp32",
+      "int8"
+    ],
+    "resolution_hw": [
+      [
+        480,
+        640
+      ],
+      [
+        240,
+        320
+      ],
+      [
+        120,
+        160
+      ],
+      [
+        60,
+        80
+      ]
+    ]
+  },
+  "protocol": "v0.1",
+  "scheduler": {
+    "chunk_arrival_policy": "discard_stale",
+    "latency_end_of_trace": "fail",
+    "run_conditions_sequentially": true
+  },
+  "schema_version": 1,
+  "source_revision": {
+    "archive_context": false,
+    "dirty": true,
+    "kind": "git",
+    "revision": "2754b60dc50d6dbf1ca76325ee40160a0b262a0a",
+    "status_porcelain": "?? .cursor/\n?? profiles/laptop-m3/\n?? profiles/rpi5/\n"
+  },
+  "statistics": {
+    "baseline_success_floor": 0.5,
+    "bootstrap_seed": 20261012,
+    "breakpoint_ratio": 0.8,
+    "confirmation_fresh_seeds_separate": true,
+    "coverage": "pointwise",
+    "n_bootstrap": 2000
+  },
+  "trace_window": {
+    "design": "contiguous_evenly_spaced_starts",
+    "end_of_trace": "fail",
+    "formula": "floor(i*(N-32)/(n_episodes-1))",
+    "length": 32,
+    "not_block_resample": true,
+    "not_continuous_full_trace_replay": true
+  }
+}

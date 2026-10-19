@@ -1,0 +1,2086 @@
+{
+  "bundle_identity": {
+    "chunk_horizon": 100,
+    "corpus_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/corpus_eval.npz",
+    "export_dir": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1",
+    "external_weights": [],
+    "hub_revision": "9e93545744656e57d20f8b2d631d5d72544002ce",
+    "input_shapes": {
+      "observation_images_top": [
+        1,
+        3,
+        480,
+        640
+      ],
+      "observation_state": [
+        1,
+        14
+      ]
+    },
+    "model_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/act_chunk_fp32.onnx",
+    "model_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+    "recipe_id": "torch_onnx_export_fp32_opset17",
+    "reference_chunks_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/eval_chunks_onnx_fp32.npz",
+    "validation_passed": true,
+    "variant_label": "onnx_fp32"
+  },
+  "candidate": "act_aloha_transfer",
+  "device_label": "laptop-m3",
+  "ended_wall_utc": "2026-10-18T23:52:54.341112+00:00",
+  "error": null,
+  "hardware_setup": {
+    "cooling_note": null,
+    "cpu_count_logical": 8,
+    "power_note": null
+  },
+  "ort_settings": {
+    "inter_op_num_threads": 1,
+    "intra_op_num_threads": 4,
+    "providers": [
+      "CPUExecutionProvider"
+    ]
+  },
+  "packages": [
+    {
+      "name": "absl-py",
+      "version": "2.5.1"
+    },
+    {
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1"
+    },
+    {
+      "name": "aiohttp",
+      "version": "3.14.5"
+    },
+    {
+      "name": "aiosignal",
+      "version": "1.4.0"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0"
+    },
+    {
+      "name": "anyio",
+      "version": "4.15.1"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0"
+    },
+    {
+      "name": "av",
+      "version": "18.1.0"
+    },
+    {
+      "name": "breakpoint-eval",
+      "version": "0.1.0"
+    },
+    {
+      "name": "breakpoint-eval",
+      "version": "0.1.0"
+    },
+    {
+      "name": "cachebox",
+      "version": "5.2.3"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2"
+    },
+    {
+      "name": "click",
+      "version": "8.5.0"
+    },
+    {
+      "name": "cloudpickle",
+      "version": "3.1.2"
+    },
+    {
+      "name": "coloredlogs",
+      "version": "15.0.1"
+    },
+    {
+      "name": "contourpy",
+      "version": "1.3.3"
+    },
+    {
+      "name": "cycler",
+      "version": "0.12.1"
+    },
+    {
+      "name": "datasets",
+      "version": "5.1.0"
+    },
+    {
+      "name": "deepdiff",
+      "version": "9.1.0"
+    },
+    {
+      "name": "diffusers",
+      "version": "0.41.0"
+    },
+    {
+      "name": "dill",
+      "version": "0.4.1"
+    },
+    {
+      "name": "dm-control",
+      "version": "1.0.14"
+    },
+    {
+      "name": "dm-env",
+      "version": "1.6"
+    },
+    {
+      "name": "dm-tree",
+      "version": "0.1.10"
+    },
+    {
+      "name": "draccus",
+      "version": "0.9.3"
+    },
+    {
+      "name": "einops",
+      "version": "0.8.2"
+    },
+    {
+      "name": "Farama-Notifications",
+      "version": "0.0.6"
+    },
+    {
+      "name": "filelock",
+      "version": "4.1.1"
+    },
+    {
+      "name": "flatbuffers",
+      "version": "25.12.19"
+    },
+    {
+      "name": "fonttools",
+      "version": "4.67.0"
+    },
+    {
+      "name": "frozenlist",
+      "version": "1.8.0"
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.7.0"
+    },
+    {
+      "name": "glfw",
+      "version": "2.10.2"
+    },
+    {
+      "name": "googleapis-common-protos",
+      "version": "1.75.5"
+    },
+    {
+      "name": "gym-aloha",
+      "version": "0.1.1"
+    },
+    {
+      "name": "gym-pusht",
+      "version": "0.1.5"
+    },
+    {
+      "name": "gymnasium",
+      "version": "0.29.1"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0"
+    },
+    {
+      "name": "hf-xet",
+      "version": "1.7.0"
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9"
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1"
+    },
+    {
+      "name": "huggingface_hub",
+      "version": "1.33.0"
+    },
+    {
+      "name": "humanfriendly",
+      "version": "10.0"
+    },
+    {
+      "name": "idna",
+      "version": "3.20"
+    },
+    {
+      "name": "ImageIO",
+      "version": "2.38.1"
+    },
+    {
+      "name": "imageio-ffmpeg",
+      "version": "0.6.0"
+    },
+    {
+      "name": "importlib_metadata",
+      "version": "9.0.1"
+    },
+    {
+      "name": "iniconfig",
+      "version": "2.3.1"
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.1.6"
+    },
+    {
+      "name": "jsonlines",
+      "version": "4.0.0"
+    },
+    {
+      "name": "kiwisolver",
+      "version": "1.5.1"
+    },
+    {
+      "name": "labmaze",
+      "version": "1.0.6"
+    },
+    {
+      "name": "lazy-loader",
+      "version": "0.6"
+    },
+    {
+      "name": "lxml",
+      "version": "6.1.3"
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.4"
+    },
+    {
+      "name": "matplotlib",
+      "version": "3.10.9"
+    },
+    {
+      "name": "mergedeep",
+      "version": "1.3.4"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0"
+    },
+    {
+      "name": "mujoco",
+      "version": "2.3.7"
+    },
+    {
+      "name": "multidict",
+      "version": "7.1.0"
+    },
+    {
+      "name": "multiprocess",
+      "version": "0.70.19"
+    },
+    {
+      "name": "mypy_extensions",
+      "version": "1.1.0"
+    },
+    {
+      "name": "networkx",
+      "version": "3.6.1"
+    },
+    {
+      "name": "numpy",
+      "version": "2.4.6"
+    },
+    {
+      "name": "onnx",
+      "version": "1.18.0"
+    },
+    {
+      "name": "onnxruntime",
+      "version": "1.22.1"
+    },
+    {
+      "name": "opencv-python",
+      "version": "5.0.0.93"
+    },
+    {
+      "name": "opentelemetry-api",
+      "version": "1.45.1"
+    },
+    {
+      "name": "opentelemetry-exporter-http-transport",
+      "version": "0.66b1"
+    },
+    {
+      "name": "opentelemetry-exporter-otlp-common",
+      "version": "0.66b1"
+    },
+    {
+      "name": "opentelemetry-exporter-otlp-proto-common",
+      "version": "1.45.1"
+    },
+    {
+      "name": "opentelemetry-exporter-otlp-proto-http",
+      "version": "1.45.1"
+    },
+    {
+      "name": "opentelemetry-proto",
+      "version": "1.45.1"
+    },
+    {
+      "name": "opentelemetry-sdk",
+      "version": "1.45.1"
+    },
+    {
+      "name": "opentelemetry-semantic-conventions",
+      "version": "0.66b1"
+    },
+    {
+      "name": "orderly-set",
+      "version": "5.5.0"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3"
+    },
+    {
+      "name": "pandas",
+      "version": "3.0.6"
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0"
+    },
+    {
+      "name": "platformdirs",
+      "version": "4.13.0"
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0"
+    },
+    {
+      "name": "propcache",
+      "version": "0.5.4"
+    },
+    {
+      "name": "protobuf",
+      "version": "7.36.2"
+    },
+    {
+      "name": "psutil",
+      "version": "7.2.2"
+    },
+    {
+      "name": "pyarrow",
+      "version": "26.0.0"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.11"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.14.1"
+    },
+    {
+      "name": "pydantic_core",
+      "version": "2.50.1"
+    },
+    {
+      "name": "pygame",
+      "version": "2.6.1"
+    },
+    {
+      "name": "Pygments",
+      "version": "2.21.0"
+    },
+    {
+      "name": "pymunk",
+      "version": "7.3.1"
+    },
+    {
+      "name": "PyOpenGL",
+      "version": "3.1.10"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.3"
+    },
+    {
+      "name": "pytest",
+      "version": "9.1.1"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3"
+    },
+    {
+      "name": "pyyaml-include",
+      "version": "1.4.1"
+    },
+    {
+      "name": "regex",
+      "version": "2026.9.29"
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2"
+    },
+    {
+      "name": "ruff",
+      "version": "0.17.0"
+    },
+    {
+      "name": "safetensors",
+      "version": "0.8.0"
+    },
+    {
+      "name": "scikit-image",
+      "version": "0.26.0"
+    },
+    {
+      "name": "scipy",
+      "version": "1.17.1"
+    },
+    {
+      "name": "setuptools",
+      "version": "84.0.0"
+    },
+    {
+      "name": "shapely",
+      "version": "2.2.0"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0"
+    },
+    {
+      "name": "sympy",
+      "version": "1.13.1"
+    },
+    {
+      "name": "termcolor",
+      "version": "3.3.0"
+    },
+    {
+      "name": "tifffile",
+      "version": "2026.3.3"
+    },
+    {
+      "name": "toml",
+      "version": "0.10.2"
+    },
+    {
+      "name": "torch",
+      "version": "2.6.0"
+    },
+    {
+      "name": "torchvision",
+      "version": "0.21.0"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.70.1"
+    },
+    {
+      "name": "typing-inspect",
+      "version": "0.9.0"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0"
+    },
+    {
+      "name": "wandb",
+      "version": "0.30.0"
+    },
+    {
+      "name": "wrapt",
+      "version": "2.5.0"
+    },
+    {
+      "name": "xxhash",
+      "version": "4.0.1"
+    },
+    {
+      "name": "yarl",
+      "version": "1.25.1"
+    },
+    {
+      "name": "zipp",
+      "version": "4.1.1"
+    }
+  ],
+  "profile_json": "/Users/mertogul/Desktop/breakpoint-1/profiles/laptop-m3/fp32/act_aloha_transfer__onnx_fp32__laptop-m3__27bf9278030e.json",
+  "run_id": "d54994a0-66e1-4ac8-a083-ffa7fec1790c",
+  "runtime_versions": {
+    "available_providers": [
+      "CoreMLExecutionProvider",
+      "AzureExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "onnx": "1.18.0",
+    "onnxruntime": "1.22.1",
+    "platform": "macOS-14.6-arm64-arm-64bit",
+    "python": "3.11.17"
+  },
+  "source_revision": {
+    "archive_context": false,
+    "dirty": true,
+    "kind": "git",
+    "revision": "badf8941ac97bae6b22da2d35bea523ccee94361",
+    "status_porcelain": "?? .cursor/\n?? profiles/laptop-m3/\n"
+  },
+  "started_wall_utc": "2026-10-18T23:50:53.985307+00:00",
+  "telemetry": {
+    "after": {
+      "boot_id": {
+        "available": false,
+        "boot_id": null,
+        "error": "boot_id file absent"
+      },
+      "temperature": {
+        "available": false,
+        "command": [
+          "measure_temp"
+        ],
+        "error": "vcgencmd not found",
+        "stdout": null
+      },
+      "throttled": {
+        "available": false,
+        "command": [
+          "get_throttled"
+        ],
+        "error": "vcgencmd not found",
+        "stdout": null
+      },
+      "wall_utc": "2026-10-18T23:52:54.340876+00:00"
+    },
+    "before": {
+      "boot_id": {
+        "available": false,
+        "boot_id": null,
+        "error": "boot_id file absent"
+      },
+      "temperature": {
+        "available": false,
+        "command": [
+          "measure_temp"
+        ],
+        "error": "vcgencmd not found",
+        "stdout": null
+      },
+      "throttled": {
+        "available": false,
+        "command": [
+          "get_throttled"
+        ],
+        "error": "vcgencmd not found",
+        "stdout": null
+      },
+      "wall_utc": "2026-10-18T23:50:54.035014+00:00"
+    },
+    "during": {
+      "failures": [],
+      "interval_s": 2.0,
+      "n_samples": 61,
+      "note": "Sampled outside ORT timed region; missing observations not fabricated",
+      "samples": [
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:50:54.035229+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:50:56.040827+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:50:58.041838+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:00.046092+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:02.050025+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:04.055359+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:06.060843+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:08.062348+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:10.067828+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:12.071338+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:14.076717+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:16.078506+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:18.080944+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:20.086405+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:22.089653+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:24.093957+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:26.099284+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:28.104595+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:30.110088+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:32.115537+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:34.121028+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:36.129414+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:38.138592+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:40.143243+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:42.146773+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:44.153972+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:46.160196+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:48.164318+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:50.171511+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:52.178497+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:54.180810+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:56.187436+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:51:58.189842+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:00.192133+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:02.198391+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:04.200290+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:06.206233+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:08.211231+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:10.214186+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:12.219961+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:14.225044+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:16.226055+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:18.231814+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:20.237537+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:22.240891+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:24.244449+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:26.245908+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:28.248481+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:30.249295+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:32.250848+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:34.252131+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:36.257279+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:38.262735+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:40.267838+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:42.272021+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:44.272683+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:46.275121+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:48.276475+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:50.277897+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:52.282779+00:00"
+        },
+        {
+          "boot_id": {
+            "available": false,
+            "boot_id": null,
+            "error": "boot_id file absent"
+          },
+          "temperature": {
+            "available": false,
+            "command": [
+              "measure_temp"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "throttled": {
+            "available": false,
+            "command": [
+              "get_throttled"
+            ],
+            "error": "vcgencmd not found",
+            "stdout": null
+          },
+          "wall_utc": "2026-10-18T23:52:54.288262+00:00"
+        }
+      ]
+    }
+  }
+}

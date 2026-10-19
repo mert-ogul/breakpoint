@@ -1,0 +1,30 @@
+{
+  "rule": "Take the most severe tested constant delay (640 ms) against the 0 ms baseline of the same latency plan. Among seeds where the baseline succeeded and the stress episode did not, use the lowest env seed. No other seeds were run or compared.",
+  "disclosure": "Selected example, not a typical episode. Aggregate results are shown alongside.",
+  "seed": 5000,
+  "policy_rng_seed": 15000,
+  "n_seeds": 30,
+  "seeds_baseline_succeeded_stress_did_not": [
+    5000,
+    5002,
+    5003,
+    5005,
+    5006,
+    5010,
+    5013,
+    5014,
+    5017,
+    5021,
+    5024,
+    5026,
+    5029
+  ],
+  "seeds_baseline_did_not_succeed_stress_did": [
+    5023,
+    5027
+  ],
+  "baseline_successes": 25,
+  "stress_successes": 14,
+  "baseline_record": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+  "stress_record": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_640/run_report.json"
+}
