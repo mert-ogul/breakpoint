@@ -4,11 +4,11 @@
 # Use only for `breakpoint profile` against an already-exported ONNX graph +
 # recorded corpus. Do not install requirements-simulation.txt on this profile.
 #
-#   uv venv --python 3.11 .venv-pi
-#   source .venv-pi/bin/activate
-#   uv pip install -r requirements-pi-profile.txt
-#   uv pip install -e '.[onnx]'
-#   uv pip check
+#   python3.11 -m venv .venv
+#   .venv/bin/python -m pip install -r requirements-pi-profile.txt -e '.[onnx]'
+#   .venv/bin/python -m pip check
+#
+# Checked on macOS arm64 only; the saved Pi profile's package list is in the benchmark data.
 #
 # Pins match requirements-onnx.txt (exercised in this repo's ONNX/profile tests).
 -r requirements-onnx.txt

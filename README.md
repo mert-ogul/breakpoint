@@ -1,98 +1,109 @@
 # Breakpoint
 
-Breakpoint measures how a pretrained robot policy's task success changes when simulated delay, camera quality, or numeric precision degrade, using paired seeds and reported uncertainty.
+Breakpoint measures how a pretrained robot policy's task success in simulation changes under controlled stress (added inference delay, lower camera quality, numeric precision, replayed device latency), using paired seeds and reported uncertainty.
 
 ![Baseline and +640 ms delay, same seed, side by side](benchmarks/act-transfer/deployment-stress/media/comparison.gif)
 
-*Selected example (env seed 5000), not a typical episode: the same ACT policy and seed with no added delay (success at 5.68 s) and with +640 ms inference delay (timeout at 8.00 s). Across all 30 seeds the baseline succeeded 25 times and the +640 ms condition 14 times. Real simulation footage; no physical robot. [MP4](benchmarks/act-transfer/deployment-stress/media/comparison.mp4)*
+*Selected example (env seed 5000), not a typical episode: the same ACT policy and seed with no added delay (success at 5.68 s) and with +640 ms inference delay (timeout at 8.00 s). Panels are aligned by simulation time; each frame is every fourth 20 ms control step. Across all 30 seeds the baseline succeeded 25 times and the +640 ms condition 14 times. Simulation footage, no physical robot. [MP4](benchmarks/act-transfer/deployment-stress/media/comparison.mp4)*
 
-[Try the example](#try-the-example) · [Reproduce](benchmarks/act-transfer/deployment-stress/REPRODUCE.md) · [Methodology](benchmarks/act-transfer/deployment-stress/METHODOLOGY.md)
-
-## Results
-
-Exploratory ACT deployment stress benchmark. One task: ALOHA TransferCube simulation, pretrained ACT policy
-`lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on CPU. One stress axis changes at a
-time; each condition is 30 paired episodes (env seeds 5000 to 5029). Entries are successes out of 30.
-
-| Stress | Conditions and successes |
-| --- | --- |
-| Constant added delay | 0 ms: 25, 40 ms: 25, 80 ms: 25, 160 ms: 23, 320 ms: 18, 640 ms: 14 |
-| Camera resolution | 480x640 native: 25, 240x320: 26, 120x160: 22, 60x80: 10 |
-| JPEG quality | bypass: 25, q95: 25, q75: 26, q50: 26, q25: 25, q10: 23 |
-| Precision | FP32: 25, static QDQ INT8: 24 |
-| Device latency replay | laptop M3: 24, Raspberry Pi 5: 9 (Pi was throttling while profiled) |
-
-The baseline is 25/30 (83.3%, Wilson 95% interval 66.4% to 92.7%). With a threshold of 0.8 times
-the baseline, the point estimate first falls below it at 320 ms, at 60x80, and under the Pi 5
-replay; no JPEG quality or the INT8 graph fell below it. These are observed points, not exact
-boundaries, and the 320 ms interval includes the threshold. The [full report](benchmarks/act-transfer/deployment-stress/report/index.html)
-has intervals, a per-seed paired outcome matrix, latency traces, and provenance.
+[Try the example](#try-the-example) · [Reproduce the benchmark](benchmarks/act-transfer/deployment-stress/REPRODUCE.md) · [Methodology](benchmarks/act-transfer/deployment-stress/METHODOLOGY.md)
 
 ## Try the example
 
-Renders the saved results with only the report dependencies. No simulator, Torch, network access,
-or model download.
+Renders the saved results from a Git clone. Python 3.11 is the tested version.
 
-```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -e '.[report]'
-.venv/bin/python scripts/render_benchmark.py \
-  --input benchmarks/act-transfer/deployment-stress/data --out /tmp/breakpoint-report
-```
-
-Then open `/tmp/breakpoint-report/index.html`.
-
-## Supported scope
-
-- One task and policy (above), validated ONNX FP32 export, and one static QDQ INT8 comparison.
-- Synthetic constant delay, resolution, and JPEG stress; latency replay from measured laptop and
-  Raspberry Pi 5 FP32 profiles.
-- Tested on macOS 14 arm64 with Python 3.11 and CPU execution. Evidence and pins:
-  [docs/compatibility.md](docs/compatibility.md).
-
-## Installation
-
-There is no package index release; `pip install breakpoint-eval` is not a supported route.
-Install from a Git clone (tested with Python 3.11):
+**1. Install (needs network access).** Run from the clone root. The commands use the virtual
+environment's executables directly, so nothing needs to be activated.
 
 ```bash
 git clone https://github.com/mert-ogul/breakpoint.git
 cd breakpoint
 python3.11 -m venv .venv
+.venv/bin/python -m pip install -e '.[report]'
 ```
 
-| Goal | Command (run with the venv active) |
+**2. Render (offline).** Needs only the report dependencies from step 1: no simulator, Torch,
+network access or model download.
+
+```bash
+.venv/bin/python scripts/render_benchmark.py \
+  --input benchmarks/act-transfer/deployment-stress/data --out /tmp/breakpoint-report
+```
+
+Open `/tmp/breakpoint-report/index.html`. The renderer checks the saved files against their
+SHA-256 manifest and recomputes every count and interval before writing anything.
+
+## Results
+
+ACT deployment stress benchmark: ALOHA TransferCube simulation, pretrained ACT policy
+`lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on CPU. One stress axis changes at a
+time; each condition is 30 paired episodes (env seeds 5000 to 5029). Entries are successes.
+The table is generated from the saved data by `scripts/render_benchmark.py --update-readme README.md`.
+
+<!-- results:start (generated by scripts/render_benchmark.py --update-readme) -->
+| Stress | Conditions and successes (of 30) |
 | --- | --- |
-| Report only | `pip install -e '.[report]'` |
-| Pi or edge ONNX profiling | `pip install -r requirements-pi-profile.txt && pip install -e '.[onnx]'` |
-| Development and offline tests | `pip install -e '.[dev,onnx,report,h264]'` (see [CONTRIBUTING.md](CONTRIBUTING.md)) |
-| Simulator runs (macOS) | see [docs/compatibility.md](docs/compatibility.md) |
+| Constant added delay | 0 ms: 25, 40 ms: 25, 80 ms: 25, 160 ms: 23, 320 ms: 18, 640 ms: 14 |
+| Camera resolution | 480x640 native: 25, 240x320: 26, 120x160: 22, 60x80: 10 |
+| JPEG quality | bypass: 25, q95: 25, q75: 26, q50: 26, q25: 25, q10: 23 |
+| Numeric precision | FP32: 25, INT8 QDQ: 24 |
+| Device latency replay | laptop-m3 replay: 24, rpi5 replay: 9 |
 
-The Pi route installs only ONNX Runtime and NumPy, with no Torch or simulator. It was checked
-on macOS arm64 (`pip check`, `breakpoint profile --help`), not on a Raspberry Pi. The profiling protocol is in
-[docs/benchmark_protocol.md](docs/benchmark_protocol.md).
+- Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
+- Constant added delay: first point below 0.8 x baseline is 320 ms at 18/30 (interval includes threshold).
+- Camera resolution: first point below 0.8 x baseline is 60x80 at 10/30.
+- JPEG quality: no condition fell below 0.8 x baseline.
+- Numeric precision: no condition fell below 0.8 x baseline.
+- Device latency replay: first point below 0.8 x baseline is rpi5 replay at 9/30.
+<!-- results:end -->
 
-An editable checkout writes `outputs/`, `artifacts/`, `vendor/` and `.cache/` inside the clone
-(all git-ignored). A regular (wheel) install never writes into `site-packages`: caches, the
-pinned LeRobot checkout and default artifacts go to `$BREAKPOINT_ROOT` or, if unset,
-`~/.local/share/breakpoint-eval`. Commands that take `--repo-root` or `--output-dir` use them
-explicitly.
+The rpi5 replay uses a profile captured while throttling was reported (see Limitations). These
+are observed points, not exact boundaries. The [full report](benchmarks/act-transfer/deployment-stress/report/index.html)
+has intervals, a per-seed paired outcome matrix, latency traces and provenance.
+
+## Supported configurations
+
+- One task and policy (above), a validated ONNX FP32 export, and one static QDQ INT8 comparison.
+- Constant added delay, camera resolution and JPEG quality; latency replay from measured FP32
+  profiles of a laptop and a Raspberry Pi 5.
+- Evidence comes from macOS 14.6 arm64 (Apple M3) with Python 3.11 on CPU. The saved `rpi5`
+  profile was measured on a Raspberry Pi running Linux aarch64. Other platforms are untested.
+  Pins and history: [docs/compatibility.md](docs/compatibility.md).
+
+Install routes (run from the clone root after `python3.11 -m venv .venv`; there is no package
+index release):
+
+| Goal | Command |
+| --- | --- |
+| Report only | `.venv/bin/python -m pip install -e '.[report]'` |
+| Profile an exported graph on a Pi or other edge device | `.venv/bin/python -m pip install -r requirements-pi-profile.txt -e '.[onnx]'` |
+| Development and offline tests | `.venv/bin/python -m pip install -e '.[dev,onnx,report,h264]'` ([CONTRIBUTING.md](CONTRIBUTING.md)) |
+| Simulator runs | `.venv/bin/python -m pip install -r requirements-simulation.txt -r requirements-onnx.txt -e '.[dev,report]'`, then [docs/compatibility.md](docs/compatibility.md) |
+
+The profiling protocol is in [docs/benchmark_protocol.md](docs/benchmark_protocol.md). An editable
+checkout writes `outputs/`, `artifacts/`, `vendor/` and `.cache/` inside the clone (all
+git-ignored). A wheel install writes to `$BREAKPOINT_ROOT`, or `~/.local/share/breakpoint-eval`
+if unset, never into `site-packages`.
 
 ## Limitations
 
 - Simulation only. Nothing here is a guarantee about a physical robot or deployment.
-- Thirty episodes per condition give wide intervals; the run is exploratory and fresh-seed
-  confirmation has not been done.
-- The Pi 5 profile was captured under reported thermal throttling with cooling and power not
-  recorded.
+- Thirty episodes per condition give wide intervals. The run is exploratory and has not been
+  confirmed with fresh seeds.
+- Pi 5 replay describes one throttled state, not Pi 5 performance in general. The firmware
+  reported throttling or a temperature limit in 391 of 393 telemetry samples (up to 88.9 °C);
+  cooling and power were not recorded, and the board model string was not saved (the device label
+  is `rpi5`, the kernel is a Raspberry Pi 2712 build).
+- `requirements-pi-profile.txt` was checked only on macOS arm64. The package list of the saved Pi
+  run is in `data/profiles/rpi5/profile_run_meta.json`.
 - INT8 is a static QDQ graph, not a full-model INT8 claim, and was not required to match FP32
   numerically.
-- Not covered: other tasks, other policies, H.264, and any claim that these thresholds transfer to
-  another setup.
-- About 390 MB of raw control-step logs are kept locally, not in the repository; hashes are in
-  [`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json).
+- Not covered: other tasks or policies, H.264, and any transfer of these thresholds to another
+  setup.
+- About 570 MB of raw run logs, ONNX graphs and corpora are not in the repository. Sizes and
+  hashes are in [`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json).
 
-## License
+## Contributing and license
 
-Apache License 2.0, see [LICENSE](LICENSE). Upstream projects, the pretrained policy and their
-licenses are listed in [NOTICE](NOTICE). No author or citation metadata is declared yet.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Apache License 2.0, see [LICENSE](LICENSE). Upstream
+projects and the pretrained policy keep their own licenses, listed in [NOTICE](NOTICE).

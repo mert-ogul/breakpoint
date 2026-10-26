@@ -12,3 +12,9 @@ dist/
 build/
 .DS_Store
 vendor/
+.venv-*/
+.env
+.env.*
+.cursor/
+# Measured on a specific machine; the committed copies live under benchmarks/act-transfer/deployment-stress/data/profiles/.
+profiles/*/

@@ -62,11 +62,14 @@ physical robot.
 - The saved resolution summary stored the same `ordered_value` (1.0) for every resolution, so the
   summary orders them by plan order (native, 240x320, 120x160, 60x80), which is mild to severe.
   The saved file is preserved unchanged.
-- The Raspberry Pi 5 profile was captured while the firmware reported throttling for most
-  telemetry samples (temperature up to 88.9 C). Cooling and power were not recorded. The replay
-  therefore describes that throttled state.
+- The `rpi5` profile was measured on Linux aarch64 (Raspberry Pi kernel `6.18.50+rpt-rpi-2712`);
+  the board model string was not saved. The firmware reported throttling active in 304 of 393
+  telemetry samples and a soft temperature limit in 87 more (up to 88.9 C). Cooling and power were
+  not recorded. The replay therefore describes that throttled state, not Pi 5 performance in
+  general. The `laptop-m3` profile has no throttling telemetry (macOS).
 - The run started from code revision `2754b60` with only untracked files present
-  (`.cursor/`, `profiles/`). The Pi profile ran from a source archive rather than a git checkout.
+  (`.cursor/`, `profiles/`). The Pi profile ran from a source archive (revision `badf894`, no git)
+  rather than a git checkout.
 
 ## Not covered
 

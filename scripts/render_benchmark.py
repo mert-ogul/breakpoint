@@ -16,10 +16,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True, help="packaged data directory")
     parser.add_argument("--out", type=Path, required=True, help="output directory for the report")
+    parser.add_argument(
+        "--update-readme",
+        type=Path,
+        help="rewrite the generated results block of this README from the packaged data",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
-        from breakpoint_eval.benchmark_report import ReportValidationError, render_benchmark_report
+        from breakpoint_eval.benchmark_report import (
+            ReportValidationError,
+            render_benchmark_report,
+            update_readme_results,
+        )
         from breakpoint_eval.benchmark_report_data import ReportDataError
     except ModuleNotFoundError as exc:
         if exc.name not in REPORT_EXTRA_MODULES:
@@ -30,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         written = render_benchmark_report(args.input, args.out)
+        if args.update_readme is not None:
+            changed = update_readme_results(args.input, args.update_readme)
+            LOGGER.info("%s %s", args.update_readme, "updated" if changed else "already current")
     except (ReportValidationError, ReportDataError) as exc:
         LOGGER.error("%s", exc)
         return 1

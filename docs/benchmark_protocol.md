@@ -24,26 +24,26 @@ replay.
 ## Profile on device (ONNX-only)
 
 ```bash
-source .venv/bin/activate
-# On Pi: pip install -r requirements-pi-profile.txt  (no torch/sim)
+# On a Pi or other edge device install only requirements-pi-profile.txt and '.[onnx]' (no torch/sim).
+# Record the real power and cooling setup in the notes; the values below are placeholders.
 
-python scripts/profile_device.py \
+.venv/bin/python scripts/profile_device.py \
   --device-label laptop-m3 \
   --export-dir artifacts/export/act-v1 \
   --output-dir profiles/laptop-m3/fp32 \
   --n-warmup 50 \
   --n-measured 1000 \
-  --power-note "AC power" \
-  --cooling-note "passive"
+  --power-note "<power source>" \
+  --cooling-note "<cooling setup>"
 
-python scripts/profile_device.py \
+.venv/bin/python scripts/profile_device.py \
   --device-label rpi5 \
   --export-dir artifacts/export/act-v1 \
   --output-dir profiles/rpi5/fp32 \
   --n-warmup 50 \
   --n-measured 1000 \
-  --power-note "5V official supply" \
-  --cooling-note "active heatsink"
+  --power-note "<power source>" \
+  --cooling-note "<cooling setup>"
 ```
 
 Refuses overwrite of completed output dirs. Propagates real exit codes. When Git
@@ -53,14 +53,12 @@ clean status).
 ## Eval dry-run (validate only)
 
 ```bash
-source .venv/bin/activate
-
-python scripts/run_benchmark.py \
+.venv/bin/python scripts/run_benchmark.py \
   --phase smoke \
   --out outputs/v1/smoke \
   --dry-run
 
-python scripts/run_benchmark.py \
+.venv/bin/python scripts/run_benchmark.py \
   --phase full \
   --out outputs/v1/full \
   --dry-run
@@ -74,18 +72,18 @@ directories or evaluating episodes.
 ```bash
 # Smoke: seeds 3000–3004, policy +10000; baseline, 640 ms, 60x80, JPEG 10,
 # INT8 if runnable, both FP32 device traces.
-python scripts/run_benchmark.py --phase smoke --out outputs/v1/smoke
+.venv/bin/python scripts/run_benchmark.py --phase smoke --out outputs/v1/smoke
 
 # Full: seeds 5000–5029; isolated latency / resolution / JPEG / precision /
 # device-profile axes. Resume matching lock only:
-python scripts/run_benchmark.py --phase full --out outputs/v1/full
-python scripts/run_benchmark.py --phase full --out outputs/v1/full --resume
+.venv/bin/python scripts/run_benchmark.py --phase full --out outputs/v1/full
+.venv/bin/python scripts/run_benchmark.py --phase full --out outputs/v1/full --resume
 ```
 
 Overrides (still identity-strict):
 
 ```bash
-python scripts/run_benchmark.py --phase smoke --out outputs/v1/smoke \
+.venv/bin/python scripts/run_benchmark.py --phase smoke --out outputs/v1/smoke \
   --export-dir PATH/TO/export \
   --profile-laptop PATH/TO/laptop.json \
   --profile-rpi5 PATH/TO/rpi5.json
@@ -98,6 +96,6 @@ seeds stays separate from exploration.
 ## Help
 
 ```bash
-python scripts/run_benchmark.py --help
-python scripts/profile_device.py --help
+.venv/bin/python scripts/run_benchmark.py --help
+.venv/bin/python scripts/profile_device.py --help
 ```

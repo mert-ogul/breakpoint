@@ -1,8 +1,7 @@
 # Simulator / LeRobot feasibility dependency pins (portable).
 # Python: 3.11
 # Install this file for third-party packages, then install this repo separately:
-#   pip install -r requirements-simulation.txt
-#   pip install -e .
+#   .venv/bin/python -m pip install -r requirements-simulation.txt -e .
 # Do not put an absolute editable path here.
 # LeRobot vendor pin (not pip-installed): 3c0a209f9fac4d2a57617e686a7f2a2309144ba2
 # ACT transfer checkpoint revision (schema-compatible): 9e93545744656e57d20f8b2d631d5d72544002ce

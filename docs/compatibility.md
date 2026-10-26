@@ -44,14 +44,14 @@ documented above (`torch==2.6.0`, `gym-aloha==0.1.1`, vendor LeRobot
 
 | Profile | Purpose | Authoritative pins | Install |
 | --- | --- | --- | --- |
-| **macOS Apple Silicon (CPU eval / sim)** | Offline tests + optional MuJoCo/LeRobot runs | `requirements-simulation.txt` + `requirements-onnx.txt` | `uv venv --python 3.11 .venv && uv pip install -r requirements-simulation.txt -r requirements-onnx.txt && uv pip install -e '.[dev,report]' && uv pip check` |
-| **Pi / edge ORT profile** | `breakpoint profile` only | `requirements-pi-profile.txt` (= `requirements-onnx.txt`) | `uv pip install -r requirements-pi-profile.txt && uv pip install -e '.[onnx]' && uv pip check` |
+| **macOS Apple Silicon (CPU eval / sim)** | Offline tests + optional MuJoCo/LeRobot runs | `requirements-simulation.txt` + `requirements-onnx.txt` | `python3.11 -m venv .venv && .venv/bin/python -m pip install -r requirements-simulation.txt -r requirements-onnx.txt -e '.[dev,report]' && .venv/bin/python -m pip check` |
+| **Pi / edge ORT profile** | `breakpoint profile` only | `requirements-pi-profile.txt` (= `requirements-onnx.txt`) | `.venv/bin/python -m pip install -r requirements-pi-profile.txt -e '.[onnx]' && .venv/bin/python -m pip check` |
 
 Mac notes:
 
 - Use the project `.venv` (Python 3.11, arm64). After a successful Mac install,
   `constraints-macos-arm64.txt` records the third-party freeze that passed
-  `uv pip check` on this host (use as `uv pip install -r requirements-simulation.txt -c constraints-macos-arm64.txt` when re-resolving).
+  `uv pip check` on this host (add `-c constraints-macos-arm64.txt` to the `pip install` command above when re-resolving).
 - LeRobot is a **vendor checkout** under `vendor/lerobot@3c0a209…`, not a pip
   package. Reuse an existing pin; never force-checkout over local edits.
   **git-lfs is not required**: checkout uses `git init` + shallow fetch of the
@@ -73,11 +73,11 @@ Pi notes:
 
 | Goal | Commands |
 | --- | --- |
-| Core CLI help only | `pip install -e .` then `breakpoint --help` |
-| Offline unit tests (torch/cv2) | `pip install -e ".[dev]"` — ONNX/report/H.264 tests **skip** without extras (`importorskip` / FFmpeg fixture) |
-| Full offline suite | `pip install -e ".[dev,onnx,report,h264]"` (+ system FFmpeg for H.264 encode) |
-| Simulator / policy runs (Mac) | `pip install -r requirements-simulation.txt` then `pip install -e '.[dev,report]'` (+ vendor LeRobot) |
-| ORT profile (no sim; Mac or Pi) | `pip install -r requirements-pi-profile.txt` then `pip install -e '.[onnx]'` |
+| Core CLI help only | `.venv/bin/python -m pip install -e .` then `.venv/bin/breakpoint --help` |
+| Offline unit tests (torch/cv2) | `.venv/bin/python -m pip install -e ".[dev]"` — ONNX/report/H.264 tests **skip** without extras (`importorskip` / FFmpeg fixture) |
+| Full offline suite | `.venv/bin/python -m pip install -e ".[dev,onnx,report,h264]"` (+ system FFmpeg for H.264 encode) |
+| Simulator / policy runs (Mac) | `.venv/bin/python -m pip install -r requirements-simulation.txt -e '.[dev,report]'` (+ vendor LeRobot) |
+| ORT profile (no sim; Mac or Pi) | `.venv/bin/python -m pip install -r requirements-pi-profile.txt -e '.[onnx]'` |
 
 Do **not** assume `pip install lerobot` (latest) reproduces these cards. Hub issues
 [#2605](https://github.com/huggingface/lerobot/issues/2605) and
@@ -162,7 +162,7 @@ from the completed full run). Simulation only.
 | Models | ONNX FP32 `27bf9278030e…` (export validation v2 passed); static QDQ INT8 `792e9adc992405…` ran in all 30 episodes, no FP32 numerical parity required, full-model INT8 not claimed |
 | Baseline | 25/30 (83.3%) at ONNX FP32, native image, 0 ms. Not a card-scale reproduction (card: 83% over 500 CUDA FP32 episodes), so the **reproduced** gate stays open |
 | Camera and L=0 (simulation) | Resolution, JPEG, and 0 ms baseline conditions ran with 30 paired episodes each |
-| Device profiles | `laptop-m3` and `rpi5`, 1000 timed samples each. The Pi reported throttling in most telemetry samples; cooling and power not recorded |
+| Device profiles | `laptop-m3` (macOS arm64) and `rpi5` (Linux aarch64, Raspberry Pi kernel `6.18.50+rpt-rpi-2712`), 1000 timed samples each. Firmware reported throttling in 304 of 393 Pi telemetry samples and a temperature limit in 87 more (up to 88.9 °C); cooling and power not recorded; board model string not saved. The Pi timings describe that state, not Pi 5 performance in general |
 | Not run | ACT insertion, Diffusion PushT, H.264 |
 
 The interpreter was 3.11.17; the pin table above lists 3.11.14 from the earlier probe.
@@ -287,10 +287,8 @@ session or Linux with EGL/OSMesa):
 1. Create the venv and install the freeze:
 
 ```bash
-uv venv --python 3.11 .venv
-source .venv/bin/activate
-uv pip install -r requirements-simulation.txt
-uv pip install -e .
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements-simulation.txt -e .
 ```
 
 2. Run the short upstream FP32 eval (script clones LeRobot@`3c0a209` as needed):

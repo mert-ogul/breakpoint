@@ -1,5 +1,8 @@
 # Reproduce the ACT export validation
 
+Run commands from the clone root; they use `.venv/bin/...` so no activation is needed.
+Install per the [README](../README.md#supported-configurations) (simulator route).
+
 Pinned stack: LeRobot `3c0a209…`, ACT transfer Hub `9e935457…`,
 `requirements-simulation.txt` + `requirements-onnx.txt`. Do not invent pins.
 
@@ -21,10 +24,9 @@ recipe fallback.
 ## 1. Export FP32 + INT8 (no INT4 / FP16)
 
 ```bash
-source .venv/bin/activate
 export MUJOCO_GL=glfw   # prepare_mujoco_macos_gl also handles Darwin CGL break
 
-breakpoint export \
+.venv/bin/breakpoint export \
   --candidate act_aloha_transfer \
   --device cpu \
   --calibration-seeds 9000,9001,9002,9003,9004,9005,9006,9007 \
@@ -47,7 +49,7 @@ Artifacts:
 ## 2. Closed-loop diagnosis (binds to on-disk FP32 hash)
 
 ```bash
-breakpoint diagnose-closed-loop \
+.venv/bin/breakpoint diagnose-closed-loop \
   --candidate act_aloha_transfer \
   --export-dir outputs/v1/export-act-transfer \
   --output-dir outputs/v1/export-act-transfer-diagnosis \
@@ -59,7 +61,7 @@ breakpoint diagnose-closed-loop \
 ## 3. Write the FP32 export validation
 
 ```bash
-breakpoint write-export-validation \
+.venv/bin/breakpoint write-export-validation \
   --export-dir outputs/v1/export-act-transfer \
   --diagnosis outputs/v1/export-act-transfer-diagnosis/closed_loop_diagnosis.json \
   --output outputs/v1/export-act-transfer/export_validation.json
@@ -73,7 +75,7 @@ incomplete task episodes. Independent trajectory equality is diagnostic only.
 
 ```bash
 # FP32 — requires export_validation.json bound to this graph hash
-python - <<'PY'
+.venv/bin/python - <<'PY'
 from pathlib import Path
 from breakpoint_eval.export_runtime import resolve_onnx_runtime
 root = Path("outputs/v1/export-act-transfer")
@@ -82,7 +84,7 @@ print("fp32", fp32.variant_label, fp32.recipe_id, fp32.model_sha256[:12], fp32.e
 PY
 
 # INT8 — requires export_validation_int8.json (FP32 sidecar must not authorize INT8)
-python - <<'PY'
+.venv/bin/python - <<'PY'
 from pathlib import Path
 from breakpoint_eval.export_runtime import resolve_onnx_runtime
 root = Path("outputs/v1/export-act-transfer")

@@ -136,3 +136,35 @@ except SystemExit as exc:
     )
     assert proc.returncode == 0, proc.stderr
     assert (tmp_path / "out" / "index.html").is_file()
+
+
+def test_readme_results_block_matches_saved_data(tmp_path: Path) -> None:
+    from breakpoint_eval.benchmark_report import (
+        README_RESULTS_END,
+        README_RESULTS_START,
+        load_validated_data,
+        results_markdown,
+        update_readme_results,
+    )
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    start = readme.index(README_RESULTS_START) + len(README_RESULTS_START)
+    committed = readme[start : readme.index(README_RESULTS_END)].strip("\n")
+    assert committed == results_markdown(load_validated_data(DATA))
+
+    stale = tmp_path / "README.md"
+    stale.write_text(
+        f"{README_RESULTS_START}\nSTALE-TABLE\n{README_RESULTS_END}\n", encoding="utf-8"
+    )
+    assert update_readme_results(DATA, stale) is True
+    assert update_readme_results(DATA, stale) is False
+    assert "STALE-TABLE" not in stale.read_text(encoding="utf-8")
+
+
+def test_update_readme_requires_markers(tmp_path: Path) -> None:
+    from breakpoint_eval.benchmark_report import update_readme_results
+
+    readme = tmp_path / "README.md"
+    readme.write_text("# no markers\n", encoding="utf-8")
+    with pytest.raises(ReportValidationError, match="markers"):
+        update_readme_results(DATA, readme)
