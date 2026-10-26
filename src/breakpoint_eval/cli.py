@@ -20,6 +20,13 @@ from breakpoint_eval.experiment_plan import (
     ExperimentAxis,
     PlanPhase,
 )
+from breakpoint_eval.operation_summary import (
+    closed_loop_diagnosis_summary,
+    export_exit_code,
+    export_summary,
+    export_validation_summary,
+    profile_summary,
+)
 from breakpoint_eval.seed_list import build_seeds, parse_seed_list
 
 # Keep argparse defaults free of modules that import numpy/torch.
@@ -559,6 +566,18 @@ def _build_image_cfg(args: argparse.Namespace) -> Any:
     )
 
 
+def _h264_available() -> bool:
+    """Log the install guidance and return False when FFmpeg/libx264 is unusable."""
+    from breakpoint_eval.h264_ffmpeg import H264UnsupportedError, require_ffmpeg_h264
+
+    try:
+        require_ffmpeg_h264()
+    except H264UnsupportedError as exc:
+        logging.error("%s", exc)
+        return False
+    return True
+
+
 def _image_sweep_cfgs(kind: str) -> list[tuple[str, Any]]:
     from breakpoint_eval.camera_degrade import (
         h264_smoke_configs,
@@ -594,30 +613,7 @@ def _cmd_write_export_validation(args: argparse.Namespace) -> int:
         return 2
     payload = json.loads(path.read_text(encoding="utf-8"))
     print(path)
-    print(
-        json.dumps(
-            {
-                "validation": str(path),
-                "schema_version": payload.get("schema_version"),
-                "passed": payload.get("passed"),
-                "numerical_parity_passed": (payload.get("numerical_parity") or {}).get("passed"),
-                "task_outcomes_passed": (payload.get("closed_loop_task_outcomes") or {}).get(
-                    "passed"
-                ),
-                "independent_trajectory_similar": (payload.get("independent_trajectory") or {}).get(
-                    "similar"
-                ),
-                "independent_trajectory_gates_deployment": (
-                    payload.get("independent_trajectory") or {}
-                ).get("gates_deployment_validation"),
-                "not_passed_reasons": payload.get("not_passed_reasons"),
-                "model_sha256": (payload.get("binding") or {}).get("model_sha256"),
-                "corpus_eval_sha256": (payload.get("binding") or {}).get("corpus_eval_sha256"),
-                "code_revision": (payload.get("binding") or {}).get("code_revision"),
-                "code_dirty": (payload.get("binding") or {}).get("code_dirty"),
-            }
-        )
-    )
+    print(json.dumps(export_validation_summary(path, payload)))
     return 0 if payload.get("passed") is True else 1
 
 
@@ -644,39 +640,8 @@ def _cmd_diagnose_closed_loop(args: argparse.Namespace) -> int:
         logging.error("%s", exc)
         return 2
     payload = json.loads(path.read_text(encoding="utf-8"))
-    independent = payload.get("independent_rollouts") or {}
-    shadow = payload.get("same_observation_shadow") or []
     print(path)
-    print(
-        json.dumps(
-            {
-                "diagnosis": str(path),
-                "independent_passed": independent.get("passed"),
-                "independent_failure_kind": independent.get("failure_kind"),
-                "independent_seeds": [
-                    {
-                        "seed": s.get("seed"),
-                        "passed": s.get("passed"),
-                        "first_divergence_step": s.get("first_divergence_step"),
-                        "max_abs_error": s.get("max_abs_error"),
-                        "pytorch_n_steps": s.get("pytorch_n_steps"),
-                        "onnx_n_steps": s.get("onnx_n_steps"),
-                        "outcomes": [s.get("pytorch_outcome"), s.get("onnx_outcome")],
-                    }
-                    for s in (independent.get("seeds") or [])
-                ],
-                "shadow_max_abs_error": max((s.get("max_abs_error") or 0.0) for s in shadow)
-                if shadow
-                else None,
-                "repeatability_all_passed": all(
-                    r.get("passed") for r in (payload.get("pytorch_repeatability") or [])
-                ),
-                "validation_gate_unchanged": (payload.get("interpretation") or {}).get(
-                    "validation_gate_unchanged"
-                ),
-            }
-        )
-    )
+    print(json.dumps(closed_loop_diagnosis_summary(path, payload)))
     return 0
 
 
@@ -711,47 +676,9 @@ def _cmd_export(args: argparse.Namespace) -> int:
         logging.error("%s", exc)
         return 2
     payload = json.loads(manifest.read_text(encoding="utf-8"))
-    validation = payload.get("export_validation") or {}
-    closed = payload.get("closed_loop_onnx_fp32_vs_pytorch") or {}
     print(manifest)
-    print(
-        json.dumps(
-            {
-                "manifest": str(manifest),
-                "onnx_fp32_parity_passed": payload.get("comparisons", {})
-                .get("onnx_fp32_vs_pytorch_fp32", {})
-                .get("passed"),
-                "export_validation_passed": validation.get("passed"),
-                "diagnostic_parity_ok": validation.get("diagnostic_parity_ok"),
-                "closed_loop_completed": validation.get("closed_loop_completed"),
-                "closed_loop_passed": validation.get("closed_loop_passed"),
-                "closed_loop_failure_kind": validation.get("closed_loop_failure_kind")
-                or closed.get("failure_kind"),
-                "corpus_suitable_as_deployment_evidence": validation.get(
-                    "corpus_suitable_as_deployment_evidence"
-                ),
-                "not_passed_reasons": validation.get("not_passed_reasons"),
-                "variants": [
-                    {"label": v["label"], "status": v["status"], "recipe_id": v["recipe_id"]}
-                    for v in payload.get("variants", [])
-                ],
-                "closed_loop_status": closed.get("status"),
-            }
-        )
-    )
-    # Process exit: fail open-loop or requested closed-loop problems. Synthetic /
-    # skipped-closed-loop diagnostic exports may leave passed=false without exiting 1.
-    open_loop_ok = bool(
-        payload.get("comparisons", {}).get("onnx_fp32_vs_pytorch_fp32", {}).get("passed")
-    )
-    if validation.get("open_loop_fp32_parity_passed") is False or not open_loop_ok:
-        return 1
-    if validation.get("closed_loop_requested"):
-        if validation.get("closed_loop_completed") is not True:
-            return 1
-        if validation.get("closed_loop_passed") is not True:
-            return 1
-    return 0
+    print(json.dumps(export_summary(manifest, payload)))
+    return export_exit_code(payload)
 
 
 def _resolve_latency_profile(
@@ -839,205 +766,114 @@ def _cmd_profile(args: argparse.Namespace) -> int:
         logging.error("%s", exc)
         return 2
     payload = json.loads(path.read_text(encoding="utf-8"))
-    summary = payload.get("measurements", {}).get("summary", {})
     print(path)
-    print(
-        json.dumps(
-            {
-                "profile": str(path),
-                "device_label": payload.get("device_label"),
-                "n_warmup": payload.get("measurements", {}).get("n_warmup"),
-                "n_measured": summary.get("count"),
-                "median_s": summary.get("median_s"),
-                "p95_s": summary.get("p95_s"),
-                "p99_s": summary.get("p99_s"),
-                "validation_passed": payload.get("output_validation", {}).get("passed"),
-                "timed_boundary": payload.get("timed_boundary"),
-            }
-        )
-    )
+    print(json.dumps(profile_summary(path, payload)))
     return 0
 
 
-def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
-    model = args.model or args.candidate
-    if model is None:
-        parser.error("provide a positional MODEL or --candidate")
-    if args.model and args.candidate and args.model != args.candidate:
-        # Allow hub repo positional with --candidate omitted; conflict if both differ.
-        from breakpoint_eval.model_resolve import resolve_model_to_candidate
-
-        try:
-            resolved_key, _ = resolve_model_to_candidate(args.model)
-        except ValueError as exc:
-            parser.error(str(exc))
-        if resolved_key != args.candidate:
-            parser.error("positional model and --candidate disagree")
-
-    if args.latency_block_length is not None and args.latency_block_seed is None:
-        parser.error("--latency-block-length requires --latency-block-seed")
-    if args.latency_block_seed is not None and args.latency_block_length is None:
-        parser.error("--latency-block-seed requires --latency-block-length")
-    if args.latency_ms < 0:
-        parser.error("--latency-ms must be >= 0")
-
-    repo_root = (args.repo_root or _repo_root_from_package()).resolve()
-    seeds_arg = parse_seed_list(args.seeds) if args.seeds is not None else None
-    n_episodes = args.n_episodes
-    if n_episodes is None and seeds_arg is not None:
-        n_episodes = len(seeds_arg)
-    if n_episodes is None:
-        n_episodes = 1
+def _run_single_condition(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    *,
+    model: str,
+    n_episodes: int,
+    seeds: list[int],
+    policy_seeds: list[int] | None,
+    output_dir: Path,
+    repo_root: Path,
+) -> int:
+    """One condition, dry-run, rpi5 or explicit-profile replay through the resolved-plan path."""
+    from breakpoint_eval.camera_degrade import ImageMode
+    from breakpoint_eval.run_orchestrate import (
+        MissingPrerequisiteError,
+        execute_resolved_run,
+        resolve_run_plan,
+        write_run_manifest,
+    )
 
     try:
-        seeds = build_seeds(
+        plan, profile = resolve_run_plan(
+            model=model,
             n_episodes=n_episodes,
-            seeds=seeds_arg,
+            output_dir=output_dir,
+            device=args.device,
+            compute_device=args.compute_device,
+            latency_ms=args.latency_ms,
+            latency_profile=args.latency_profile,
+            profile_device=args.profile_device,
+            profile_variant=args.profile_variant,
+            profile_recipe_id=args.profile_recipe_id,
+            seeds=seeds,
             start_seed=args.start_seed,
+            image_mode=args.image_mode,
+            repo_root=repo_root,
+            dry_run=args.dry_run,
+            onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
+            policy_rng_seeds=policy_seeds,
         )
-    except ValueError as exc:
-        parser.error(str(exc))
-
-    policy_seeds = parse_seed_list(args.policy_seeds) if args.policy_seeds is not None else None
-    if policy_seeds is not None and len(policy_seeds) != len(seeds):
-        parser.error("--policy-seeds length must match --seeds / --episodes")
-
-    # Resolve candidate early for default output path.
-    from breakpoint_eval.model_resolve import resolve_model_to_candidate
-
-    try:
-        candidate_key, _spec = resolve_model_to_candidate(model)
+    except MissingPrerequisiteError as exc:
+        logging.error("%s", exc)
+        return 2
     except ValueError as exc:
         logging.error("%s", exc)
         return 2
 
-    if getattr(args, "plan", None) is not None:
-        if args.output_dir is None:
-            parser.error("--plan requires --out DIR")
-        from breakpoint_eval.run_plan_execute import execute_experiment_plan
-
-        try:
-            return execute_experiment_plan(
-                plan_path=Path(args.plan).resolve(),
-                output_dir=Path(args.output_dir).resolve(),
-                repo_root=repo_root,
-                device=args.device,
-                compute_device=args.compute_device,
-                onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
-                latency_profile=args.latency_profile,
-                profile_device=args.profile_device,
-                profile_variant=args.profile_variant,
-                profile_recipe_id=args.profile_recipe_id,
-                save_video=args.video,
-                dry_run=args.dry_run,
-                allow_existing_out=bool(args.allow_existing_out),
-                latency_end_of_trace=args.latency_end_of_trace,
-                latency_block_length=args.latency_block_length,
-                latency_block_seed=args.latency_block_seed,
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            logging.error("%s", exc)
+    try:
+        base_image_cfg = _build_image_cfg(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if base_image_cfg.mode is ImageMode.H264:
+        if not _h264_available():
             return 2
 
-    output_dir = args.output_dir
-    if output_dir is None:
-        output_dir = repo_root / "artifacts" / "runs" / candidate_key
-    output_dir = output_dir.resolve()
+    manifest = write_run_manifest(plan)
+    print(manifest)
+    print(json.dumps(plan.to_dict(), indent=2, sort_keys=True))
+    if args.dry_run:
+        return 0
 
-    using_sweep = bool(args.latency_sweep_ms or args.image_sweep)
-    using_profile = (
-        args.latency_profile is not None or args.profile_device is not None or args.device == "rpi5"
+    try:
+        report, exit_code = execute_resolved_run(
+            plan,
+            profile,
+            save_video=args.video,
+            image_cfg=base_image_cfg,
+            latency_end_of_trace=args.latency_end_of_trace,
+            latency_block_length=args.latency_block_length,
+            latency_block_seed=args.latency_block_seed,
+        )
+    except KeyboardInterrupt:
+        return 130
+    print(report)
+    print(
+        json.dumps(
+            {
+                "latency_mode": plan.latency_mode,
+                "latency_profile": plan.latency_profile_path,
+                "chunk_arrival_policy": _CHUNK_ARRIVAL_POLICY,
+                "report": str(report),
+                "exit_code": exit_code,
+            }
+        )
     )
-    if using_profile and (args.latency_ms != 0.0 or args.latency_sweep_ms):
-        parser.error(
-            "constant --latency-ms/--latency-sweep-ms is distinct from measured "
-            "device replay; do not combine with --latency-profile/--device rpi5"
-        )
+    return exit_code
 
-    # Preferred orchestration path (single condition / dry-run / rpi5 / explicit profile).
-    if not using_sweep:
-        from breakpoint_eval.camera_degrade import ImageMode
-        from breakpoint_eval.run_orchestrate import (
-            MissingPrerequisiteError,
-            execute_resolved_run,
-            resolve_run_plan,
-            write_run_manifest,
-        )
 
-        try:
-            plan, profile = resolve_run_plan(
-                model=model,
-                n_episodes=n_episodes,
-                output_dir=output_dir,
-                device=args.device,
-                compute_device=args.compute_device,
-                latency_ms=args.latency_ms,
-                latency_profile=args.latency_profile,
-                profile_device=args.profile_device,
-                profile_variant=args.profile_variant,
-                profile_recipe_id=args.profile_recipe_id,
-                seeds=seeds,
-                start_seed=args.start_seed,
-                image_mode=args.image_mode,
-                repo_root=repo_root,
-                dry_run=args.dry_run,
-                onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
-                policy_rng_seeds=policy_seeds,
-            )
-        except MissingPrerequisiteError as exc:
-            logging.error("%s", exc)
-            return 2
-        except ValueError as exc:
-            logging.error("%s", exc)
-            return 2
-
-        try:
-            base_image_cfg = _build_image_cfg(args)
-        except ValueError as exc:
-            parser.error(str(exc))
-        if base_image_cfg.mode is ImageMode.H264:
-            try:
-                from breakpoint_eval.h264_ffmpeg import require_ffmpeg_h264
-
-                require_ffmpeg_h264()
-            except Exception as exc:  # noqa: BLE001
-                logging.error("%s", exc)
-                return 2
-
-        manifest = write_run_manifest(plan)
-        print(manifest)
-        print(json.dumps(plan.to_dict(), indent=2, sort_keys=True))
-        if args.dry_run:
-            return 0
-
-        try:
-            report, exit_code = execute_resolved_run(
-                plan,
-                profile,
-                save_video=args.video,
-                image_cfg=base_image_cfg,
-                latency_end_of_trace=args.latency_end_of_trace,
-                latency_block_length=args.latency_block_length,
-                latency_block_seed=args.latency_block_seed,
-            )
-        except KeyboardInterrupt:
-            return 130
-        print(report)
-        print(
-            json.dumps(
-                {
-                    "latency_mode": plan.latency_mode,
-                    "latency_profile": plan.latency_profile_path,
-                    "chunk_arrival_policy": _CHUNK_ARRIVAL_POLICY,
-                    "report": str(report),
-                    "exit_code": exit_code,
-                }
-            )
-        )
-        return exit_code
-
-    # Sweep path (constant-delay or image sweeps) — still writes a run_manifest.
+def _run_sweep(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    *,
+    model: str,
+    candidate_key: str,
+    n_episodes: int,
+    seeds: list[int],
+    policy_seeds: list[int] | None,
+    output_dir: Path,
+    repo_root: Path,
+) -> int:
+    """Constant-delay and/or image-mode job grid; still writes a run_manifest."""
     from breakpoint_eval.camera_degrade import ImageMode
+    from breakpoint_eval.h264_ffmpeg import H264UnsupportedError
     from breakpoint_eval.run_baseline import RunRequest, run_baseline
     from breakpoint_eval.run_orchestrate import (
         MissingPrerequisiteError,
@@ -1083,22 +919,13 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             parser.error("--image-sweep is mutually exclusive with explicit image mode flags")
         try:
             image_jobs = [(name, cfg) for name, cfg in _image_sweep_cfgs(args.image_sweep)]
-        except Exception as exc:  # noqa: BLE001 — surface missing FFmpeg clearly
-            from breakpoint_eval.h264_ffmpeg import H264UnsupportedError
-
-            if isinstance(exc, H264UnsupportedError) or args.image_sweep == "h264":
-                logging.error("%s", exc)
-                return 2
-            raise
+        except H264UnsupportedError as exc:
+            logging.error("%s", exc)
+            return 2
     else:
         image_jobs = [(None, base_image_cfg)]
         if base_image_cfg.mode is ImageMode.H264:
-            try:
-                from breakpoint_eval.h264_ffmpeg import require_ffmpeg_h264
-
-                require_ffmpeg_h264()
-            except Exception as exc:  # noqa: BLE001
-                logging.error("%s", exc)
+            if not _h264_available():
                 return 2
 
     if len(latency_values_ms) > 1 and len(image_jobs) > 1:
@@ -1197,6 +1024,125 @@ def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         )
         return 130
     return exit_code
+
+
+def _cmd_run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    model = args.model or args.candidate
+    if model is None:
+        parser.error("provide a positional MODEL or --candidate")
+    if args.model and args.candidate and args.model != args.candidate:
+        # Allow hub repo positional with --candidate omitted; conflict if both differ.
+        from breakpoint_eval.model_resolve import resolve_model_to_candidate
+
+        try:
+            resolved_key, _ = resolve_model_to_candidate(args.model)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if resolved_key != args.candidate:
+            parser.error("positional model and --candidate disagree")
+
+    if args.latency_block_length is not None and args.latency_block_seed is None:
+        parser.error("--latency-block-length requires --latency-block-seed")
+    if args.latency_block_seed is not None and args.latency_block_length is None:
+        parser.error("--latency-block-seed requires --latency-block-length")
+    if args.latency_ms < 0:
+        parser.error("--latency-ms must be >= 0")
+
+    repo_root = (args.repo_root or _repo_root_from_package()).resolve()
+    seeds_arg = parse_seed_list(args.seeds) if args.seeds is not None else None
+    n_episodes = args.n_episodes
+    if n_episodes is None and seeds_arg is not None:
+        n_episodes = len(seeds_arg)
+    if n_episodes is None:
+        n_episodes = 1
+
+    try:
+        seeds = build_seeds(
+            n_episodes=n_episodes,
+            seeds=seeds_arg,
+            start_seed=args.start_seed,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    policy_seeds = parse_seed_list(args.policy_seeds) if args.policy_seeds is not None else None
+    if policy_seeds is not None and len(policy_seeds) != len(seeds):
+        parser.error("--policy-seeds length must match --seeds / --episodes")
+
+    # Resolve candidate early for default output path.
+    from breakpoint_eval.model_resolve import resolve_model_to_candidate
+
+    try:
+        candidate_key, _spec = resolve_model_to_candidate(model)
+    except ValueError as exc:
+        logging.error("%s", exc)
+        return 2
+
+    if getattr(args, "plan", None) is not None:
+        if args.output_dir is None:
+            parser.error("--plan requires --out DIR")
+        from breakpoint_eval.run_plan_execute import execute_experiment_plan
+
+        try:
+            return execute_experiment_plan(
+                plan_path=Path(args.plan).resolve(),
+                output_dir=Path(args.output_dir).resolve(),
+                repo_root=repo_root,
+                device=args.device,
+                compute_device=args.compute_device,
+                onnx_model=args.onnx_model.resolve() if args.onnx_model else None,
+                latency_profile=args.latency_profile,
+                profile_device=args.profile_device,
+                profile_variant=args.profile_variant,
+                profile_recipe_id=args.profile_recipe_id,
+                save_video=args.video,
+                dry_run=args.dry_run,
+                allow_existing_out=bool(args.allow_existing_out),
+                latency_end_of_trace=args.latency_end_of_trace,
+                latency_block_length=args.latency_block_length,
+                latency_block_seed=args.latency_block_seed,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            logging.error("%s", exc)
+            return 2
+
+    output_dir = args.output_dir
+    if output_dir is None:
+        output_dir = repo_root / "artifacts" / "runs" / candidate_key
+    output_dir = output_dir.resolve()
+
+    using_sweep = bool(args.latency_sweep_ms or args.image_sweep)
+    using_profile = (
+        args.latency_profile is not None or args.profile_device is not None or args.device == "rpi5"
+    )
+    if using_profile and (args.latency_ms != 0.0 or args.latency_sweep_ms):
+        parser.error(
+            "constant --latency-ms/--latency-sweep-ms is distinct from measured "
+            "device replay; do not combine with --latency-profile/--device rpi5"
+        )
+
+    if not using_sweep:
+        return _run_single_condition(
+            parser,
+            args,
+            model=model,
+            n_episodes=n_episodes,
+            seeds=seeds,
+            policy_seeds=policy_seeds,
+            output_dir=output_dir,
+            repo_root=repo_root,
+        )
+    return _run_sweep(
+        parser,
+        args,
+        model=model,
+        candidate_key=candidate_key,
+        n_episodes=n_episodes,
+        seeds=seeds,
+        policy_seeds=policy_seeds,
+        output_dir=output_dir,
+        repo_root=repo_root,
+    )
 
 
 def _cmd_report(args: argparse.Namespace) -> int:

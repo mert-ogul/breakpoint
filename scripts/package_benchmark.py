@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import shutil
@@ -24,6 +23,7 @@ from breakpoint_eval.artifact_names import (  # noqa: E402
     PROTOCOL_LOCK_NAME,
     require_artifact,
 )
+from breakpoint_eval.file_digest import sha256_file  # noqa: E402
 
 LOGGER = logging.getLogger("package_benchmark")
 
@@ -42,14 +42,6 @@ HISTORICAL_NOTE = (
     "Files under historical/ and the verbatim summaries/protocol files keep the absolute "
     "paths of the machine that produced them. Portable links use relative paths only."
 )
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def load_json(path: Path) -> Any:

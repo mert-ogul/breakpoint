@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 
+from breakpoint_eval.file_digest import sha256_file
 from breakpoint_eval.latency_trace import (
     PROFILE_SCHEMA_VERSION,
     TIMED_BOUNDARY_ORT_RUN,
@@ -44,14 +45,6 @@ def require_onnxruntime() -> Any:
             "(pip install 'breakpoint-eval[onnx]' / requirements-onnx.txt)"
         ) from exc
     return ort
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def detect_host_info() -> dict[str, Any]:

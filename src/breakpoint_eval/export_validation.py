@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from breakpoint_eval.act_export import sha256_file
 from breakpoint_eval.artifact_names import (
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
@@ -31,6 +30,7 @@ from breakpoint_eval.export_tolerances import (
     ONNX_FP32_PARITY_MEAN_ABS,
     ONNX_FP32_PARITY_RTOL,
 )
+from breakpoint_eval.file_digest import sha256_file
 
 SCHEMA_VERSION = 2
 VALIDATION_FILENAME = EXPORT_VALIDATION_NAME

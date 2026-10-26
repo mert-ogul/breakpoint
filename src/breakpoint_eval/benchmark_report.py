@@ -1,4 +1,10 @@
-"""Render the packaged benchmark as local HTML, Markdown, plots, and a data index."""
+"""Render a packaged benchmark data directory as the public HTML/Markdown report.
+
+Input is the verified archive read by benchmark_report_data (all axes, device profiles,
+provenance); numbers come from there and this module only formats them. The per-run
+summary written next to a single run's records is render_report.py. The two share the
+statistics in experiment_summary but not layout, so they are kept separate.
+"""
 
 from __future__ import annotations
 
@@ -668,7 +674,8 @@ def write_data_index(data: ReportData, out_dir: Path, written: list[Path]) -> Pa
     return path
 
 
-def render_report(input_dir: Path, out_dir: Path) -> list[Path]:
+def render_benchmark_report(input_dir: Path, out_dir: Path) -> list[Path]:
+    """Validate the packaged data, then write plots, index.html, report.md and data_index.json."""
     data = load_report_data(input_dir)
     failed = [c for c in data.checks if not c.passed]
     if failed:

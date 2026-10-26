@@ -12,7 +12,6 @@ Export boundary (matches ACTPolicy.select_action inference compute):
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from collections import deque
@@ -24,6 +23,7 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
+from breakpoint_eval.file_digest import sha256_file
 from breakpoint_eval.policy_adapter import ActionStep, ChunkInfo, PolicyAdapter
 
 LOGGER = logging.getLogger("breakpoint_eval.act_export")
@@ -131,14 +131,6 @@ def require_onnx() -> None:
             "ONNX export requires optional deps: pip install 'onnx>=1.16,<1.19' "
             "'onnxruntime>=1.19,<1.23'"
         ) from exc
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def inspect_onnx_graph(path: Path) -> dict[str, Any]:

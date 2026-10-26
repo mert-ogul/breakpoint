@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -28,6 +27,7 @@ from breakpoint_eval.experiment_summary import (
     DEFAULT_BREAKPOINT_RATIO,
 )
 from breakpoint_eval.export_runtime import load_export_manifest, resolve_onnx_runtime
+from breakpoint_eval.file_digest import sha256_file
 from breakpoint_eval.latency_trace import (
     contiguous_window_starts,
     load_latency_profile,
@@ -87,14 +87,6 @@ def load_benchmark_config(path: Path) -> dict[str, Any]:
             f"expected protocol {PROTOCOL_NAME} {PROTOCOL_VERSION}, got {identity[0]} {identity[1]}"
         )
     return payload
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def _external_weight_files(model_path: Path) -> list[dict[str, str]]:

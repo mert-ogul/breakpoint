@@ -1,6 +1,8 @@
-"""Render summary.md / report.html / static plots from saved run records only.
+"""Render summary.md / report.html / static plots for one run directory.
 
-No model downloads, simulator access, or experiment reruns.
+Reads only that run's saved records (no model downloads, simulator access, or reruns).
+Used by `breakpoint report` and after each benchmark axis. The packaged-benchmark report
+is benchmark_report.py.
 """
 
 from __future__ import annotations

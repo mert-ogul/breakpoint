@@ -7,7 +7,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from breakpoint_eval.act_export import INPUT_IMAGES, INPUT_STATE, sha256_file
+from breakpoint_eval.act_export import INPUT_IMAGES, INPUT_STATE
+from breakpoint_eval.file_digest import sha256_file
 
 
 @dataclass(frozen=True)

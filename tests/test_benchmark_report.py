@@ -13,7 +13,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from breakpoint_eval.benchmark_report import ReportValidationError, render_report  # noqa: E402
+from breakpoint_eval.benchmark_report import ReportValidationError, render_benchmark_report  # noqa: E402
 from breakpoint_eval.benchmark_report_data import ReportDataError, load_report_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,7 +55,7 @@ def test_saved_example_passes_every_check() -> None:
 def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> None:
     before = tree_hash(DATA)
     out = tmp_path / "report"
-    render_report(DATA, out)
+    render_benchmark_report(DATA, out)
     assert tree_hash(DATA) == before
     index = json.loads((out / "data_index.json").read_text())
     rows = [
@@ -89,7 +89,7 @@ def test_changed_episode_record_is_refused(tmp_path: Path) -> None:
     episodes.write_text("\n".join(lines) + "\n")
     refresh_manifest(copy)
     with pytest.raises(ReportValidationError, match="saved summary counts"):
-        render_report(copy, tmp_path / "report")
+        render_benchmark_report(copy, tmp_path / "report")
     assert not (tmp_path / "report" / "index.html").exists()
 
 
@@ -98,7 +98,7 @@ def test_tampered_file_fails_manifest_check(tmp_path: Path) -> None:
     shutil.copytree(DATA, copy)
     (copy / "episodes" / "episodes.jsonl").write_text("[]\n")
     with pytest.raises(ReportDataError, match="manifest"):
-        render_report(copy, tmp_path / "report")
+        render_benchmark_report(copy, tmp_path / "report")
 
 
 def test_render_script_runs_without_heavy_packages(tmp_path: Path) -> None:

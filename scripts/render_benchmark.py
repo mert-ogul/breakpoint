@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
-        from breakpoint_eval.benchmark_report import ReportValidationError, render_report
+        from breakpoint_eval.benchmark_report import ReportValidationError, render_benchmark_report
         from breakpoint_eval.benchmark_report_data import ReportDataError
     except ModuleNotFoundError as exc:
         if exc.name not in REPORT_EXTRA_MODULES:
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     try:
-        written = render_report(args.input, args.out)
+        written = render_benchmark_report(args.input, args.out)
     except (ReportValidationError, ReportDataError) as exc:
         LOGGER.error("%s", exc)
         return 1
