@@ -50,11 +50,11 @@ The table is generated from the saved data by `scripts/render_benchmark.py --upd
 | Device latency replay | laptop-m3 replay: 24, rpi5 replay: 9 |
 
 - Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
-- Constant added delay: first point below 0.8 x baseline is 320 ms at 18/30 (interval includes threshold).
-- Camera resolution: first point below 0.8 x baseline is 60x80 at 10/30.
+- Constant added delay: first grid point below 0.8 x baseline is 320 ms at 18/30 (interval includes threshold).
+- Camera resolution: first grid point below 0.8 x baseline is 60x80 at 10/30.
 - JPEG quality: no condition fell below 0.8 x baseline.
-- Numeric precision: no condition fell below 0.8 x baseline.
-- Device latency replay: first point below 0.8 x baseline is rpi5 replay at 9/30.
+- Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below.
+- Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
 <!-- results:end -->
 
 The rpi5 replay uses a profile captured while throttling was reported (see Limitations). These

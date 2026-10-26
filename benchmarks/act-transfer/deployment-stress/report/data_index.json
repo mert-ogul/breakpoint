@@ -262,9 +262,9 @@
   ],
   "files": [
     {
-      "bytes": 88642,
+      "bytes": 90067,
       "path": "index.html",
-      "sha256": "a8d32b2b85b7151a8a7c235e60be096b541e4e5588a6627cf2f6c6ff592f5571"
+      "sha256": "292ced2ca03b7bdf7ae492b937381d5a566d88bfda04ff35a1fb83c5b1a79387"
     },
     {
       "bytes": 76950,
@@ -372,9 +372,9 @@
       "sha256": "2af166435ffe25d3ff25d5b058ab643cbc427bd5370d9050f078ecb6fc7fc154"
     },
     {
-      "bytes": 11546,
+      "bytes": 11948,
       "path": "report.md",
-      "sha256": "0c6a16cea11cdfd44a129f48529a6661e2649845b619556971434e7c17a230fe"
+      "sha256": "aee271587a93315ab8924429d05d3620f283199510effaf6079cefbf48b80b45"
     }
   ],
   "generator": "scripts/render_benchmark.py",
@@ -427,7 +427,7 @@
     },
     {
       "detail": "90 referenced rows; differing: []",
-      "name": "shared baseline outcomes equal the latency axis 0 ms condition seed by seed",
+      "name": "shared baseline outcomes equal the latency_ms_0 condition seed by seed",
       "passed": true
     },
     {

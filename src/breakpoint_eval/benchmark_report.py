@@ -132,30 +132,43 @@ def matrix_html(axis: AxisView) -> str:
 def status_text(axis: AxisView, view: ConditionView) -> str:
     if view.is_baseline:
         return "baseline"
+    if axis.suppressed_reason:
+        return "not assessed"
     parts = ["below threshold" if view.below_threshold else "not below threshold"]
     if view.threshold_inside_interval:
         parts.append("interval spans threshold")
     return "; ".join(parts)
 
 
-def status_glyph(view: ConditionView) -> str:
+def status_glyph(axis: AxisView, view: ConditionView) -> str:
     if view.is_baseline:
         return "\u25c6"
+    if axis.suppressed_reason:
+        return "\u2013"
     return GLYPH_LOST if view.below_threshold else "\u25cb"
 
 
-def paired_text(view: ConditionView) -> str:
+def paired_text(view: ConditionView, separator: str = " &middot; ") -> str:
     if view.paired is None:
         return "reference"
     p = view.paired
-    return (
-        f"lost {p['baseline_only']} &middot; gained {p['stress_only']} &middot; "
-        f"both succeeded {p['both_success']} &middot; neither {p['both_fail']}"
+    return separator.join(
+        [
+            f"lost {p['baseline_only']}",
+            f"gained {p['stress_only']}",
+            f"both succeeded {p['both_success']}",
+            f"neither {p['both_fail']}",
+        ]
     )
 
 
 def paired_text_plain(view: ConditionView) -> str:
-    return paired_text(view).replace("&middot;", "|")
+    return paired_text(view, "; ")
+
+
+def md_cell(text: str) -> str:
+    """Escape a value for a Markdown table cell so it cannot add columns."""
+    return str(text).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
 
 
 def contrast_text(view: ConditionView) -> str:
@@ -175,42 +188,64 @@ def condition_table_html(axis: AxisView) -> str:
             f'<td class="num">{view.successes}/{view.eligible}</td>'
             f'<td class="num">{pct(view.successes / view.eligible)}</td>'
             f'<td class="num">{wilson_text(view)}</td>'
-            f'<td><span class="mark {cls}">{status_glyph(view)}</span> {esc(status_text(axis, view))}</td>'
+            f'<td><span class="mark {cls}">{status_glyph(axis, view)}</span> {esc(status_text(axis, view))}</td>'
             f"<td>{paired_text(view)}</td>"
             f'<td class="num">{esc(contrast_text(view))}</td></tr>'
         )
     return (
         '<div class="scroll"><table class="data"><caption>Success counts with Wilson 95% '
-        'intervals</caption><thead><tr><th scope="col">Condition</th><th scope="col">Success'
+        "score intervals. The threshold is estimated from the baseline sample, so an interval "
+        "that overlaps it is not a paired significance test.</caption>"
+        '<thead><tr><th scope="col">Condition</th><th scope="col">Success'
         '</th><th scope="col">Rate</th><th scope="col">Wilson 95%</th><th scope="col">vs '
         f'{axis.ratio:g} &times; baseline ({pct(axis.threshold_rate)})</th><th scope="col">Paired '
-        'with baseline seeds</th><th scope="col">p &minus; '
-        f"{axis.ratio:g}&middot;p<sub>base</sub>, paired bootstrap 95%</th></tr></thead>"
+        'with baseline seeds</th><th scope="col">Paired bootstrap 95% interval (pointwise) for '
+        f"p &minus; {axis.ratio:g}&middot;p<sub>base</sub></th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></div>"
     )
 
 
 def breakpoint_sentence(axis: AxisView) -> str:
-    if axis.derived:
-        below = [v.condition_id for v in axis.conditions if v.below_threshold]
+    if axis.suppressed_reason:
         return (
-            "No saved experiment summary exists for this axis. Counts, intervals, and paired "
-            "tables here are derived by this report from the episode records. "
+            f"Threshold comparison not reported: {axis.suppressed_reason}. Counts and intervals "
+            "are shown without a below-threshold judgement."
+        )
+    below = [v.condition_id for v in axis.conditions if v.below_threshold]
+    derived = (
+        "No saved experiment summary exists for this axis; counts, intervals, and paired "
+        "tables are derived by this report from the episode records. "
+        if axis.derived
+        else ""
+    )
+    if not axis.ordered:
+        return (
+            f"{derived}Categorical comparison against the baseline: the conditions have no "
+            "order, so no breakpoint is estimated. "
             + (
                 f"Point estimate below threshold: {', '.join(below)}."
                 if below
-                else "No condition is below the threshold."
+                else "No condition's point estimate is below the threshold."
             )
+        )
+    if axis.derived:
+        return derived + (
+            f"First grid point below threshold: {below[0]}."
+            if below
+            else "No condition is below the threshold."
         )
     bp = axis.saved_breakpoint
     if bp is None:
         return axis.saved_note or ""
     if bp["status"] == "observed_interval":
         interval = bp["observed_interval"]
+        recovery = bp.get("recovery_condition_ids") or []
         return (
-            f"Saved summary: first point below threshold is {bp['first_below']}; observed "
-            f"interval is between {interval['above_condition_id']} and "
-            f"{interval['below_condition_id']}. {axis.saved_note or ''}"
+            f"Saved summary: on this exploratory grid the first point below threshold is "
+            f"{bp['first_below']}; the observed crossing lies between "
+            f"{interval['above_condition_id']} and {interval['below_condition_id']}. "
+            + (f"Later points recover above it: {', '.join(recovery)}. " if recovery else "")
+            + (axis.saved_note or "")
         )
     if bp["status"] == "not_reached_within_tested_range":
         return "Saved summary: no condition fell below the threshold within the tested range."
@@ -218,6 +253,8 @@ def breakpoint_sentence(axis: AxisView) -> str:
 
 
 def unresolved_conditions(axis: AxisView) -> list[ConditionView]:
+    if axis.suppressed_reason:
+        return []
     return [v for v in axis.conditions if v.threshold_inside_interval]
 
 
@@ -246,11 +283,15 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
     unresolved = unresolved_conditions(axis)
     notes = "".join(f"<li>{esc(n)}</li>" for n in axis.isolation_notes)
     unresolved_text = (
-        "Conditions whose Wilson interval includes the threshold (state of the threshold "
-        f"comparison is unresolved at n={episodes_per_condition(data)}): "
-        + ", ".join(esc(v.condition_id) for v in unresolved)
+        "Conditions whose Wilson interval includes the threshold (the comparison is "
+        f"unresolved at n={episodes_per_condition(data)}; this is an interval overlap, not a "
+        "paired significance test): " + ", ".join(esc(v.condition_id) for v in unresolved)
         if unresolved
-        else "No condition interval includes the threshold."
+        else (
+            "Threshold comparison not reported for this axis."
+            if axis.suppressed_reason
+            else "No condition interval includes the threshold."
+        )
     )
     links = [
         ("Episode records (all axes, compact JSONL)", "episodes/episodes.jsonl"),
@@ -263,7 +304,8 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
     derived = (
         '<p class="callout derived"><strong>Derived axis.</strong> No experiment summary '
         "was saved for the device replay; this report computed its values from episode "
-        "records. The baseline is the shared constant 0 ms condition.</p>"
+        f"records. The baseline is the shared condition <code>{esc(axis.baseline_condition_id)}"
+        "</code>.</p>"
         if axis.derived
         else ""
     )
@@ -326,12 +368,13 @@ def timing_panel_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
             + stats_row(
                 "replay windows",
                 profile.window_stats,
-                "union of the 32-sample windows assigned to episodes",
+                f"union of the {data.trace_window_length}-sample windows assigned to episodes",
             )
             + stats_row(
                 "consumed",
                 profile.used_stats,
-                "samples actually applied to fresh chunks across 30 episodes",
+                f"samples actually applied to fresh chunks across {episodes_per_condition(data)} "
+                "episodes",
             )
             + "</tbody></table></div>"
             + telemetry_html(profile)
@@ -350,12 +393,27 @@ def timing_panel_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     return (
         '<section class="panel" id="panel-timing" aria-labelledby="h-timing">'
         '<h2 id="h-timing">Device timing</h2>'
-        "<p>Each episode replays a contiguous 32-sample window of the measured trace, starting at "
-        "<code>floor(i&middot;(N&minus;32)/(n&minus;1))</code>. A 400-step episode requests about "
-        "four fresh chunks, so only the first few samples of each window are consumed. Replayed "
-        "delays are applied on simulated time; host inference time is never added.</p>"
-        + "".join(blocks)
-        + "</section>"
+        f"<p>Each episode replays a contiguous {data.trace_window_length}-sample window of the "
+        "measured trace, starting at "
+        f"<code>floor(i&middot;(N&minus;{data.trace_window_length})/(n&minus;1))</code>. An "
+        "episode requests few fresh chunks, so only the first samples of each window are "
+        "consumed. Replayed delays are applied on simulated time; host inference time is never "
+        "added.</p>" + "".join(blocks) + "</section>"
+    )
+
+
+def int8_note(data: ReportData, int8_status: str) -> str:
+    ran = any(r["condition_id"] == "precision_int8" for r in data.rows)
+    if int8_status == "ok" and ran:
+        return (
+            f"Unsupported conditions: none skipped. INT8 export status is '{int8_status}' and "
+            "the INT8 graph ran in every planned episode. The INT8 graph has no FP32 "
+            "numerical-parity requirement; see the provenance section for its recorded chunk "
+            "error."
+        )
+    return (
+        f"INT8 export status is '{int8_status}'; no INT8 condition was run and no INT8 "
+        "measurement is reported."
     )
 
 
@@ -371,15 +429,13 @@ def honest_notes(data: ReportData) -> list[str]:
         f"Errors: {errors} runtime errors or policy failures in {n} episode records. Outcomes: "
         + ", ".join(f"{v} {k}" for k, v in sorted(outcomes.items()))
         + ".",
-        f"Unsupported conditions: none skipped. INT8 export status is '{int8}' and the INT8 "
-        "graph ran in every planned episode. The INT8 graph has no FP32 numerical-parity "
-        "requirement; see the provenance section for its recorded chunk error.",
+        int8_note(data, int8),
         f"Baseline strength: {baseline_view(first).successes}/{baseline_view(first).eligible} "
         f"({pct(first.baseline_rate)}) against the project floor of {first.baseline_floor:g}. "
         + (
             "The baseline is not weak by that floor."
             if first.baseline_rate >= first.baseline_floor
-            else "The baseline is below the floor; breakpoint claims are not supported."
+            else "The baseline is below the floor; threshold comparisons are not reported."
         ),
         f"Sample size: {episodes_per_condition(data)} paired episodes per condition. Intervals "
         "are wide; the run is exploratory and does not locate an exact boundary.",
@@ -390,10 +446,13 @@ def honest_notes(data: ReportData) -> list[str]:
         if unresolved_conditions(a)
     ]
     notes.append(
-        "Unresolved threshold comparisons (Wilson interval includes the threshold): "
-        + "; ".join(unresolved)
-        + "."
+        "Unresolved threshold comparisons (Wilson interval includes the threshold; the threshold "
+        "is estimated from the same baseline, so this overlap is not a paired significance "
+        "test): " + ("; ".join(unresolved) if unresolved else "none") + "."
     )
+    suppressed = [f"{a.axis}: {a.suppressed_reason}" for a in data.axes if a.suppressed_reason]
+    if suppressed:
+        notes.append("Threshold comparisons not reported: " + "; ".join(suppressed) + ".")
     resolution = next(a for a in data.axes if a.axis == "resolution")
     if len({v.ordered_value for v in resolution.conditions[1:]}) == 1:
         notes.append(
@@ -417,17 +476,33 @@ def observations(data: ReportData) -> list[str]:
         f"({pct(base.successes / base.eligible)}; Wilson 95% {wilson_text(base)})."
     ]
     for axis in data.axes:
-        below = [v for v in axis.conditions if v.below_threshold]
-        if below:
-            first = below[0]
-            tag = " (interval includes threshold)" if first.threshold_inside_interval else ""
+        if axis.suppressed_reason:
             lines.append(
-                f"{axis.title}: first point below {axis.ratio:g} x baseline is "
-                f"{short_label(first.condition_id).replace(chr(10), ' ')} at "
-                f"{first.successes}/{first.eligible}{tag}."
+                f"{axis.title}: threshold comparison not reported ({axis.suppressed_reason})."
             )
+        elif axis.ordered:
+            below = [v for v in axis.conditions if v.below_threshold]
+            if below:
+                first = below[0]
+                tag = " (interval includes threshold)" if first.threshold_inside_interval else ""
+                lines.append(
+                    f"{axis.title}: first grid point below {axis.ratio:g} x baseline is "
+                    f"{short_label(first.condition_id).replace(chr(10), ' ')} at "
+                    f"{first.successes}/{first.eligible}{tag}."
+                )
+            else:
+                lines.append(f"{axis.title}: no condition fell below {axis.ratio:g} x baseline.")
         else:
-            lines.append(f"{axis.title}: no condition fell below {axis.ratio:g} x baseline.")
+            verdicts = [
+                f"{short_label(v.condition_id).replace(chr(10), ' ')} {v.successes}/{v.eligible} "
+                f"{'below' if v.below_threshold else 'not below'}"
+                for v in axis.conditions
+                if not v.is_baseline
+            ]
+            lines.append(
+                f"{axis.title} (categorical comparison, no ordering) against "
+                f"{axis.ratio:g} x baseline: {'; '.join(verdicts)}."
+            )
     return lines
 
 
@@ -580,9 +655,10 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         ]
         for v in axis.conditions:
             lines.append(
-                f"| `{v.condition_id}` | {v.successes}/{v.eligible} | "
-                f"{pct(v.successes / v.eligible)} | {wilson_text(v)} | "
-                f"{status_glyph(v)} {status_text(axis, v)} | {paired_text_plain(v)} |"
+                f"| `{md_cell(v.condition_id)}` | {v.successes}/{v.eligible} | "
+                f"{pct(v.successes / v.eligible)} | {md_cell(wilson_text(v))} | "
+                f"{md_cell(f'{status_glyph(axis, v)} {status_text(axis, v)}')} | "
+                f"{md_cell(paired_text_plain(v))} |"
             )
         lines += [
             "",

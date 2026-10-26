@@ -177,3 +177,273 @@ def test_update_readme_requires_markers(tmp_path: Path) -> None:
     readme.write_text("# no markers\n", encoding="utf-8")
     with pytest.raises(ReportValidationError, match="markers"):
         update_readme_results(DATA, readme)
+
+
+# --- manifest, structure, wording, and table checks -------------------------------------
+
+
+def copy_data(tmp_path: Path) -> Path:
+    copy = tmp_path / "data"
+    shutil.copytree(DATA, copy)
+    return copy
+
+
+def edit_json(path: Path, change) -> None:
+    payload = json.loads(path.read_text())
+    change(payload)
+    path.write_text(json.dumps(payload))
+
+
+def edit_manifest(copy: Path, change) -> None:
+    edit_json(copy / "manifest.json", change)
+
+
+def lock_path(copy: Path) -> Path:
+    return next((copy / "protocol").glob("*protocol_lock.json"))
+
+
+def edit_rows(copy: Path, change) -> None:
+    path = copy / "episodes" / "episodes.jsonl"
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line]
+    change(rows)
+    path.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows))
+
+
+def refuses(copy: Path, tmp_path: Path, match: str) -> None:
+    out = tmp_path / "report"
+    with pytest.raises(ReportDataError, match=match):
+        render_benchmark_report(copy, out)
+    assert not out.exists()
+
+
+def test_empty_manifest_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    (copy / "manifest.json").write_text('{"schema_version": 1, "files": []}')
+    refuses(copy, tmp_path, "nonempty")
+
+
+def test_unsupported_manifest_schema_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_manifest(copy, lambda m: m.update(schema_version=2))
+    refuses(copy, tmp_path, "schema_version")
+
+
+@pytest.mark.parametrize(
+    ("change", "match"),
+    [
+        (lambda m: m["files"].append(dict(m["files"][0])), "duplicate entry"),
+        (lambda m: m["files"][0].update(path="/etc/hosts"), "plain relative path"),
+        (lambda m: m["files"][0].update(path="../outside.json"), "plain relative path"),
+        (lambda m: m["files"][0].update(path="episodes/../manifest.json"), "plain relative path"),
+        (lambda m: m["files"][0].update(sha256="abc"), "64 lowercase hex"),
+        (lambda m: m["files"][0].update(bytes=-1), "nonnegative integer"),
+    ],
+)
+def test_unsafe_or_malformed_manifest_entries_are_refused(
+    tmp_path: Path, change, match: str
+) -> None:
+    copy = copy_data(tmp_path)
+    edit_manifest(copy, change)
+    refuses(copy, tmp_path, match)
+
+
+def test_declared_size_must_match(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_manifest(copy, lambda m: m["files"][0].update(bytes=m["files"][0]["bytes"] + 1))
+    refuses(copy, tmp_path, "manifest")
+
+
+def test_manifest_must_list_every_input_the_report_reads(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_manifest(
+        copy,
+        lambda m: m.update(
+            files=[f for f in m["files"] if f["path"] != "profiles/rpi5/profile.json"]
+        ),
+    )
+    refuses(copy, tmp_path, "does not list files the report reads")
+
+
+def test_unlisted_plan_file_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    shutil.copy(
+        next((copy / "protocol" / "plans").glob("*.json")),
+        copy / "protocol" / "plans" / "extra.json",
+    )
+    refuses(copy, tmp_path, "does not list files the report reads")
+
+
+def test_empty_episode_file_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    (copy / "episodes" / "episodes.jsonl").write_text("")
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "no episode rows")
+
+
+def test_row_without_required_field_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_rows(copy, lambda rows: rows[0].pop("seed"))
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "lacks required fields")
+
+
+def test_missing_condition_rows_are_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_rows(
+        copy,
+        lambda rows: rows.__setitem__(
+            slice(None), [r for r in rows if r["condition_id"] != "jpeg_q75"]
+        ),
+    )
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "no episode rows for planned condition .*jpeg_q75")
+
+
+def test_condition_without_eligible_episodes_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+
+    def fail_all(rows: list[dict]) -> None:
+        for r in rows:
+            if r["condition_id"] == "jpeg_q75":
+                r.update(outcome="runtime_error", success=False)
+
+    edit_rows(copy, fail_all)
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "no eligible episodes")
+
+
+def test_missing_plan_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    plan = next(p for p in (copy / "protocol" / "plans").glob("*.json") if "jpeg" in p.name)
+    plan.unlink()
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "plans must cover")
+
+
+def test_missing_profile_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    shutil.rmtree(copy / "profiles" / "rpi5")
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "does not list files the report reads")
+
+
+def test_lock_without_recorded_statistics_is_refused(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_json(lock_path(copy), lambda lock: lock["statistics"].pop("breakpoint_ratio"))
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "missing statistics.breakpoint_ratio")
+
+
+def test_threshold_ratio_comes_from_the_lock(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_json(lock_path(copy), lambda lock: lock["statistics"].update(breakpoint_ratio=0.7))
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "differ from the protocol lock")
+
+
+def test_trace_window_must_match_the_plan(tmp_path: Path) -> None:
+    copy = copy_data(tmp_path)
+    edit_json(lock_path(copy), lambda lock: lock["trace_window"].update(length=16))
+    refresh_manifest(copy)
+    refuses(copy, tmp_path, "window_length")
+
+
+def weak_baseline_data(tmp_path: Path):
+    from breakpoint_eval.benchmark_report_data import load_report_data as load
+
+    copy = copy_data(tmp_path)
+
+    def weaken(rows: list[dict]) -> None:
+        for r in rows:
+            if r["condition_id"] == "latency_ms_0" or r["referenced_baseline"]:
+                r.update(success=False, outcome="terminated_no_success")
+
+    edit_rows(copy, weaken)
+    refresh_manifest(copy)
+    return load(copy)
+
+
+def test_weak_baseline_suppresses_threshold_language(tmp_path: Path) -> None:
+    from breakpoint_eval import benchmark_report as report
+
+    data = weak_baseline_data(tmp_path)
+    assert all(axis.suppressed_reason for axis in data.axes)
+    text = "\n".join(report.observations(data))
+    assert "first grid point" not in text and "below 0.8 x baseline" not in text
+    assert text.count("threshold comparison not reported") == len(data.axes)
+    for axis in data.axes:
+        assert "not reported" in report.breakpoint_sentence(axis)
+        assert report.unresolved_conditions(axis) == []
+        assert all(
+            report.status_text(axis, v) in {"baseline", "not assessed"} for v in axis.conditions
+        )
+    assert "below the floor" in "\n".join(report.honest_notes(data))
+
+
+def test_categorical_axes_are_not_described_as_crossings() -> None:
+    from breakpoint_eval import benchmark_report as report
+
+    data = report.load_validated_data(DATA)
+    by_axis = {axis.axis: axis for axis in data.axes}
+    assert not by_axis["precision"].ordered and not by_axis["device_profile"].ordered
+    assert by_axis["latency_ms"].ordered
+    lines = report.observations(data)
+    ordered = [line for line in lines if "first grid point" in line]
+    assert len(ordered) == 2 and all("categorical" not in line for line in ordered)
+    for title in ("Numeric precision", "Device latency replay"):
+        line = next(x for x in lines if x.startswith(title))
+        assert "categorical comparison" in line and "first" not in line
+    for axis in (by_axis["precision"], by_axis["device_profile"]):
+        sentence = report.breakpoint_sentence(axis)
+        assert "Categorical comparison" in sentence and "no breakpoint is estimated" in sentence
+    assert "exploratory grid" in report.breakpoint_sentence(by_axis["latency_ms"])
+
+
+def table_widths(markdown: str) -> list[list[int]]:
+    import re
+
+    tables: list[list[int]] = []
+    current: list[int] = []
+    for line in markdown.splitlines():
+        if line.startswith("|"):
+            current.append(len(re.split(r"(?<!\\)\|", line.strip())[1:-1]))
+        elif current:
+            tables.append(current)
+            current = []
+    return tables + ([current] if current else [])
+
+
+def test_markdown_tables_have_one_width_per_table() -> None:
+    from breakpoint_eval import benchmark_report as report
+
+    data = report.load_validated_data(DATA)
+    tables = table_widths(report.render_markdown(data, Path("."), "plots"))
+    assert len(tables) >= 7
+    assert all(len(set(widths)) == 1 for widths in tables)
+    assert tables[0][0] == 6
+
+
+def test_markdown_cell_escapes_pipes() -> None:
+    from breakpoint_eval import benchmark_report as report
+
+    assert report.md_cell("a|b") == "a\\|b"
+    assert table_widths("| x | " + report.md_cell("a|b") + " |\n")[0] == [2]
+    data = report.load_validated_data(DATA)
+    view = data.axes[0].conditions[1]
+    assert "|" not in report.paired_text_plain(view)
+
+
+def test_saved_example_counts_are_unchanged() -> None:
+    from breakpoint_eval import benchmark_report as report
+
+    data = report.load_validated_data(DATA)
+    counts = {a.axis: [v.successes for v in a.conditions] for a in data.axes}
+    assert counts == {
+        "latency_ms": [25, 25, 25, 23, 18, 14],
+        "resolution": [25, 26, 22, 10],
+        "jpeg": [25, 25, 26, 26, 25, 23],
+        "precision": [25, 24],
+        "device_profile": [25, 24, 9],
+    }
+    assert len(data.rows) == 600 and data.n_runs == 18
+    assert data.trace_window_length == 32
