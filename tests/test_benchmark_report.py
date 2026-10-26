@@ -101,6 +101,15 @@ def test_tampered_file_fails_manifest_check(tmp_path: Path) -> None:
         render_benchmark_report(copy, tmp_path / "report")
 
 
+@pytest.mark.parametrize("manifest_text", ["", "{bad json", '{"files": 3}', '{"files": [{}]}'])
+def test_malformed_manifest_is_a_report_error(tmp_path: Path, manifest_text: str) -> None:
+    copy = tmp_path / "data"
+    shutil.copytree(DATA, copy)
+    (copy / "manifest.json").write_text(manifest_text)
+    with pytest.raises(ReportDataError, match="not a valid manifest"):
+        render_benchmark_report(copy, tmp_path / "report")
+
+
 def test_render_script_runs_without_heavy_packages(tmp_path: Path) -> None:
     banned = [
         "torch",

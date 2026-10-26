@@ -151,15 +151,21 @@ def sample_stats(values: np.ndarray) -> dict[str, float]:
 def verify_manifest(data_dir: Path) -> tuple[Check, str]:
     manifest_path = data_dir / "manifest.json"
     if not manifest_path.exists():
-        raise ReportDataError(f"{manifest_path} is missing; is this a packaged v1 data directory?")
-    manifest = load_json(manifest_path)
+        raise ReportDataError(
+            f"{manifest_path} is missing; is this a packaged benchmark data directory?"
+        )
+    try:
+        manifest = load_json(manifest_path)
+        entries = [(entry["path"], entry["sha256"]) for entry in manifest["files"]]
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ReportDataError(f"{manifest_path} is not a valid manifest: {exc!r}") from exc
     bad: list[str] = []
-    for entry in manifest["files"]:
-        path = data_dir / entry["path"]
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
-            bad.append(entry["path"])
+    for rel_path, expected_sha256 in entries:
+        path = data_dir / rel_path
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected_sha256:
+            bad.append(rel_path)
     manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    detail = f"{len(manifest['files'])} files hashed" if not bad else f"mismatch: {bad[:5]}"
+    detail = f"{len(entries)} files hashed" if not bad else f"mismatch: {bad[:5]}"
     return Check("packaged files match manifest sha256", not bad, detail), manifest_sha
 
 
