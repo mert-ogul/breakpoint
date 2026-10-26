@@ -222,7 +222,7 @@ def test_resolve_int8_refuses_fp32_validation_sidecar(tmp_path: Path) -> None:
         corpus_suitable_as_deployment_evidence=True,
     )
     (tmp_path / VALIDATION_FILENAME).write_text(json.dumps(v2), encoding="utf-8")
-    with pytest.raises(ValueError, match="export_validation_v2_int8"):
+    with pytest.raises(ValueError, match="export_validation_int8"):
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 

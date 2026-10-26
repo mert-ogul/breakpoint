@@ -1,9 +1,9 @@
-# Breakpoint v0.1 fixed protocol
+# ACT deployment stress protocol
 
 Thin scripts over the existing planner, runner, scheduler, and summarizer.
 Public `breakpoint` CLI commands are unchanged.
 
-Config source: `configs/v1.json` (seeds, conditions, host ORT settings, trace-window
+Config source: `configs/act-transfer.json` (seeds, conditions, host ORT settings, trace-window
 design, threshold ratio 0.8, baseline floor 0.5, scheduler semantics).
 
 ## Host settings (fixed across comparisons)

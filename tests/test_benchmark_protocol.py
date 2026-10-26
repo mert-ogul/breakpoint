@@ -1,4 +1,4 @@
-"""Focused v0.1 protocol tests (no full hardware/simulator runs)."""
+"""Focused protocol tests (no full hardware/simulator runs)."""
 
 from __future__ import annotations
 
@@ -32,12 +32,13 @@ from breakpoint_eval.latency_trace import (
 from breakpoint_eval.source_revision import read_source_revision
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = ROOT / "configs" / "v1.json"
+CONFIG_PATH = ROOT / "configs" / "act-transfer.json"
 
 
 def test_config_loads() -> None:
     cfg = load_benchmark_config(CONFIG_PATH)
-    assert cfg["protocol"] == "v0.1"
+    assert cfg["protocol_name"] == "act_deployment_stress"
+    assert cfg["protocol_version"] == "0.1"
     assert cfg["statistics"]["breakpoint_ratio"] == 0.8
     assert cfg["statistics"]["baseline_success_floor"] == 0.5
     assert cfg["host"]["compute_device"] == "cpu"
@@ -316,7 +317,7 @@ def test_scripts_help_and_dry_run() -> None:
     assert "--n-warmup" in help_prof.stdout
 
     # Dry-run without real artifacts should fail validation (not create dirs).
-    out = ROOT / "outputs" / "_v1_dry_run_should_not_exist"
+    out = ROOT / "outputs" / "_benchmark_dry_run_should_not_exist"
     if out.exists():
         # Clean leftover from prior failed attempts.
         import shutil

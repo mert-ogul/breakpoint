@@ -17,9 +17,9 @@ from breakpoint_eval.benchmark_report import ReportValidationError, render_repor
 from breakpoint_eval.benchmark_report_data import ReportDataError, load_report_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "benchmarks" / "act-transfer" / "v1" / "data"
+DATA = ROOT / "benchmarks" / "act-transfer" / "deployment-stress" / "data"
 
-pytestmark = pytest.mark.skipif(not DATA.is_dir(), reason="packaged v1 data not present")
+pytestmark = pytest.mark.skipif(not DATA.is_dir(), reason="packaged benchmark data not present")
 
 
 def tree_hash(path: Path) -> str:

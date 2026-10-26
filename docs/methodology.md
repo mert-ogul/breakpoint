@@ -211,7 +211,8 @@ Paired closed-loop checks compare **independently controlled** episodes (same se
 separate resets). Independent action equality and identical episode lengths are
 **diagnostics only**, not numerical export requirements.
 
-Deployment validation uses versioned `export_validation_v2.json` (schema_version=2):
+Deployment validation uses `export_validation.json` (schema_version=2; older exports name it
+`export_validation_v2.json`, which is still read):
 same-input numerical parity (held-out corpus open-loop chunks plus same-observation
 shadow compares covering every fresh action-chunk inference) and completed closed-loop
 **task outcomes** with recorded success/terminated/truncated fields. Two-seed task

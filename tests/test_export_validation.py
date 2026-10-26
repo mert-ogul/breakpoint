@@ -314,7 +314,7 @@ def _write_export_with_v2(tmp_path: Path, *, v2_passed: bool) -> Path:
         corpus_suitable_as_deployment_evidence=True,
     )
     assert v2["passed"] is v2_passed
-    (tmp_path / "export_validation_v2.json").write_text(json.dumps(v2), encoding="utf-8")
+    (tmp_path / "export_validation.json").write_text(json.dumps(v2), encoding="utf-8")
     return model_path
 
 
@@ -329,5 +329,5 @@ def test_resolve_accepts_v2_when_v1_closed_loop_failed(tmp_path: Path) -> None:
 @pytest.mark.requires_onnx
 def test_resolve_rejects_failed_v2(tmp_path: Path) -> None:
     model_path = _write_export_with_v2(tmp_path, v2_passed=False)
-    with pytest.raises(ValueError, match="export_validation_v2.passed"):
+    with pytest.raises(ValueError, match="export_validation.passed"):
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")

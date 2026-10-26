@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a packaged v0.1 evaluation to HTML, Markdown, plots, and a data index."""
+"""Render a packaged benchmark to HTML, Markdown, plots, and a data index."""
 
 from __future__ import annotations
 

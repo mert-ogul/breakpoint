@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin v0.1 protocol runner over existing planner / runner / summarizer."""
+"""Run the ACT deployment stress protocol over the existing planner, runner and summarizer."""
 
 from __future__ import annotations
 
@@ -16,8 +16,13 @@ _SRC = _ROOT / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from breakpoint_eval.benchmark_protocol import (  # noqa: E402
+from breakpoint_eval.artifact_names import (  # noqa: E402
+    BENCHMARK_CONFIG_NAME,
     PROTOCOL_LOCK_NAME,
+    resolve_artifact,
+)
+from breakpoint_eval.benchmark_protocol import (  # noqa: E402
+    DEFAULT_CONFIG_REL,
     assert_lock_matches,
     build_full_axis_plans,
     build_smoke_plan,
@@ -45,15 +50,15 @@ LOGGER = logging.getLogger("run_benchmark")
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="run_benchmark",
-        description="Fixed Breakpoint v0.1 smoke/full protocol (thin script, not a new framework).",
+        description="Run the fixed ACT deployment stress protocol (smoke or full phase).",
     )
     p.add_argument("--phase", choices=("smoke", "full"), required=True)
     p.add_argument("--out", type=Path, required=True, help="Run output root")
     p.add_argument(
         "--config",
         type=Path,
-        default=_ROOT / "configs" / "v1.json",
-        help="Protocol config (default: configs/v1.json)",
+        default=_ROOT / DEFAULT_CONFIG_REL,
+        help="Protocol config (default: configs/act-transfer.json)",
     )
     p.add_argument("--export-dir", type=Path, default=None, help="Override export dir")
     p.add_argument(
@@ -231,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
         config = load_benchmark_config(args.config.resolve())
         host = host_settings_from_config(config)
         if host.compute_device != "cpu":
-            raise ValueError("v0.1 protocol requires host.compute_device=cpu (no MPS inheritance)")
+            raise ValueError("the protocol requires host.compute_device=cpu (no MPS inheritance)")
 
         overrides: dict[str, Path] = {}
         if args.profile_laptop is not None:
@@ -302,8 +307,9 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out.resolve()
     lock_path = out / PROTOCOL_LOCK_NAME
     if args.resume:
-        if not lock_path.is_file():
-            raise SystemExit(f"--resume requires existing {lock_path}")
+        lock_path = resolve_artifact(out, PROTOCOL_LOCK_NAME)
+        if lock_path is None:
+            raise SystemExit(f"--resume requires existing {out / PROTOCOL_LOCK_NAME}")
         existing = json.loads(lock_path.read_text(encoding="utf-8"))
         assert_lock_matches(existing, lock)
     else:
@@ -314,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         out.mkdir(parents=True, exist_ok=True)
         lock_path.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        shutil.copy2(args.config.resolve(), out / "v1_config.json")
+        shutil.copy2(args.config.resolve(), out / BENCHMARK_CONFIG_NAME)
 
     if artifacts.int8_status != "ok":
         write_unsupported_int8_record(out, artifacts=artifacts)

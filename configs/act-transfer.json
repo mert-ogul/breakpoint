@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
-  "protocol": "v0.1",
+  "protocol_name": "act_deployment_stress",
+  "protocol_version": "0.1",
   "candidate": "act_aloha_transfer",
   "artifacts": {
     "export_dir": "artifacts/export/act-v1",

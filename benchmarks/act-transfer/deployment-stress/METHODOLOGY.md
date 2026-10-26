@@ -1,4 +1,4 @@
-# Methodology: ACT cube transfer, v0.1
+# Methodology: ACT deployment stress benchmark
 
 Simulation only. This is an exploratory run, not a safety assessment and not a statement about a
 physical robot.
@@ -58,7 +58,7 @@ physical robot.
   parity; its recorded same-input chunk error is in `data/validation/export_validation_v2_int8.json`.
   It is a static QDQ model, not a full-model INT8 claim.
 - The device replay axis has no saved experiment summary. Its counts, intervals, and paired tables
-  are derived by `scripts/render_v1.py` from the episode records and labelled as derived.
+  are derived by `scripts/render_benchmark.py` from the episode records and labelled as derived.
 - The saved resolution summary stored the same `ordered_value` (1.0) for every resolution, so the
   summary orders them by plan order (native, 240x320, 120x160, 60x80), which is mild to severe.
   The saved file is preserved unchanged.
@@ -73,4 +73,4 @@ physical robot.
 H.264, other tasks or policies, confirmation with fresh seeds, physical hardware, and any claim
 that these thresholds transfer to another setup.
 
-See also `docs/v1_protocol.md` (fixed protocol) and `docs/methodology.md` (general rules).
+See also `docs/benchmark_protocol.md` (fixed protocol) and `docs/methodology.md` (general rules).

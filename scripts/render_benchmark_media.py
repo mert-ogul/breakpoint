@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Re-record the selected v0.1 baseline/stress pair and write the comparison media.
+"""Re-record the selected baseline/stress pair and write the comparison media.
 
 Needs the simulator stack (see docs/compatibility.md), ONNX Runtime, Pillow, matplotlib
 (for bundled fonts), and ffmpeg with libx264 on PATH.
@@ -20,13 +20,17 @@ if _SRC.is_dir() and str(_SRC) not in sys.path:
 from breakpoint_eval.benchmark_media import MediaVerificationError, make_media  # noqa: E402
 
 LOGGER = logging.getLogger("render_benchmark_media")
-V1_DIR = _ROOT / "benchmarks" / "act-transfer" / "v1"
+BENCHMARK_DIR = _ROOT / "benchmarks" / "act-transfer" / "deployment-stress"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", type=Path, default=V1_DIR / "data", help="packaged data dir")
-    parser.add_argument("--out", type=Path, default=V1_DIR / "media", help="media output dir")
+    parser.add_argument(
+        "--data", type=Path, default=BENCHMARK_DIR / "data", help="packaged data dir"
+    )
+    parser.add_argument(
+        "--out", type=Path, default=BENCHMARK_DIR / "media", help="media output dir"
+    )
     parser.add_argument(
         "--work",
         type=Path,

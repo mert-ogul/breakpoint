@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-V1 = ROOT / "benchmarks" / "act-transfer" / "v1"
+BENCHMARK_DIR = ROOT / "benchmarks" / "act-transfer" / "deployment-stress"
 
 pytestmark = pytest.mark.skipif(
-    not (ROOT / "pyproject.toml").is_file() or not V1.is_dir(),
-    reason="needs a source checkout with benchmarks/act-transfer/v1",
+    not (ROOT / "pyproject.toml").is_file() or not BENCHMARK_DIR.is_dir(),
+    reason="needs a source checkout with benchmarks/act-transfer/deployment-stress",
 )
 
 MARKDOWN_LINK = re.compile(r"(?<!\!)\[[^\]]*\]\(([^)\s]+)\)|!\[[^\]]*\]\(([^)\s]+)\)")
@@ -22,8 +22,8 @@ HTML_LINK = re.compile(r"""(?:href|src)="([^"]+)\"""")
 def _markdown_files() -> list[Path]:
     files = [ROOT / "README.md", ROOT / "CONTRIBUTING.md", ROOT / "profiles" / "README.md"]
     files += sorted((ROOT / "docs").glob("*.md"))
-    files += sorted(V1.glob("*.md"))
-    files.append(V1 / "report" / "report.md")
+    files += sorted(BENCHMARK_DIR.glob("*.md"))
+    files.append(BENCHMARK_DIR / "report" / "report.md")
     return [f for f in files if f.is_file()]
 
 
@@ -63,15 +63,15 @@ def test_markdown_links_resolve(path: Path) -> None:
 
 
 def test_report_html_links_resolve() -> None:
-    html = V1 / "report" / "index.html"
+    html = BENCHMARK_DIR / "report" / "index.html"
     targets = HTML_LINK.findall(html.read_text(encoding="utf-8"))
     assert targets
     assert not _check(html, targets)
 
 
 def test_readme_media_and_social_preview_exist() -> None:
-    media = V1 / "media"
+    media = BENCHMARK_DIR / "media"
     for name in ("comparison.gif", "comparison.mp4", "social-preview.png"):
         assert (media / name).is_file(), name
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "benchmarks/act-transfer/v1/media/comparison.gif" in readme
+    assert "benchmarks/act-transfer/deployment-stress/media/comparison.gif" in readme

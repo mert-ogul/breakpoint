@@ -189,14 +189,14 @@ def resolve_onnx_runtime(
     else:
         if require_export_validation and variant_label == "int8":
             raise ValueError(
-                "INT8 deployment requires export_validation_v2_int8.json next to the "
+                "INT8 deployment requires export_validation_int8.json next to the "
                 f"graph (missing beside {model_path}); refuse FP32 sidecar authorization"
             )
         validation = dict(manifest.get("export_validation") or {})
         if require_export_validation:
             if validation.get("passed") is not True:
                 raise ValueError(
-                    "export_validation.passed is not true and export_validation_v2.json "
+                    "export_validation.passed is not true and export_validation.json "
                     "is missing; refuse to evaluate an unvalidated export as a deployment "
                     f"runtime (manifest={manifest_path})"
                 )

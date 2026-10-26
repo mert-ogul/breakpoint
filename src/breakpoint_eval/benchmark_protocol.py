@@ -1,4 +1,4 @@
-"""Fixed v0.1 protocol: thin planning/resume helpers over existing plan/runner APIs."""
+"""ACT deployment stress protocol: thin planning/resume helpers over existing plan/runner APIs."""
 
 from __future__ import annotations
 
@@ -36,8 +36,11 @@ from breakpoint_eval.latency_trace import (
 
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_protocol")
 
-PROTOCOL_LOCK_NAME = "v1_protocol_lock.json"
-DEFAULT_CONFIG_REL = Path("configs/v1.json")
+DEFAULT_CONFIG_REL = Path("configs/act-transfer.json")
+PROTOCOL_NAME = "act_deployment_stress"
+PROTOCOL_VERSION = "0.1"
+# Configs and locks written before the protocol was named carry "protocol": "v0.1".
+LEGACY_PROTOCOL_LABEL = "v0.1"
 NATIVE_HW = (480, 640)
 
 
@@ -56,19 +59,33 @@ class ResolvedArtifacts:
 
 
 @dataclass(frozen=True)
-class V1HostSettings:
+class BenchmarkHostSettings:
     compute_device: str
     ort_providers: list[str]
     intra_op_num_threads: int
     inter_op_num_threads: int
 
 
+def protocol_identity(payload: dict[str, Any]) -> tuple[str, str]:
+    """Return (name, version) from a config or lock, accepting the legacy "protocol" label."""
+    if "protocol" in payload:
+        if payload["protocol"] != LEGACY_PROTOCOL_LABEL:
+            raise ValueError(f"unknown legacy protocol label {payload['protocol']!r}")
+        return PROTOCOL_NAME, PROTOCOL_VERSION
+    return str(payload.get("protocol_name")), str(payload.get("protocol_version"))
+
+
 def load_benchmark_config(path: Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if int(payload.get("schema_version", -1)) != 1:
-        raise ValueError(f"unsupported v1 config schema_version={payload.get('schema_version')!r}")
-    if payload.get("protocol") != "v0.1":
-        raise ValueError(f"expected protocol v0.1, got {payload.get('protocol')!r}")
+        raise ValueError(
+            f"unsupported benchmark config schema_version={payload.get('schema_version')!r}"
+        )
+    identity = protocol_identity(payload)
+    if identity != (PROTOCOL_NAME, PROTOCOL_VERSION):
+        raise ValueError(
+            f"expected protocol {PROTOCOL_NAME} {PROTOCOL_VERSION}, got {identity[0]} {identity[1]}"
+        )
     return payload
 
 
@@ -259,9 +276,9 @@ def resolve_benchmark_artifacts(
     )
 
 
-def host_settings_from_config(config: dict[str, Any]) -> V1HostSettings:
+def host_settings_from_config(config: dict[str, Any]) -> BenchmarkHostSettings:
     host = config["host"]
-    return V1HostSettings(
+    return BenchmarkHostSettings(
         compute_device=str(host["compute_device"]),
         ort_providers=list(host["ort_providers"]),
         intra_op_num_threads=int(host["intra_op_num_threads"]),
@@ -518,13 +535,14 @@ def freeze_protocol_lock(
     config: dict[str, Any],
     artifacts: ResolvedArtifacts,
     source_revision: dict[str, Any],
-    host: V1HostSettings,
+    host: BenchmarkHostSettings,
     phase: str,
 ) -> dict[str, Any]:
     stats = config["statistics"]
     return {
         "schema_version": 1,
-        "protocol": config["protocol"],
+        "protocol_name": protocol_identity(config)[0],
+        "protocol_version": protocol_identity(config)[1],
         "phase": phase,
         "candidate": config["candidate"],
         "source_revision": source_revision,
@@ -566,7 +584,12 @@ def freeze_protocol_lock(
 
 def assert_lock_matches(existing: dict[str, Any], fresh: dict[str, Any]) -> None:
     """Refuse resume when identity or protocol config changed."""
-    keys = ("protocol", "phase", "candidate", "artifacts", "host", "trace_window", "statistics")
+    if protocol_identity(existing) != protocol_identity(fresh):
+        raise ValueError(
+            "resume refused: protocol identity changed between lock and current configuration. "
+            "Use a fresh --out directory for identity/config changes."
+        )
+    keys = ("phase", "candidate", "artifacts", "host", "trace_window", "statistics")
     for key in keys:
         if existing.get(key) != fresh.get(key):
             raise ValueError(

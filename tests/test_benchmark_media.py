@@ -21,7 +21,15 @@ from breakpoint_eval.benchmark_media import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-EPISODES = ROOT / "benchmarks" / "act-transfer" / "v1" / "data" / "episodes" / "episodes.jsonl"
+EPISODES = (
+    ROOT
+    / "benchmarks"
+    / "act-transfer"
+    / "deployment-stress"
+    / "data"
+    / "episodes"
+    / "episodes.jsonl"
+)
 
 
 def row(condition: str, seed: int, success: bool) -> dict:
@@ -57,7 +65,7 @@ def test_select_pair_refuses_when_no_such_pair() -> None:
         select_pair(rows)
 
 
-@pytest.mark.skipif(not EPISODES.exists(), reason="packaged v1 data not present")
+@pytest.mark.skipif(not EPISODES.exists(), reason="packaged benchmark data not present")
 def test_saved_selection_is_seed_5000() -> None:
     rows = [json.loads(line) for line in EPISODES.read_text().splitlines()]
     selection = select_pair(rows)

@@ -1,4 +1,4 @@
-"""v0.1 device profiling helpers (onnx/numpy only — no simulator or Torch)."""
+"""Device profiling helpers (onnx/numpy only — no simulator or Torch)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from breakpoint_eval.artifact_names import EXPORT_VALIDATION_NAME, resolve_artifact
 from breakpoint_eval.device_profile import (
     DEFAULT_MEASURED,
     DEFAULT_WARMUPS,
@@ -134,7 +135,7 @@ class TelemetrySampler:
 
     def start(self) -> None:
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="v1-telemetry", daemon=True)
+        self._thread = threading.Thread(target=self._loop, name="profile-telemetry", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
@@ -211,18 +212,18 @@ def resolve_validated_fp32_bundle(export_dir: Path) -> ExportBundleFp32:
     if declared and declared != digest:
         raise ValueError(f"FP32 hash mismatch: file={digest} manifest={declared}")
     recipe_id = str(variant.get("recipe_id") or RECIPE_ONNX_FP32)
-    validation_path = export_dir / "export_validation_v2.json"
+    validation_path = resolve_artifact(export_dir, EXPORT_VALIDATION_NAME)
     validation_passed = False
-    if validation_path.is_file():
+    if validation_path is not None:
         validation = json.loads(validation_path.read_text(encoding="utf-8"))
         binding = validation.get("binding") or {}
         bound_sha = binding.get("model_sha256") or validation.get("model_sha256")
         if bound_sha and bound_sha != digest:
-            raise ValueError(f"export_validation_v2 bound sha256={bound_sha} != model {digest}")
+            raise ValueError(f"{validation_path.name} bound sha256={bound_sha} != model {digest}")
         validation_passed = bool(validation.get("passed"))
     if not validation_passed:
         raise ValueError(
-            "validated onnx_fp32 required: export_validation_v2.json passed=true "
+            f"validated onnx_fp32 required: {EXPORT_VALIDATION_NAME} passed=true "
             f"bound to {digest[:12]}"
         )
 

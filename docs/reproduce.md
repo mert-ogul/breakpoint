@@ -1,4 +1,4 @@
-# Reproduce ACT FP32 / INT8 release validation (v0.1)
+# Reproduce the ACT export validation
 
 Pinned stack: LeRobot `3c0a209…`, ACT transfer Hub `9e935457…`,
 `requirements-simulation.txt` + `requirements-onnx.txt`. Do not invent pins.
@@ -42,7 +42,7 @@ Artifacts:
 - `act_chunk_fp32.onnx`, optional `act_chunk_int8_qdq.onnx`
 - `corpus_eval.npz` / `corpus_calibration.npz` (+ JSON sidecars)
 - `export_manifest.json`
-- `export_validation_v2_int8.json` (INT8 identity/finite/shape/coverage; not FP32 hash)
+- `export_validation_int8.json` (INT8 identity/finite/shape/coverage; not FP32 hash)
 
 ## 2. Closed-loop diagnosis (binds to on-disk FP32 hash)
 
@@ -56,13 +56,13 @@ breakpoint diagnose-closed-loop \
   --device cpu
 ```
 
-## 3. Write FP32 export validation v2
+## 3. Write the FP32 export validation
 
 ```bash
-breakpoint write-export-validation-v2 \
+breakpoint write-export-validation \
   --export-dir outputs/v1/export-act-transfer \
   --diagnosis outputs/v1/export-act-transfer-diagnosis/closed_loop_diagnosis.json \
-  --output outputs/v1/export-act-transfer/export_validation_v2.json
+  --output outputs/v1/export-act-transfer/export_validation.json
 ```
 
 Refuses stale diagnosis (missing/`model_sha256` mismatch), missing
@@ -72,7 +72,7 @@ incomplete task episodes. Independent trajectory equality is diagnostic only.
 ## 4. Two-model verification (FP32 then INT8)
 
 ```bash
-# FP32 — requires export_validation_v2.json bound to this graph hash
+# FP32 — requires export_validation.json bound to this graph hash
 python - <<'PY'
 from pathlib import Path
 from breakpoint_eval.export_runtime import resolve_onnx_runtime
@@ -81,7 +81,7 @@ fp32 = resolve_onnx_runtime(root / "act_chunk_fp32.onnx", expected_candidate="ac
 print("fp32", fp32.variant_label, fp32.recipe_id, fp32.model_sha256[:12], fp32.export_validation.get("passed"))
 PY
 
-# INT8 — requires export_validation_v2_int8.json (FP32 sidecar must not authorize INT8)
+# INT8 — requires export_validation_int8.json (FP32 sidecar must not authorize INT8)
 python - <<'PY'
 from pathlib import Path
 from breakpoint_eval.export_runtime import resolve_onnx_runtime
@@ -95,14 +95,14 @@ print("parent", (rt.export_validation.get("binding") or {}).get("parent_fp32_sha
 PY
 ```
 
-## 5. Fixed v0.1 protocol (smoke / full / profile)
+## 5. Run the deployment stress protocol
 
 See [benchmark_protocol.md](benchmark_protocol.md) for `scripts/run_benchmark.py`, `scripts/profile_device.py`,
-and `configs/v1.json`. Prefer `--dry-run` before any long eval.
+and `configs/act-transfer.json`. Prefer `--dry-run` before any long eval.
 
 ## 6. Package, report, and media for the completed full run
 
-See [`benchmarks/act-transfer/v1/REPRODUCE.md`](../benchmarks/act-transfer/v1/REPRODUCE.md)
+See [`benchmarks/act-transfer/deployment-stress/REPRODUCE.md`](../benchmarks/act-transfer/deployment-stress/REPRODUCE.md)
 for `scripts/package_benchmark.py`, `scripts/render_benchmark.py`, and `scripts/render_benchmark_media.py`.
 
 ## Notes

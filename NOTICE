@@ -1,0 +1,31 @@
+Breakpoint (breakpoint-eval) 0.1.0 (experimental)
+
+This repository is licensed under the Apache License, Version 2.0 (see LICENSE).
+It declares no copyright holder or author list in its metadata.
+
+Breakpoint does not redistribute upstream source code or model weights. The ACT deployment stress
+benchmark uses the following projects at run time. Each is obtained by its own
+installer or download and stays under its own license.
+
+- LeRobot (https://github.com/huggingface/lerobot), Apache-2.0. Pinned to commit
+  3c0a209f9fac4d2a57617e686a7f2a2309144ba2 and cloned into vendor/ by the setup
+  commands; vendor/ is not tracked in this repository.
+- lerobot/act_aloha_sim_transfer_cube_human weights (Hugging Face Hub), license
+  apache-2.0 as stated on the model card. The ACT method is described in
+  "Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware"
+  (https://arxiv.org/abs/2304.13705).
+- gym-aloha (https://github.com/huggingface/gym-aloha), Apache-2.0, which provides
+  the simulated ALOHA transfer-cube task.
+- MuJoCo and dm_control (Google DeepMind), Apache-2.0, installed as dependencies of
+  gym-aloha.
+- ONNX, ONNX Runtime, NumPy, Matplotlib, PyAV, OpenCV, PyTorch and torchvision are
+  installed from PyPI under their own licenses. Check each package's metadata
+  before redistributing an environment.
+
+The comparison media under benchmarks/act-transfer/deployment-stress/media/ are frames rendered
+from that simulator with the model above. Exported ONNX graphs are not tracked; their
+SHA-256 values are recorded in
+benchmarks/act-transfer/deployment-stress/data/protocol/v1_protocol_lock.json.
+
+Names of third-party projects are used only to identify them. This project is not
+affiliated with or endorsed by their owners.

@@ -1,4 +1,4 @@
-"""Select, re-record, verify, and compose the v0.1 comparison media from saved results.
+"""Select, re-record, verify, and compose the comparison media from saved results.
 
 Selection reads only packaged episode records. Recording re-runs exactly one baseline and one
 stress episode through ``run_baseline`` with the saved seeds and effective settings, then checks
@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 
+from breakpoint_eval.artifact_names import PROTOCOL_LOCK_NAME, require_artifact
 from breakpoint_eval.stack import repo_root_from_package
 
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_media")
@@ -578,7 +579,7 @@ def make_media(
         for line in (data_dir / "episodes" / "episodes.jsonl").read_text().splitlines()
         if line
     ]
-    lock = json.loads((data_dir / "protocol" / "v1_protocol_lock.json").read_text())
+    lock = json.loads(require_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME).read_text())
     selection = select_pair(rows)
     stride = round(1.0 / fps / CONTROL_PERIOD_S)
     plan_path = data_dir / "protocol" / "plans" / f"{LATENCY_PLAN}.json"

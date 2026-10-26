@@ -1,4 +1,4 @@
-"""Stylesheet for the v0.1 report: plain CSS, system fonts, light/dark/print/mobile."""
+"""Stylesheet for the benchmark report: plain CSS, system fonts, light/dark/print/mobile."""
 
 CSS = """
 :root{

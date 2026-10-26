@@ -17,6 +17,11 @@ from pathlib import Path
 from typing import Any
 
 from breakpoint_eval.act_export import sha256_file
+from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT8_NAME,
+    EXPORT_VALIDATION_NAME,
+    resolve_artifact,
+)
 from breakpoint_eval.export_tolerances import (
     ONNX_FP32_CLOSED_LOOP_ATOL,
     ONNX_FP32_CLOSED_LOOP_RTOL,
@@ -28,8 +33,8 @@ from breakpoint_eval.export_tolerances import (
 )
 
 SCHEMA_VERSION = 2
-VALIDATION_FILENAME = "export_validation_v2.json"
-INT8_VALIDATION_FILENAME = "export_validation_v2_int8.json"
+VALIDATION_FILENAME = EXPORT_VALIDATION_NAME
+INT8_VALIDATION_FILENAME = EXPORT_VALIDATION_INT8_NAME
 
 # Terminal outcomes from a finished episode (not policy_failed / runtime_error).
 _COMPLETED_TASK_OUTCOMES = frozenset(
@@ -415,10 +420,10 @@ def assert_validation_v2_acceptable(
 ) -> None:
     """Fail-closed acceptance for FP32 deployment runtime binding."""
     if not isinstance(result, dict):
-        raise ValueError("export_validation_v2 must be a JSON object")
+        raise ValueError("export_validation must be a JSON object")
     if result.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(
-            f"export_validation_v2 schema_version must be {SCHEMA_VERSION}; "
+            f"export_validation schema_version must be {SCHEMA_VERSION}; "
             f"got {result.get('schema_version')!r}"
         )
     if (
@@ -427,44 +432,44 @@ def assert_validation_v2_acceptable(
     ):
         raise ValueError(
             "FP32 deployment resolve refused INT8 validation sidecar; "
-            "use export_validation_v2_int8.json for INT8 graphs"
+            "use export_validation_int8.json for INT8 graphs"
         )
     if result.get("passed") is not True:
         raise ValueError(
-            "export_validation_v2.passed is not true; refuse unvalidated deployment runtime "
+            "export_validation.passed is not true; refuse unvalidated deployment runtime "
             f"(reasons={result.get('not_passed_reasons')})"
         )
     binding = result.get("binding") or {}
-    _require_binding_identity(binding, label="export_validation_v2")
+    _require_binding_identity(binding, label="export_validation")
     if not result.get("validation_settings"):
-        raise ValueError("export_validation_v2 validation_settings missing")
+        raise ValueError("export_validation validation_settings missing")
     if binding.get("model_sha256") != model_sha256:
         raise ValueError(
-            "export_validation_v2 model_sha256 mismatch: "
+            "export_validation model_sha256 mismatch: "
             f"validation={binding.get('model_sha256')!r} model={model_sha256!r}"
         )
     if corpus_eval_sha256 is None or corpus_eval_sha256 == "":
         raise ValueError("corpus_eval_sha256 required for deployment runtime binding")
     if binding.get("corpus_eval_sha256") != corpus_eval_sha256:
         raise ValueError(
-            "export_validation_v2 corpus_eval_sha256 mismatch: "
+            "export_validation corpus_eval_sha256 mismatch: "
             f"validation={binding.get('corpus_eval_sha256')!r} "
             f"manifest={corpus_eval_sha256!r}"
         )
     if hub_revision is not None and hub_revision != "":
         if binding.get("hub_revision") != hub_revision:
             raise ValueError(
-                "export_validation_v2 hub_revision mismatch: "
+                "export_validation hub_revision mismatch: "
                 f"validation={binding.get('hub_revision')!r} manifest={hub_revision!r}"
             )
     numerical = result.get("numerical_parity") or {}
     if numerical.get("passed") is not True:
-        raise ValueError("export_validation_v2 numerical_parity.passed is not true")
+        raise ValueError("export_validation numerical_parity.passed is not true")
     tasks = result.get("closed_loop_task_outcomes") or {}
     if tasks.get("passed") is not True or tasks.get("completed") is not True:
-        raise ValueError("export_validation_v2 closed_loop_task_outcomes incomplete or failed")
+        raise ValueError("export_validation closed_loop_task_outcomes incomplete or failed")
     if result.get("corpus_suitable_as_deployment_evidence") is not True:
-        raise ValueError("export_validation_v2 corpus is not suitable as deployment evidence")
+        raise ValueError("export_validation corpus is not suitable as deployment evidence")
 
 
 def evaluate_int8_runtime_checks(parity_report: dict[str, Any] | None) -> dict[str, Any]:
@@ -580,17 +585,17 @@ def assert_int8_validation_acceptable(
     calibration_sha256: str | None = None,
 ) -> None:
     if not isinstance(result, dict):
-        raise ValueError("export_validation_v2_int8 must be a JSON object")
+        raise ValueError("export_validation_int8 must be a JSON object")
     if result.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(
-            f"export_validation_v2_int8 schema_version must be {SCHEMA_VERSION}; "
+            f"export_validation_int8 schema_version must be {SCHEMA_VERSION}; "
             f"got {result.get('schema_version')!r}"
         )
     if result.get("variant_label") != "int8":
         raise ValueError("INT8 resolve requires variant_label=int8 validation sidecar")
     if result.get("passed") is not True:
         raise ValueError(
-            "export_validation_v2_int8.passed is not true; refuse unvalidated INT8 runtime "
+            "export_validation_int8.passed is not true; refuse unvalidated INT8 runtime "
             f"(reasons={result.get('not_passed_reasons')})"
         )
     binding = result.get("binding") or {}
@@ -623,7 +628,7 @@ def build_validation_v2_from_artifacts(
     repo_root: Path,
     output_path: Path | None = None,
 ) -> Path:
-    """Assemble v2 from an existing export manifest + closed-loop diagnosis JSON."""
+    """Assemble the schema 2 validation from an existing export manifest + closed-loop diagnosis JSON."""
     export_dir = Path(export_dir).resolve()
     diagnosis_path = Path(diagnosis_path).resolve()
     manifest_path = export_dir / "export_manifest.json"
@@ -739,7 +744,7 @@ def build_validation_v2_from_artifacts(
 def load_export_validation_v2(path: Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError(f"export_validation_v2 must be a JSON object: {path}")
+        raise ValueError(f"export_validation must be a JSON object: {path}")
     return payload
 
 
@@ -748,10 +753,8 @@ def find_export_validation_v2(model_path: Path, *, variant_label: str | None = N
     label = (variant_label or "").lower()
     name = Path(model_path).name.lower()
     if label == "int8" or "int8" in name:
-        sibling = parent / INT8_VALIDATION_FILENAME
-        return sibling if sibling.is_file() else None
-    sibling = parent / VALIDATION_FILENAME
-    return sibling if sibling.is_file() else None
+        return resolve_artifact(parent, INT8_VALIDATION_FILENAME)
+    return resolve_artifact(parent, VALIDATION_FILENAME)
 
 
 def write_int8_validation_from_export(

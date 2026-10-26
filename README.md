@@ -2,15 +2,15 @@
 
 Breakpoint measures how a pretrained robot policy's task success changes when simulated delay, camera quality, or numeric precision degrade, using paired seeds and reported uncertainty.
 
-![Baseline and +640 ms delay, same seed, side by side](benchmarks/act-transfer/v1/media/comparison.gif)
+![Baseline and +640 ms delay, same seed, side by side](benchmarks/act-transfer/deployment-stress/media/comparison.gif)
 
-*Selected example (env seed 5000), not a typical episode: the same ACT policy and seed with no added delay (success at 5.68 s) and with +640 ms inference delay (timeout at 8.00 s). Across all 30 seeds the baseline succeeded 25 times and the +640 ms condition 14 times. Real simulation footage; no physical robot. [MP4](benchmarks/act-transfer/v1/media/comparison.mp4)*
+*Selected example (env seed 5000), not a typical episode: the same ACT policy and seed with no added delay (success at 5.68 s) and with +640 ms inference delay (timeout at 8.00 s). Across all 30 seeds the baseline succeeded 25 times and the +640 ms condition 14 times. Real simulation footage; no physical robot. [MP4](benchmarks/act-transfer/deployment-stress/media/comparison.mp4)*
 
-[Try the example](#try-the-example) · [Reproduce](benchmarks/act-transfer/v1/REPRODUCE.md) · [Methodology](benchmarks/act-transfer/v1/METHODOLOGY.md)
+[Try the example](#try-the-example) · [Reproduce](benchmarks/act-transfer/deployment-stress/REPRODUCE.md) · [Methodology](benchmarks/act-transfer/deployment-stress/METHODOLOGY.md)
 
 ## Results
 
-v0.1, exploratory. One task: ALOHA TransferCube simulation, pretrained ACT policy
+Exploratory ACT deployment stress benchmark. One task: ALOHA TransferCube simulation, pretrained ACT policy
 `lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on CPU. One stress axis changes at a
 time; each condition is 30 paired episodes (env seeds 5000 to 5029). Entries are successes out of 30.
 
@@ -25,7 +25,7 @@ time; each condition is 30 paired episodes (env seeds 5000 to 5029). Entries are
 The baseline is 25/30 (83.3%, Wilson 95% interval 66.4% to 92.7%). With a threshold of 0.8 times
 the baseline, the point estimate first falls below it at 320 ms, at 60x80, and under the Pi 5
 replay; no JPEG quality or the INT8 graph fell below it. These are observed points, not exact
-boundaries, and the 320 ms interval includes the threshold. The [full report](benchmarks/act-transfer/v1/report/index.html)
+boundaries, and the 320 ms interval includes the threshold. The [full report](benchmarks/act-transfer/deployment-stress/report/index.html)
 has intervals, a per-seed paired outcome matrix, latency traces, and provenance.
 
 ## Try the example
@@ -37,7 +37,7 @@ or model download.
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -e '.[report]'
 .venv/bin/python scripts/render_benchmark.py \
-  --input benchmarks/act-transfer/v1/data --out /tmp/breakpoint-report
+  --input benchmarks/act-transfer/deployment-stress/data --out /tmp/breakpoint-report
 ```
 
 Then open `/tmp/breakpoint-report/index.html`.
@@ -90,7 +90,7 @@ explicitly.
 - Not covered: other tasks, other policies, H.264, and any claim that these thresholds transfer to
   another setup.
 - About 390 MB of raw control-step logs are kept locally, not in the repository; hashes are in
-  [`large_evidence.json`](benchmarks/act-transfer/v1/data/large_evidence.json).
+  [`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json).
 
 ## License
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package a completed v0.1 run into benchmarks/act-transfer/v1/data (read-only on inputs)."""
+"""Package a completed benchmark run into benchmarks/act-transfer/deployment-stress/data (read-only on inputs)."""
 
 from __future__ import annotations
 
@@ -12,16 +12,28 @@ import sys
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_SRC = REPO_ROOT / "src"
+if _SRC.is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from breakpoint_eval.artifact_names import (  # noqa: E402
+    BENCHMARK_CONFIG_NAME,
+    EXPORT_VALIDATION_INT8_NAME,
+    EXPORT_VALIDATION_NAME,
+    PROTOCOL_LOCK_NAME,
+    require_artifact,
+)
+
 LOGGER = logging.getLogger("package_benchmark")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FULL = REPO_ROOT / "outputs" / "v1" / "full"
-DEFAULT_OUT = REPO_ROOT / "benchmarks" / "act-transfer" / "v1" / "data"
+DEFAULT_OUT = REPO_ROOT / "benchmarks" / "act-transfer" / "deployment-stress" / "data"
 EXPORT_DIR = REPO_ROOT / "artifacts" / "export" / "act-v1"
 PROFILE_DEVICES = ("laptop-m3", "rpi5")
 EXPORT_VALIDATION_FILES = (
-    "export_validation_v2.json",
-    "export_validation_v2_int8.json",
+    EXPORT_VALIDATION_NAME,
+    EXPORT_VALIDATION_INT8_NAME,
     "export_manifest.json",
     "corpus_eval.json",
     "corpus_calibration.json",
@@ -181,8 +193,10 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def package_protocol(full_root: Path, out: Path) -> None:
-    for name in ("v1_config.json", "v1_protocol_lock.json", "run_records.json"):
-        copy_verbatim(full_root / name, out / "protocol" / name)
+    for name in (BENCHMARK_CONFIG_NAME, PROTOCOL_LOCK_NAME):
+        source = require_artifact(full_root, name)
+        copy_verbatim(source, out / "protocol" / source.name)
+    copy_verbatim(full_root / "run_records.json", out / "protocol" / "run_records.json")
     for plan in sorted((full_root / "plans").glob("*.json")):
         copy_verbatim(plan, out / "protocol" / "plans" / plan.name)
 
@@ -206,7 +220,12 @@ def package_historical(full_root: Path, out: Path) -> None:
 
 def package_validation(out: Path, large: list[dict[str, Any]]) -> None:
     for name in EXPORT_VALIDATION_FILES:
-        copy_verbatim(EXPORT_DIR / name, out / "validation" / name)
+        source = (
+            require_artifact(EXPORT_DIR, name)
+            if name in (EXPORT_VALIDATION_NAME, EXPORT_VALIDATION_INT8_NAME)
+            else EXPORT_DIR / name
+        )
+        copy_verbatim(source, out / "validation" / source.name)
     for name in (
         "act_chunk_fp32.onnx",
         "act_chunk_int8_qdq.onnx",
@@ -239,7 +258,7 @@ def package_profiles(out: Path, large: list[dict[str, Any]]) -> None:
 
 
 def package_identities(full_root: Path, out: Path) -> None:
-    lock = load_json(full_root / "v1_protocol_lock.json")
+    lock = load_json(require_artifact(full_root, PROTOCOL_LOCK_NAME))
     artifacts = lock["artifacts"]
     for label, key in (("fp32", "fp32_sha256"), ("int8", "int8_sha256")):
         path = Path(artifacts[f"{label}_path"])

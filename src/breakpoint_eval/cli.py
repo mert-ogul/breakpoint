@@ -262,11 +262,11 @@ def _add_run_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
 
 
-def _add_write_export_validation_v2_parser(
+def _add_write_export_validation_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
     parser = subparsers.add_parser(
-        "write-export-validation-v2",
+        "write-export-validation",
         help=(
             "Write schema_version=2 export validation from an existing export "
             "manifest + closed-loop diagnosis (does not modify export_manifest.json)"
@@ -283,7 +283,7 @@ def _add_write_export_validation_v2_parser(
         "--output",
         type=Path,
         default=None,
-        help="Defaults to <export-dir>/export_validation_v2.json",
+        help="Defaults to <export-dir>/export_validation.json",
     )
     parser.add_argument("--repo-root", type=Path, default=None)
 
@@ -527,7 +527,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_report_parser(sub)
     _add_export_parser(sub)
     _add_diagnose_closed_loop_parser(sub)
-    _add_write_export_validation_v2_parser(sub)
+    _add_write_export_validation_parser(sub)
     _add_profile_parser(sub)
     _add_plan_parser(sub)
     _add_summarize_parser(sub)
@@ -578,7 +578,7 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, Any]]:
     raise ValueError(kind)
 
 
-def _cmd_write_export_validation_v2(args: argparse.Namespace) -> int:
+def _cmd_write_export_validation(args: argparse.Namespace) -> int:
     from breakpoint_eval.export_validation import build_validation_v2_from_artifacts
 
     repo_root = (args.repo_root or _repo_root_from_package()).resolve()
@@ -1313,8 +1313,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_export(args)
     if args.command == "diagnose-closed-loop":
         return _cmd_diagnose_closed_loop(args)
-    if args.command == "write-export-validation-v2":
-        return _cmd_write_export_validation_v2(args)
+    if args.command == "write-export-validation":
+        return _cmd_write_export_validation(args)
     if args.command == "profile":
         return _cmd_profile(args)
     if args.command == "plan":

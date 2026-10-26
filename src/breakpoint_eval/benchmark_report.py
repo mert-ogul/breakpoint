@@ -1,4 +1,4 @@
-"""Render the packaged v0.1 evaluation as local HTML, Markdown, plots, and a data index."""
+"""Render the packaged benchmark as local HTML, Markdown, plots, and a data index."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from breakpoint_eval import __version__
+from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT8_NAME,
+    EXPORT_VALIDATION_NAME,
+    PROTOCOL_LOCK_NAME,
+    require_artifact,
+)
 from breakpoint_eval.benchmark_report_data import (
     AxisView,
     ConditionView,
@@ -416,8 +422,9 @@ def observations(data: ReportData) -> list[str]:
 def provenance_html(data: ReportData, out_dir: Path) -> str:
     art = data.lock["artifacts"]
     lock = data.lock
-    int8_validation = data.validation_files.get("export_validation_v2_int8.json", {})
-    fp32_validation = data.validation_files.get("export_validation_v2.json", {})
+    lock_rel = f"protocol/{require_artifact(data.data_dir / 'protocol', PROTOCOL_LOCK_NAME).name}"
+    int8_validation = data.validation_files.get(EXPORT_VALIDATION_INT8_NAME, {})
+    fp32_validation = data.validation_files.get(EXPORT_VALIDATION_NAME, {})
     runtime = int8_validation.get("runtime_checks", {})
     checks = "".join(
         f'<tr><td class="num">{"pass" if c.passed else "FAIL"}</td><td>{esc(c.name)}</td>'
@@ -468,7 +475,7 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         "<details><summary>Historical paths</summary><p>The verbatim protocol, summary, and "
         "provenance files keep the absolute paths of the machine that produced them. Links in "
         "this report are relative.</p>"
-        f'<ul class="evidence"><li><a href="{esc(rel_link(data, out_dir, "protocol/v1_protocol_lock.json"))}">'
+        f'<ul class="evidence"><li><a href="{esc(rel_link(data, out_dir, lock_rel))}">'
         "Protocol lock</a></li>"
         f'<li><a href="{esc(rel_link(data, out_dir, "manifest.json"))}">Data manifest</a></li>'
         f'<li><a href="{esc(rel_link(data, out_dir, "large_evidence.json"))}">Large evidence index'
@@ -510,9 +517,9 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         '<meta name="color-scheme" content="light dark">'
-        "<title>Breakpoint v0.1 report: ACT cube transfer</title>"
+        "<title>ACT deployment stress benchmark: cube transfer</title>"
         f"<style>{CSS}{tab_css([k for k, _ in tabs])}</style></head><body><main>"
-        '<header><p class="eyebrow">Breakpoint &middot; v0.1 &middot; exploratory</p>'
+        '<header><p class="eyebrow">Breakpoint &middot; ACT deployment stress benchmark &middot; exploratory</p>'
         "<h1>ACT cube transfer under isolated stress</h1>"
         '<p class="lead">One pretrained ACT policy (<code>lerobot/act_aloha_sim_transfer_cube_human'
         "</code>) in the ALOHA TransferCube simulation, run as ONNX Runtime on CPU. Four isolated "
@@ -533,7 +540,7 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
 
 def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     lines = [
-        "# Breakpoint v0.1: ACT cube transfer under isolated stress",
+        "# ACT deployment stress benchmark: cube transfer under isolated stress",
         "",
         "Simulation only. One pretrained ACT policy, ONNX Runtime on CPU, paired seeds "
         f"{seed_range(data)}, {episodes_per_condition(data)} episodes per condition. "

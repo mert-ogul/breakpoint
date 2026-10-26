@@ -1,7 +1,7 @@
 # Compatibility baseline
 
 Status date: 2026-10-12 (local probe on Apple M3, macOS 14.6), updated 2026-10-19 with the
-v0.1 ACT transfer evaluation (see "Current evidence").
+ACT deployment stress benchmark (see "Current evidence").
 
 Breakpoint evaluates pretrained policies in simulation. This document records one
 explicit Python / LeRobot / simulator stack and what was actually verified for
@@ -110,7 +110,7 @@ This project does **not** claim physical-robot or remote-hardware experiment run
 
 | Candidate | Hub revision (pinned) | Env | loaded | ran | reproduced | camera (impl / synthetic / sim) | L=0 (impl / synthetic / sim) | ONNX FP32 | device profile |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **yes** (v0.1: 600 episodes, CPU, ONNX FP32) | **no** (not run at card scale with upstream eval) | yes / yes / **yes** | yes / yes / **yes** | **yes** (export validation v2; 25/30 baseline) | **yes** (laptop-m3, rpi5; Pi throttled) |
+| ACT ALOHA transfer | `9e935457…` | AlohaTransferCube-v0 | **yes** (artifact) | **yes** (deployment stress benchmark: 600 episodes, CPU, ONNX FP32) | **no** (not run at card scale with upstream eval) | yes / yes / **yes** | yes / yes / **yes** | **yes** (export validation v2; 25/30 baseline) | **yes** (laptop-m3, rpi5; Pi throttled) |
 | ACT ALOHA insertion | `2bd896d0…` | AlohaInsertion-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unverified** | not attempted |
 | Diffusion PushT | `202c8695…` | PushT-v0 | **unverified** | not attempted | **no** | yes / yes / **unverified** | yes / yes / **unverified** | **unsupported** | **unsupported** (ORT) |
 
@@ -149,9 +149,9 @@ Insertion uses the same ACT layout; success is reward == 4 when peg contacts pin
 PushT (card / `gym-pusht`): image `(3,96,96)`, state `(2,)`, `n_obs_steps=2`,
 horizon 16 / `n_action_steps=8`, success if coverage ≥ 0.95; actions in `[0, 512]^2`.
 
-## Current evidence: ACT transfer v0.1 (2026-10-19)
+## Current evidence: ACT deployment stress benchmark (2026-10-19)
 
-Source: [`benchmarks/act-transfer/v1`](../benchmarks/act-transfer/v1/README.md) (packaged
+Source: [`benchmarks/act-transfer/deployment-stress`](../benchmarks/act-transfer/deployment-stress/README.md) (packaged
 from the completed full run). Simulation only.
 
 | Item | Evidence |

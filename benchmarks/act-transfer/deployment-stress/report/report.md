@@ -1,4 +1,4 @@
-# Breakpoint v0.1: ACT cube transfer under isolated stress
+# ACT deployment stress benchmark: cube transfer under isolated stress
 
 Simulation only. One pretrained ACT policy, ONNX Runtime on CPU, paired seeds 5000–5029, 30 episodes per condition. Exploratory run.
 

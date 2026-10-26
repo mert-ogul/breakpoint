@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin v0.1 device profiler (requires only breakpoint-eval[onnx])."""
+"""Profile validated ONNX FP32 on this device (requires only breakpoint-eval[onnx])."""
 
 from __future__ import annotations
 

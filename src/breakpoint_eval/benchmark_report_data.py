@@ -1,4 +1,4 @@
-"""Load a packaged v0.1 run and validate every displayed count against episode records.
+"""Load a packaged benchmark run and validate every displayed count against episode records.
 
 Reads only the packaged data directory (see scripts/package_benchmark.py). No Torch, MuJoCo,
 network, or model access.
@@ -16,6 +16,13 @@ from typing import Any
 
 import numpy as np
 
+from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT8_NAME,
+    EXPORT_VALIDATION_NAME,
+    PROTOCOL_LOCK_NAME,
+    require_artifact,
+    resolve_artifact,
+)
 from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.experiment_summary import wilson_interval
 from breakpoint_eval.latency_trace import contiguous_window_starts
@@ -518,7 +525,7 @@ def load_report_data(data_dir: Path) -> ReportData:
         key=lambda p: AXIS_ORDER.index(p["axis"]),
     )
     axes = [build_axis(data_dir, rows, plan, "latency_ms_0") for plan in plans]
-    lock = load_json(data_dir / "protocol" / "v1_protocol_lock.json")
+    lock = load_json(require_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME))
     profiles = [build_profile(data_dir, d, rows) for d in ("laptop-m3", "rpi5")]
     checks = [
         manifest_check,
@@ -529,10 +536,11 @@ def load_report_data(data_dir: Path) -> ReportData:
         *validate_replay(axes, profiles, rows),
         validate_identities(lock, profiles),
     ]
-    validation_files = {
-        p.name: load_json(p)
-        for p in sorted((data_dir / "validation").glob("export_validation*.json"))
-    }
+    validation_files = {}
+    for name in (EXPORT_VALIDATION_NAME, EXPORT_VALIDATION_INT8_NAME):
+        path = resolve_artifact(data_dir / "validation", name)
+        if path is not None:
+            validation_files[name] = load_json(path)
     return ReportData(
         data_dir=data_dir,
         axes=axes,

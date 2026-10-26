@@ -3,7 +3,7 @@
 
 Checks: license files in the wheel, CLI help for every subcommand, workspace resolution
 (default and ``BREAKPOINT_ROOT``) with a read-only installed package, and optionally rendering
-the saved v0.1 example with the installed code.
+the saved example with the installed code.
 """
 
 from __future__ import annotations
@@ -125,7 +125,9 @@ def check_installed(wheel: Path, example_data: Path | None) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, required=True)
-    parser.add_argument("--example-data", type=Path, help="packaged v0.1 data directory to render")
+    parser.add_argument(
+        "--example-data", type=Path, help="packaged benchmark data directory to render"
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     check_license_files(args.wheel)

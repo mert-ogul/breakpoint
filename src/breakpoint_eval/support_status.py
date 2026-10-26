@@ -64,7 +64,7 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         device_profile="yes",
         notes=(
             "loaded evidence under artifacts/feasibility_act_transfer/. "
-            "v0.1 evaluation packaged in benchmarks/act-transfer/v1: 600 CPU episodes "
+            "deployment stress benchmark packaged in benchmarks/act-transfer/deployment-stress: 600 CPU episodes "
             "(seeds 5000-5029), ONNX FP32 baseline 25/30, static QDQ INT8 24/30, "
             "constant delay, resolution, JPEG, and laptop-m3 / rpi5 latency replay. "
             "Card-scale reproduction not claimed. The rpi5 profile was captured under "

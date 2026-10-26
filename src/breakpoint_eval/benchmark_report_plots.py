@@ -1,4 +1,4 @@
-"""Matplotlib figures for the v0.1 report (light and dark variants; SVG and PNG)."""
+"""Matplotlib figures for the benchmark report (light and dark variants; SVG and PNG)."""
 
 from __future__ import annotations
 
