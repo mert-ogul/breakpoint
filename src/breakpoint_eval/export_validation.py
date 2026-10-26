@@ -11,7 +11,6 @@ Independent trajectory equality is recorded but does not fail deployment validat
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,6 +30,7 @@ from breakpoint_eval.export_tolerances import (
     ONNX_FP32_PARITY_RTOL,
 )
 from breakpoint_eval.file_digest import sha256_file
+from breakpoint_eval.source_revision import read_source_revision
 
 SCHEMA_VERSION = 2
 VALIDATION_FILENAME = EXPORT_VALIDATION_NAME
@@ -63,41 +63,26 @@ class ValidationBinding:
     candidate: str
     recipe_id: str
     variant_label: str
-    code_revision: str
-    code_dirty: bool
-    uncommitted_paths: tuple[str, ...]
+    code_revision: str | None
+    code_dirty: bool | None
+    uncommitted_paths: tuple[str, ...] | None
 
 
 def collect_code_revision(repo_root: Path) -> dict[str, Any]:
-    """Record HEAD and uncommitted paths (fail-open to empty if not a git repo)."""
-    root = Path(repo_root).resolve()
-    revision = None
-    dirty_paths: list[str] = []
-    try:
-        rev = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        revision = rev.stdout.strip() or None
-        status = subprocess.run(
-            ["git", "-C", str(root), "status", "--porcelain"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        for line in status.stdout.splitlines():
-            path = line[3:].strip() if len(line) >= 4 else line.strip()
-            if path:
-                dirty_paths.append(path)
-    except (OSError, subprocess.CalledProcessError):
-        revision = None
-        dirty_paths = []
+    """Record HEAD and uncommitted paths; dirty state and paths are None when unknown."""
+    info = read_source_revision(Path(repo_root).resolve())
+    porcelain = info["status_porcelain"]
+    uncommitted: list[str] | None = None
+    if porcelain is not None:
+        uncommitted = [
+            (line[3:] if len(line) >= 4 else line).strip()
+            for line in porcelain.splitlines()
+            if line.strip()
+        ]
     return {
-        "code_revision": revision,
-        "code_dirty": bool(dirty_paths),
-        "uncommitted_paths": dirty_paths,
+        "code_revision": info["revision"],
+        "code_dirty": info["dirty"],
+        "uncommitted_paths": uncommitted,
     }
 
 
@@ -387,7 +372,9 @@ def build_export_validation_v2(
             "variant_label": binding.variant_label,
             "code_revision": binding.code_revision,
             "code_dirty": binding.code_dirty,
-            "uncommitted_paths": list(binding.uncommitted_paths),
+            "uncommitted_paths": (
+                None if binding.uncommitted_paths is None else list(binding.uncommitted_paths)
+            ),
         },
         "validation_settings": _validation_settings(),
         "numerical_parity": numerical,
@@ -417,8 +404,14 @@ def assert_validation_v2_acceptable(
     model_sha256: str,
     corpus_eval_sha256: str | None,
     hub_revision: str | None = None,
+    candidate: str | None = None,
+    recipe_id: str | None = None,
+    variant_label: str | None = None,
 ) -> None:
-    """Fail-closed acceptance for FP32 deployment runtime binding."""
+    """Fail-closed acceptance for FP32 deployment runtime binding.
+
+    Identity arguments left as None are not compared.
+    """
     if not isinstance(result, dict):
         raise ValueError("export_validation must be a JSON object")
     if result.get("schema_version") != SCHEMA_VERSION:
@@ -439,7 +432,9 @@ def assert_validation_v2_acceptable(
             "export_validation.passed is not true; refuse unvalidated deployment runtime "
             f"(reasons={result.get('not_passed_reasons')})"
         )
-    binding = result.get("binding") or {}
+    binding = result.get("binding")
+    if not isinstance(binding, dict):
+        raise ValueError("export_validation binding missing or not an object")
     _require_binding_identity(binding, label="export_validation")
     if not result.get("validation_settings"):
         raise ValueError("export_validation validation_settings missing")
@@ -461,6 +456,16 @@ def assert_validation_v2_acceptable(
             raise ValueError(
                 "export_validation hub_revision mismatch: "
                 f"validation={binding.get('hub_revision')!r} manifest={hub_revision!r}"
+            )
+    for key, expected in (
+        ("candidate", candidate),
+        ("recipe_id", recipe_id),
+        ("variant_label", variant_label),
+    ):
+        if expected is not None and binding.get(key) != expected:
+            raise ValueError(
+                f"export_validation {key} mismatch: "
+                f"validation={binding.get(key)!r} expected={expected!r}"
             )
     numerical = result.get("numerical_parity") or {}
     if numerical.get("passed") is not True:
@@ -714,9 +719,11 @@ def build_validation_v2_from_artifacts(
         candidate=candidate,
         recipe_id=recipe_id,
         variant_label=str(fp32.get("label") or "onnx_fp32"),
-        code_revision=str(code.get("code_revision") or ""),
-        code_dirty=bool(code.get("code_dirty")),
-        uncommitted_paths=tuple(code.get("uncommitted_paths") or ()),
+        code_revision=code["code_revision"],
+        code_dirty=code["code_dirty"],
+        uncommitted_paths=(
+            None if code["uncommitted_paths"] is None else tuple(code["uncommitted_paths"])
+        ),
     )
     result = build_export_validation_v2(
         binding=binding,

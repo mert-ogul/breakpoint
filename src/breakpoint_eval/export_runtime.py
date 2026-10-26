@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from breakpoint_eval.act_export import INPUT_IMAGES, INPUT_STATE
+from breakpoint_eval.device_profile import INPUT_IMAGES, INPUT_STATE
 from breakpoint_eval.file_digest import sha256_file
 
 
@@ -181,6 +181,9 @@ def resolve_onnx_runtime(
                     model_sha256=model_sha256,
                     corpus_eval_sha256=corpus_eval_sha256,
                     hub_revision=hub_revision or None,
+                    candidate=candidate or None,
+                    recipe_id=str(variant.get("recipe_id") or "") or None,
+                    variant_label=variant_label or None,
                 )
         validation = {
             **validation,

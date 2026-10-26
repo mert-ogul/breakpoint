@@ -15,20 +15,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from breakpoint_eval.artifact_names import EXPORT_VALIDATION_NAME, resolve_artifact
+from breakpoint_eval.artifact_names import EXPORT_VALIDATION_NAME, require_artifact
 from breakpoint_eval.device_profile import (
     DEFAULT_MEASURED,
     DEFAULT_WARMUPS,
+    INPUT_IMAGES,
+    INPUT_STATE,
     ProfileRequest,
     run_device_profile,
     sha256_file,
 )
+from breakpoint_eval.export_validation import assert_validation_v2_acceptable
 from breakpoint_eval.source_revision import read_source_revision
 
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_profile")
 
 FP32_VARIANT = "onnx_fp32"
-RECIPE_ONNX_FP32 = "torch_onnx_export_fp32_opset17"
 DEFAULT_PROVIDERS = ("CPUExecutionProvider",)
 DEFAULT_INTRA = 4
 DEFAULT_INTER = 1
@@ -181,8 +183,14 @@ def _external_weight_files(model_path: Path) -> list[dict[str, str]]:
     return extras
 
 
-def resolve_validated_fp32_bundle(export_dir: Path) -> ExportBundleFp32:
-    """Read recipe/revision/shapes/hashes from the export bundle without Torch."""
+def resolve_validated_fp32_bundle(
+    export_dir: Path, *, expected_candidate: str | None = None
+) -> ExportBundleFp32:
+    """Read recipe/revision/shapes/hashes from the export bundle without Torch.
+
+    Accepts only a schema-2 export validation that passed and is bound to this FP32
+    graph, the local evaluation corpus, and the manifest identity.
+    """
     export_dir = Path(export_dir).resolve()
     manifest_path = export_dir / "export_manifest.json"
     if not manifest_path.is_file():
@@ -211,52 +219,73 @@ def resolve_validated_fp32_bundle(export_dir: Path) -> ExportBundleFp32:
     declared = graph.get("sha256")
     if declared and declared != digest:
         raise ValueError(f"FP32 hash mismatch: file={digest} manifest={declared}")
-    recipe_id = str(variant.get("recipe_id") or RECIPE_ONNX_FP32)
-    validation_path = resolve_artifact(export_dir, EXPORT_VALIDATION_NAME)
-    validation_passed = False
-    if validation_path is not None:
-        validation = json.loads(validation_path.read_text(encoding="utf-8"))
-        binding = validation.get("binding") or {}
-        bound_sha = binding.get("model_sha256") or validation.get("model_sha256")
-        if bound_sha and bound_sha != digest:
-            raise ValueError(f"{validation_path.name} bound sha256={bound_sha} != model {digest}")
-        validation_passed = bool(validation.get("passed"))
-    if not validation_passed:
+
+    candidate = str(manifest.get("candidate") or "")
+    recipe_id = str(variant.get("recipe_id") or "")
+    hub_revision = str(manifest.get("hub_revision") or "")
+    if not candidate or not recipe_id or not hub_revision:
         raise ValueError(
-            f"validated onnx_fp32 required: {EXPORT_VALIDATION_NAME} passed=true "
-            f"bound to {digest[:12]}"
+            f"{manifest_path.name} missing candidate, hub_revision, or onnx_fp32 recipe_id"
+        )
+    if expected_candidate is not None and candidate != expected_candidate:
+        raise ValueError(
+            f"export manifest candidate={candidate!r} does not match run "
+            f"candidate={expected_candidate!r}"
         )
 
     corpus = export_dir / "corpus_eval.npz"
     if not corpus.is_file():
         raise FileNotFoundError(f"corpus_eval.npz missing under {export_dir}")
-    # Prefer ONNX FP32 reference chunks written by export (sample_id keys).
-    ref_candidates = [
-        export_dir / "eval_chunks_onnx_fp32.npz",
-        export_dir / "reference_chunks_onnx_fp32.npz",
-    ]
-    ref_path = next((p for p in ref_candidates if p.is_file()), None)
-    if ref_path is None:
-        found = sorted(export_dir.glob("eval_chunks_*fp32*.npz"))
-        if len(found) == 1:
-            ref_path = found[0]
-        elif len(found) > 1:
-            raise FileNotFoundError(
-                f"ambiguous FP32 reference chunk files under {export_dir}: "
-                f"{[p.name for p in found]}"
-            )
-        else:
-            raise FileNotFoundError(
-                f"ONNX FP32 reference chunks missing under {export_dir}; "
-                "expected eval_chunks_onnx_fp32.npz"
-            )
+    manifest_corpus_sha = ((manifest.get("corpus") or {}).get("evaluation") or {}).get("sha256")
+    if not manifest_corpus_sha:
+        raise ValueError(f"{manifest_path.name} missing corpus.evaluation.sha256")
+    corpus_sha = sha256_file(corpus)
+    if corpus_sha != manifest_corpus_sha:
+        raise ValueError(
+            f"corpus_eval.npz sha256={corpus_sha} != manifest corpus.evaluation.sha256="
+            f"{manifest_corpus_sha}"
+        )
+
+    validation_path = require_artifact(export_dir, EXPORT_VALIDATION_NAME)
+    validation = json.loads(validation_path.read_text(encoding="utf-8"))
+    try:
+        assert_validation_v2_acceptable(
+            validation,
+            model_sha256=digest,
+            corpus_eval_sha256=corpus_sha,
+            hub_revision=hub_revision,
+            candidate=candidate,
+            recipe_id=recipe_id,
+            variant_label=FP32_VARIANT,
+        )
+    except ValueError as exc:
+        raise ValueError(f"{validation_path.name} rejects onnx_fp32 profiling: {exc}") from exc
+
+    corpus = export_dir / "corpus_eval.npz"
+    if not corpus.is_file():
+        raise FileNotFoundError(f"corpus_eval.npz missing under {export_dir}")
+    ref_names = ("eval_chunks_onnx_fp32.npz", "reference_chunks_onnx_fp32.npz")
+    ref_found = [export_dir / n for n in ref_names if (export_dir / n).is_file()]
+    if not ref_found:
+        ref_found = sorted(export_dir.glob("eval_chunks_*fp32*.npz"))
+    if len(ref_found) > 1:
+        raise ValueError(
+            f"ambiguous FP32 reference chunk files under {export_dir}: "
+            f"{[p.name for p in ref_found]}"
+        )
+    if not ref_found:
+        raise FileNotFoundError(
+            f"ONNX FP32 reference chunks missing under {export_dir}; "
+            "expected eval_chunks_onnx_fp32.npz"
+        )
+    ref_path = ref_found[0]
 
     io_spec = manifest.get("io_spec") or variant.get("io_spec") or {}
     shapes = None
     if isinstance(io_spec, dict) and io_spec.get("image_shape") and io_spec.get("state_shape"):
         shapes = {
-            "observation_images_top": list(io_spec["image_shape"]),
-            "observation_state": list(io_spec["state_shape"]),
+            INPUT_IMAGES: list(io_spec["image_shape"]),
+            INPUT_STATE: list(io_spec["state_shape"]),
         }
     chunk_horizon = None
     if isinstance(io_spec, dict) and io_spec.get("action_chunk_shape"):
@@ -270,13 +299,13 @@ def resolve_validated_fp32_bundle(export_dir: Path) -> ExportBundleFp32:
         model_sha256=digest,
         recipe_id=recipe_id,
         variant_label=FP32_VARIANT,
-        hub_revision=manifest.get("hub_revision"),
+        hub_revision=hub_revision,
         chunk_horizon=chunk_horizon,
         input_shapes=shapes,
         corpus_path=corpus.resolve(),
         reference_chunks_path=ref_path.resolve(),
         external_weights=_external_weight_files(model_path),
-        validation_passed=validation_passed,
+        validation_passed=True,
     )
 
 
@@ -316,7 +345,7 @@ def run_benchmark_profile(
             pass
 
     refuse_completed_output_dir(Path(output_dir))
-    bundle = resolve_validated_fp32_bundle(Path(export_dir))
+    bundle = resolve_validated_fp32_bundle(Path(export_dir), expected_candidate=candidate)
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
