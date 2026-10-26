@@ -25,7 +25,6 @@ from breakpoint_eval.stack import repo_root_from_package
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_media")
 
 REPO_ROOT = repo_root_from_package()
-EXPORT_DIR = REPO_ROOT / "artifacts" / "export" / "act-v1"
 BASELINE_CONDITION = "latency_ms_0"
 STRESS_CONDITION = "latency_ms_640"
 LATENCY_PLAN = "v0.1_full_latency"
@@ -154,6 +153,7 @@ def record_episode(
     host: dict[str, Any],
     work_dir: Path,
     stride: int,
+    export_dir: Path,
 ) -> Recording:
     from breakpoint_eval.experiment_plan import load_experiment_plan
     from breakpoint_eval.run_baseline import run_baseline
@@ -167,7 +167,7 @@ def record_episode(
         condition_dir=work_dir / condition_id,
         repo_root=REPO_ROOT,
         device=host["compute_device"],
-        onnx_model=EXPORT_DIR / "act_chunk_fp32.onnx",
+        onnx_model=export_dir / "act_chunk_fp32.onnx",
         latency_profile=None,
         save_video=False,
         ort_providers=host["ort_providers"],
@@ -570,6 +570,7 @@ def make_media(
     data_dir: Path,
     out_dir: Path,
     work_dir: Path,
+    export_dir: Path,
     width: int,
     fps: float,
     hold_frames: int,
@@ -594,6 +595,7 @@ def make_media(
             host=lock["host"],
             work_dir=work_dir,
             stride=stride,
+            export_dir=export_dir,
         )
         comparison = compare_with_saved(recordings[condition], selection[key])
         require_match(comparison)

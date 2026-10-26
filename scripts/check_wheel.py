@@ -63,8 +63,7 @@ def check_installed(wheel: Path, example_data: Path | None) -> None:
         dropped = ("BREAKPOINT_ROOT", "PYTHONPATH", "XDG_DATA_HOME")
         env = {k: v for k, v in os.environ.items() if k not in dropped}
         env.update(HOME=str(home), PYTHONDONTWRITEBYTECODE="1")
-        extra = "[report]" if example_data else ""
-        run([python, "-m", "pip", "install", "-q", f"{wheel}{extra}"], cwd=outside, env=env)
+        run([python, "-m", "pip", "install", "-q", str(wheel)], cwd=outside, env=env)
 
         package_dir = Path(
             run(
@@ -89,7 +88,7 @@ def check_installed(wheel: Path, example_data: Path | None) -> None:
                 raise SystemExit("could not read subcommands from `breakpoint --help`")
             for command in commands:
                 run([cli, command, "--help"], cwd=outside, env=env)
-            LOGGER.info("help ok: %s", ", ".join(commands))
+            LOGGER.info("core help ok: %s", ", ".join(commands))
 
             default_root = run([python, "-c", ROOT_SNIPPET], cwd=outside, env=env).splitlines()[1]
             expected = (home / ".local" / "share" / "breakpoint-eval").resolve()
@@ -105,6 +104,11 @@ def check_installed(wheel: Path, example_data: Path | None) -> None:
             LOGGER.info("workspace: default %s, override %s", default_root, override)
 
             if example_data:
+                set_writable(package_dir, writable=True)
+                run(
+                    [python, "-m", "pip", "install", "-q", f"{wheel}[report]"], cwd=outside, env=env
+                )
+                set_writable(package_dir, writable=False)
                 report_dir = outside / "report"
                 script = Path(__file__).resolve().with_name("render_benchmark.py")
                 run(

@@ -71,3 +71,7 @@ jobs:
       - run: python scripts/render_benchmark.py --input benchmarks/act-transfer/deployment-stress/data --out "$RUNNER_TEMP/report"
       - name: Rendered Markdown matches the committed report
         run: diff -u benchmarks/act-transfer/deployment-stress/report/report.md "$RUNNER_TEMP/report/report.md"
+      - name: README results block matches the packaged data
+        run: |
+          python scripts/render_benchmark.py --input benchmarks/act-transfer/deployment-stress/data --out "$RUNNER_TEMP/report" --update-readme README.md
+          git diff --exit-code README.md

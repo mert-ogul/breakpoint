@@ -4,7 +4,7 @@
   "protocol_version": "0.1",
   "candidate": "act_aloha_transfer",
   "artifacts": {
-    "export_dir": "artifacts/export/act-v1",
+    "export_dir": "artifacts/export/act-transfer",
     "fp32_onnx_name": "act_chunk_fp32.onnx",
     "int8_onnx_name": "act_chunk_int8_qdq.onnx",
     "expected_fp32_sha256": null,

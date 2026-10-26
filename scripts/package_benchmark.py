@@ -35,7 +35,7 @@ from breakpoint_eval.latency_trace import load_latency_profile  # noqa: E402
 
 LOGGER = logging.getLogger("package_benchmark")
 
-DEFAULT_FULL = REPO_ROOT / "outputs" / "v1" / "full"
+DEFAULT_FULL = REPO_ROOT / "outputs" / "act-transfer" / "full"
 DEFAULT_OUT = REPO_ROOT / "benchmarks" / "act-transfer" / "deployment-stress" / "data"
 REFERENCE_NAME = "baseline_reference.json"
 # "resumed_complete" was written by runs resumed before records kept their original status.

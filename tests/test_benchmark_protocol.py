@@ -333,7 +333,7 @@ def test_scripts_help_and_dry_run() -> None:
             str(out),
             "--dry-run",
             "--export-dir",
-            str(ROOT / "artifacts" / "export" / "act-v1-missing"),
+            str(ROOT / "artifacts" / "export" / "act-transfer-missing"),
         ],
         cwd=ROOT,
         capture_output=True,

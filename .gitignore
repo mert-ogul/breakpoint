@@ -16,5 +16,7 @@ vendor/
 .env
 .env.*
 .cursor/
+# Local working-directory archive; not part of the repository.
+/Archive.zip
 # Measured on a specific machine; the committed copies live under benchmarks/act-transfer/deployment-stress/data/profiles/.
 profiles/*/
