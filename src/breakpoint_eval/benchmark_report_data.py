@@ -44,7 +44,6 @@ AXIS_UNITS = {
     "device_profile": "measured ONNX Runtime chunk latency replayed from a device profile",
 }
 AXIS_ORDER = ("latency_ms", "resolution", "jpeg", "precision", "device_profile")
-CONTROL_PERIOD_S = 0.02
 RATE_TOLERANCE = 1e-9
 # Axes whose conditions are ordered from mild to severe; the others compare categories.
 ORDERED_AXES = frozenset({"latency_ms", "resolution", "jpeg"})

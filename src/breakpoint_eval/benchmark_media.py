@@ -157,11 +157,11 @@ def record_episode(
 ) -> Recording:
     from breakpoint_eval.experiment_plan import load_experiment_plan
     from breakpoint_eval.run_baseline import run_baseline
-    from breakpoint_eval.run_plan_execute import _condition_run_request
+    from breakpoint_eval.run_plan_execute import condition_run_request
 
     plan = load_experiment_plan(plan_path)
     condition = next(c for c in plan.conditions if c.condition_id == condition_id)
-    request = _condition_run_request(
+    request = condition_run_request(
         plan=plan,
         condition=condition,
         condition_dir=work_dir / condition_id,

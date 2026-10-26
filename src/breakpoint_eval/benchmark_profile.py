@@ -12,6 +12,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +59,7 @@ def _utc_now() -> str:
 
 
 def package_list() -> list[dict[str, str]]:
-    """Installed distributions via importlib.metadata (no pip subprocess required)."""
-    try:
-        from importlib import metadata
-    except ImportError:
-        return []
+    """Installed distributions as (name, version) rows."""
     rows: list[dict[str, str]] = []
     for dist in metadata.distributions():
         name = dist.metadata["Name"] if dist.metadata else None
@@ -317,7 +314,6 @@ def refuse_completed_output_dir(output_dir: Path) -> None:
             f"refuse to overwrite completed profile output: {output_dir} (found {marker.name})"
         )
     if output_dir.is_dir() and any(output_dir.iterdir()):
-        # Non-empty incomplete dir is also refused to avoid mixed runs.
         raise FileExistsError(
             f"output directory is not empty: {output_dir}. "
             "Choose a fresh --output-dir or remove incomplete contents."
@@ -337,13 +333,6 @@ def run_benchmark_profile(
     candidate: str = "act_aloha_transfer",
 ) -> Path:
     """Profile validated FP32 with CPU EP 4/1 threads; write telemetry sidecar."""
-    # Guard: this module must stay free of torch/sim imports at call time.
-    for banned in ("torch", "mujoco", "dm_control", "gymnasium", "lerobot"):
-        if banned in __import__("sys").modules:
-            # Already loaded by caller is OK on laptop; Pi path should not have them.
-            # Soft note only — refuse only if env marks itself as pi-profile-only.
-            pass
-
     refuse_completed_output_dir(Path(output_dir))
     bundle = resolve_validated_fp32_bundle(Path(export_dir), expected_candidate=candidate)
     output_dir = Path(output_dir).resolve()

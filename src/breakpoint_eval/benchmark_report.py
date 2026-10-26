@@ -417,7 +417,7 @@ def int8_note(data: ReportData, int8_status: str) -> str:
     )
 
 
-def honest_notes(data: ReportData) -> list[str]:
+def report_limitations(data: ReportData) -> list[str]:
     n = len(data.rows)
     outcomes: dict[str, int] = {}
     for row in data.rows:
@@ -593,7 +593,7 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     panels = "".join(axis_panel_html(data, a, out_dir, plots_rel) for a in data.axes)
     panels += timing_panel_html(data, out_dir, plots_rel)
     obs = "".join(f"<li>{esc(line)}</li>" for line in observations(data))
-    notes = "".join(f"<li>{esc(line)}</li>" for line in honest_notes(data))
+    notes = "".join(f"<li>{esc(line)}</li>" for line in report_limitations(data))
     summary = (
         f"{len(data.rows)} episode records &middot; {data.n_runs} simulated runs "
         f"({sum(len(a.conditions) for a in data.axes)} condition rows; the baseline is reused by "
@@ -639,7 +639,7 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         "",
         "## Read before the numbers",
         "",
-        *[f"- {line}" for line in honest_notes(data)],
+        *[f"- {line}" for line in report_limitations(data)],
         "",
     ]
     for axis in data.axes:

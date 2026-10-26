@@ -377,7 +377,7 @@ def test_weak_baseline_suppresses_threshold_language(tmp_path: Path) -> None:
         assert all(
             report.status_text(axis, v) in {"baseline", "not assessed"} for v in axis.conditions
         )
-    assert "below the floor" in "\n".join(report.honest_notes(data))
+    assert "below the floor" in "\n".join(report.report_limitations(data))
 
 
 def test_categorical_axes_are_not_described_as_crossings() -> None:

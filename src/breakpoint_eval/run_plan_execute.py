@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import shutil
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from breakpoint_eval.camera_degrade import ImageDegradeConfig, ImageMode
-from breakpoint_eval.experiment_plan import ExperimentPlan, load_experiment_plan
+from breakpoint_eval.experiment_plan import ConditionSpec, ExperimentPlan, load_experiment_plan
 from breakpoint_eval.experiment_summary import summarize_from_plan_file
 from breakpoint_eval.export_runtime import load_export_manifest, resolve_onnx_runtime
 from breakpoint_eval.latency_trace import load_latency_profile
@@ -80,10 +81,10 @@ def _image_cfg_from_params(params: dict[str, Any]) -> ImageDegradeConfig:
     raise ValueError(f"unsupported image condition mode {mode!r}")
 
 
-def _condition_run_request(
+def condition_run_request(
     *,
     plan: ExperimentPlan,
-    condition: Any,
+    condition: ConditionSpec,
     condition_dir: Path,
     repo_root: Path,
     device: str,
@@ -119,7 +120,6 @@ def _condition_run_request(
             raise ValueError("precision plan axis requires --onnx-model from an export directory")
         export_dir = Path(onnx_model).resolve().parent
         model_path = _variant_onnx_path(export_dir, str(params["variant_label"]))
-        # Validate identity for the selected variant.
         resolve_onnx_runtime(
             model_path,
             expected_candidate=plan.candidate,
@@ -241,7 +241,7 @@ def execute_experiment_plan(
     for condition in plan.conditions:
         condition_dir = output_dir / "conditions" / condition.condition_id
         condition_dir.mkdir(parents=True, exist_ok=True)
-        req = _condition_run_request(
+        req = condition_run_request(
             plan=plan,
             condition=condition,
             condition_dir=condition_dir,
@@ -284,26 +284,12 @@ def execute_experiment_plan(
             continue
         try:
             if req.latency_profile is not None:
-                req = RunRequest(
-                    candidate=req.candidate,
-                    seeds=req.seeds,
-                    output_dir=req.output_dir,
-                    device=req.device,
-                    save_video=req.save_video,
+                req = dataclasses.replace(
+                    req,
                     latency_s=0.0,
-                    latency_profile=req.latency_profile,
                     latency_end_of_trace=latency_end_of_trace,
                     latency_block_length=latency_block_length,
                     latency_block_seed=latency_block_seed,
-                    latency_window_starts=req.latency_window_starts,
-                    latency_window_length=req.latency_window_length,
-                    image_cfg=req.image_cfg,
-                    repo_root=req.repo_root,
-                    onnx_model=req.onnx_model,
-                    policy_rng_seeds=req.policy_rng_seeds,
-                    ort_providers=req.ort_providers,
-                    ort_intra_op_num_threads=req.ort_intra_op_num_threads,
-                    ort_inter_op_num_threads=req.ort_inter_op_num_threads,
                 )
             report = run_baseline(req)
         except (ValueError, FileNotFoundError, RuntimeError, OSError) as exc:
@@ -380,7 +366,6 @@ def execute_experiment_plan(
         LOGGER.info("dry-run plan execution wrote planned settings only")
         return 0
 
-    # Summarize from on-disk reports keyed by condition id.
     mapping = {cid: path for cid, path in condition_reports.items() if path.is_file()}
     try:
         summarize_from_plan_file(

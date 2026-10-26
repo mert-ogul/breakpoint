@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import shutil
@@ -42,8 +43,8 @@ from breakpoint_eval.experiment_summary import (  # noqa: E402
     summarize_from_plan_file,
 )
 from breakpoint_eval.render_report import render_report  # noqa: E402
-from breakpoint_eval.run_baseline import RunRequest, run_baseline  # noqa: E402
-from breakpoint_eval.run_plan_execute import _condition_run_request  # noqa: E402
+from breakpoint_eval.run_baseline import run_baseline  # noqa: E402
+from breakpoint_eval.run_plan_execute import condition_run_request  # noqa: E402
 from breakpoint_eval.source_revision import read_source_revision  # noqa: E402
 
 LOGGER = logging.getLogger("run_benchmark")
@@ -105,7 +106,6 @@ def _execute_condition(
     baseline_report: Path | None,
 ) -> dict:
     condition_dir.mkdir(parents=True, exist_ok=True)
-    # Explicit baseline reuse by reference only.
     if (
         shared_baseline is not None
         and baseline_report is not None
@@ -152,7 +152,7 @@ def _execute_condition(
             return rec
         onnx_model = artifacts.int8_path
 
-    req = _condition_run_request(
+    req = condition_run_request(
         plan=plan,
         condition=condition,
         condition_dir=condition_dir,
@@ -184,24 +184,8 @@ def _execute_condition(
     )
     try:
         if req.latency_profile is not None:
-            req = RunRequest(
-                candidate=req.candidate,
-                seeds=req.seeds,
-                output_dir=req.output_dir,
-                device=req.device,
-                save_video=False,
-                latency_s=0.0,
-                latency_profile=req.latency_profile,
-                latency_end_of_trace="fail",
-                latency_window_starts=req.latency_window_starts,
-                latency_window_length=req.latency_window_length,
-                image_cfg=req.image_cfg,
-                repo_root=req.repo_root,
-                onnx_model=req.onnx_model,
-                policy_rng_seeds=req.policy_rng_seeds,
-                ort_providers=req.ort_providers,
-                ort_intra_op_num_threads=req.ort_intra_op_num_threads,
-                ort_inter_op_num_threads=req.ort_inter_op_num_threads,
+            req = dataclasses.replace(
+                req, save_video=False, latency_s=0.0, latency_end_of_trace="fail"
             )
         report = run_baseline(req)
     except (ValueError, FileNotFoundError, RuntimeError, OSError) as exc:
@@ -229,7 +213,6 @@ def _execute_condition(
             "planned": planned,
         }
 
-    # Capture shared baseline from latency_ms_0.
     if condition.condition_id == "latency_ms_0" and shared_baseline is not None:
         shared_baseline.mkdir(parents=True, exist_ok=True)
         shutil.copy2(report, shared_baseline / "run_report.json")
@@ -306,7 +289,6 @@ def main(argv: list[str] | None = None) -> int:
         LOGGER.error("%s", exc)
         return 2
 
-    # Dry-run: validate + print only.
     if args.dry_run:
         print(json.dumps({"dry_run": True, "lock": lock, "n_plans": len(plans)}, indent=2))
         for plan in plans:
@@ -404,7 +386,6 @@ def main(argv: list[str] | None = None) -> int:
             report_path = condition_dir / "run_report.json"
             if report_path.is_file() and not incomplete_condition:
                 condition_reports[condition.condition_id] = report_path
-            # Refresh baseline path after latency_ms_0.
             if (shared / "run_report.json").is_file():
                 baseline_report = shared / "run_report.json"
 
@@ -413,9 +394,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         all_records.append({"plan_id": plan.plan_id, "records": records})
 
-        # Summarize axes that have a baseline and mapped reports.
         if plan.baseline_condition_id and plan.baseline_condition_id in condition_reports:
-            # Map referenced baselines into mapping for summary.
             mapping = dict(condition_reports)
             try:
                 summarize_from_plan_file(

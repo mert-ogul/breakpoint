@@ -147,9 +147,7 @@ def test_validation_for_other_corpus_is_rejected(export_dir: Path) -> None:
     ("field", "match"),
     [("candidate", "candidate"), ("hub_revision", "hub_revision"), ("recipe_id", "recipe_id")],
 )
-def test_validation_identity_mismatch_is_rejected(
-    export_dir: Path, field: str, match: str
-) -> None:
+def test_validation_identity_mismatch_is_rejected(export_dir: Path, field: str, match: str) -> None:
     _edit_validation(export_dir, lambda v: v["binding"].update({field: "other"}))
     with pytest.raises(ValueError, match=match):
         resolve_validated_fp32_bundle(export_dir)
