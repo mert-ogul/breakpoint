@@ -10,21 +10,18 @@ import pytest
 import torch
 from torch import nn
 
-pytest.importorskip("onnx")
-pytest.importorskip("onnxruntime")
-
-from breakpoint_eval.act_export import (  # noqa: E402
+from breakpoint_eval.act_export import (
     INPUT_IMAGES,
     INPUT_STATE,
     OUTPUT_CHUNK,
     RECIPE_ONNX_FP32,
     sha256_file,
 )
-from breakpoint_eval.export_runtime import (  # noqa: E402
+from breakpoint_eval.export_runtime import (
     apply_policy_rng_seed,
     resolve_onnx_runtime,
 )
-from breakpoint_eval.latency_trace import (  # noqa: E402
+from breakpoint_eval.latency_trace import (
     TIMED_BOUNDARY_ORT_RUN,
     assert_profile_compatible,
     load_latency_profile,
@@ -78,6 +75,7 @@ def _write_export_dir(tmp_path: Path) -> tuple[Path, Path, str]:
     return model_path, man_path, digest
 
 
+@pytest.mark.requires_onnx
 def test_resolve_onnx_runtime_from_manifest(tmp_path: Path) -> None:
     model_path, _, digest = _write_export_dir(tmp_path)
     resolved = resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
@@ -87,6 +85,7 @@ def test_resolve_onnx_runtime_from_manifest(tmp_path: Path) -> None:
     assert resolved.chunk_horizon == 4
 
 
+@pytest.mark.requires_onnx
 def test_resolve_rejects_unvalidated_export(tmp_path: Path) -> None:
     model_path, man_path, _ = _write_export_dir(tmp_path)
     payload = json.loads(man_path.read_text())
@@ -96,6 +95,7 @@ def test_resolve_rejects_unvalidated_export(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+@pytest.mark.requires_onnx
 def test_resolve_rejects_synthetic_passed_bypass(tmp_path: Path) -> None:
     """diagnostic_parity_ok / forged passed must not unlock deployment runtime."""
     model_path, man_path, _ = _write_export_dir(tmp_path)
@@ -113,6 +113,7 @@ def test_resolve_rejects_synthetic_passed_bypass(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+@pytest.mark.requires_onnx
 def test_resolve_rejects_skipped_closed_loop_bypass(tmp_path: Path) -> None:
     model_path, man_path, _ = _write_export_dir(tmp_path)
     payload = json.loads(man_path.read_text())
@@ -129,6 +130,7 @@ def test_resolve_rejects_skipped_closed_loop_bypass(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+@pytest.mark.requires_onnx
 def test_resolve_rejects_failed_closed_loop_bypass(tmp_path: Path) -> None:
     model_path, man_path, _ = _write_export_dir(tmp_path)
     payload = json.loads(man_path.read_text())
@@ -146,6 +148,7 @@ def test_resolve_rejects_failed_closed_loop_bypass(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+@pytest.mark.requires_onnx
 def test_resolve_rejects_path_match_when_manifest_hash_disagrees(tmp_path: Path) -> None:
     model_path, man_path, digest = _write_export_dir(tmp_path)
     payload = json.loads(man_path.read_text())
@@ -156,6 +159,7 @@ def test_resolve_rejects_path_match_when_manifest_hash_disagrees(tmp_path: Path)
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+@pytest.mark.requires_onnx
 def test_resolve_int8_refuses_fp32_validation_sidecar(tmp_path: Path) -> None:
     model_path, man_path, digest = _write_export_dir(tmp_path)
     # Relabel the only graph as int8; FP32 v2 sidecar must not authorize it.
@@ -166,7 +170,7 @@ def test_resolve_int8_refuses_fp32_validation_sidecar(tmp_path: Path) -> None:
     )
     man_path.write_text(json.dumps(payload), encoding="utf-8")
     from breakpoint_eval.act_export import RECIPE_ONNX_FP32
-    from breakpoint_eval.export_validation_v2 import (
+    from breakpoint_eval.export_validation import (
         VALIDATION_FILENAME,
         ValidationBinding,
         build_export_validation_v2,
@@ -222,6 +226,7 @@ def test_resolve_int8_refuses_fp32_validation_sidecar(tmp_path: Path) -> None:
         resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
 
 
+@pytest.mark.requires_onnx
 def test_profile_rejects_pytorch_relabel_via_hash_mismatch(tmp_path: Path) -> None:
     model_path, _, digest = _write_export_dir(tmp_path)
     profile = {

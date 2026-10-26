@@ -52,8 +52,7 @@ def prepare_mujoco_macos_gl() -> None:
     else:
         os.environ["MUJOCO_GL"] = requested
     LOGGER.info(
-        "macOS MuJoCo prepare: imported mujoco %s with GL disabled, "
-        "MUJOCO_GL=%s for dm_control",
+        "macOS MuJoCo prepare: imported mujoco %s with GL disabled, MUJOCO_GL=%s for dm_control",
         getattr(sys.modules["mujoco"], "__version__", "?"),
         os.environ["MUJOCO_GL"],
     )

@@ -68,8 +68,7 @@ def repo_root_from_package() -> Path:
         return flat_root
     if _is_under_site_packages(pkg_file):
         LOGGER.info(
-            "Package lives under site-packages; using user workspace %s "
-            "(set %s to override)",
+            "Package lives under site-packages; using user workspace %s (set %s to override)",
             default_user_workspace(),
             _BREAKPOINT_ROOT_ENV,
         )
@@ -186,7 +185,7 @@ def download_candidate_checkpoint(spec: CandidateSpec, cache_dir: Path) -> Path:
     except ImportError as exc:
         raise ImportError(
             "huggingface_hub is required to download checkpoints "
-            "(install via requirements-feasibility.txt or LeRobot)."
+            "(install via requirements-simulation.txt or LeRobot)."
         ) from exc
     path = snapshot_download(
         repo_id=spec.hub_repo,

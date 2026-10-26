@@ -10,17 +10,14 @@ import pytest
 import torch
 from torch import nn
 
-pytest.importorskip("onnx")
-pytest.importorskip("onnxruntime")
-
-from breakpoint_eval.device_profile import (  # noqa: E402
+from breakpoint_eval.device_profile import (
     DEFAULT_MEASURED,
     DEFAULT_WARMUPS,
     ProfileRequest,
     load_profile_corpus,
     run_device_profile,
 )
-from breakpoint_eval.latency_trace import TIMED_BOUNDARY_ORT_RUN, load_latency_profile  # noqa: E402
+from breakpoint_eval.latency_trace import TIMED_BOUNDARY_ORT_RUN, load_latency_profile
 
 
 class _Tiny(nn.Module):
@@ -93,6 +90,7 @@ def test_defaults_separate_warmup_and_measured() -> None:
     assert DEFAULT_MEASURED == 1000
 
 
+@pytest.mark.requires_onnx
 def test_profile_corpus_loader_no_sim(tmp_path: Path) -> None:
     _, corpus_path, _ = _write_tiny_artifacts(tmp_path)
     corpus = load_profile_corpus(corpus_path)
@@ -100,6 +98,7 @@ def test_profile_corpus_loader_no_sim(tmp_path: Path) -> None:
     assert corpus["shapes"]["observation_images_top"] == [1, 3, 8, 8]
 
 
+@pytest.mark.requires_onnx
 def test_run_device_profile_writes_ordered_measurements(tmp_path: Path) -> None:
     model_path, corpus_path, ref_path = _write_tiny_artifacts(tmp_path)
     out_dir = tmp_path / "profiles" / "local"
@@ -136,6 +135,7 @@ def test_run_device_profile_writes_ordered_measurements(tmp_path: Path) -> None:
     assert all(x >= 0 for x in prof.latency_s)
 
 
+@pytest.mark.requires_onnx
 def test_profile_refuses_failed_validation(tmp_path: Path) -> None:
     model_path, corpus_path, _ = _write_tiny_artifacts(tmp_path)
     # Wrong-shaped reference forces validation failure.
@@ -157,6 +157,7 @@ def test_profile_refuses_failed_validation(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.requires_onnx
 def test_profile_fails_when_reference_sample_missing(tmp_path: Path) -> None:
     model_path, corpus_path, ref_path = _write_tiny_artifacts(tmp_path)
     # Drop one sample_id from the reference set.

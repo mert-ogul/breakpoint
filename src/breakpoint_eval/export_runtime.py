@@ -139,7 +139,7 @@ def resolve_onnx_runtime(
     )
     hub_revision = str(manifest.get("hub_revision") or "")
 
-    from breakpoint_eval.export_validation_v2 import (
+    from breakpoint_eval.export_validation import (
         assert_int8_validation_acceptable,
         assert_validation_v2_acceptable,
         find_export_validation_v2,
@@ -161,9 +161,13 @@ def resolve_onnx_runtime(
                     None,
                 )
                 parent_sha = str(((parent or {}).get("graph") or {}).get("sha256") or "") or None
-                calib_sha = str(
-                    ((manifest.get("corpus") or {}).get("calibration") or {}).get("sha256") or ""
-                ) or None
+                calib_sha = (
+                    str(
+                        ((manifest.get("corpus") or {}).get("calibration") or {}).get("sha256")
+                        or ""
+                    )
+                    or None
+                )
                 assert_int8_validation_acceptable(
                     validation,
                     model_sha256=model_sha256,

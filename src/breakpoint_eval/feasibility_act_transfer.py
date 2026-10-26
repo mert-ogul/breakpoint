@@ -18,7 +18,7 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 from breakpoint_eval.candidate_map import LEROBOT_CARD_COMMIT
-from breakpoint_eval.stack import ensure_lerobot_checkout
+from breakpoint_eval.stack import ensure_lerobot_checkout, repo_root_from_package
 
 LOGGER = logging.getLogger("breakpoint_eval.feasibility")
 
@@ -131,7 +131,7 @@ def run_upstream_eval(
 
 
 def parse_args(argv: list[str] | None = None) -> FeasibilityRequest:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = repo_root_from_package()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=repo_root)
     parser.add_argument("--n-episodes", type=int, default=2)

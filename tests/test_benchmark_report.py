@@ -13,8 +13,8 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from breakpoint_eval.v1_report import ReportValidationError, render_report  # noqa: E402
-from breakpoint_eval.v1_report_data import ReportDataError, load_report_data  # noqa: E402
+from breakpoint_eval.benchmark_report import ReportValidationError, render_report  # noqa: E402
+from breakpoint_eval.benchmark_report_data import ReportDataError, load_report_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "benchmarks" / "act-transfer" / "v1" / "data"
@@ -32,9 +32,13 @@ def tree_hash(path: Path) -> str:
 
 def refresh_manifest(data: Path) -> None:
     files = [
-        {"path": p.relative_to(data).as_posix(), "bytes": p.stat().st_size,
-         "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
-        for p in sorted(data.rglob("*")) if p.is_file() and p.name != "manifest.json"
+        {
+            "path": p.relative_to(data).as_posix(),
+            "bytes": p.stat().st_size,
+            "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+        }
+        for p in sorted(data.rglob("*"))
+        if p.is_file() and p.name != "manifest.json"
     ]
     (data / "manifest.json").write_text(json.dumps({"schema_version": 1, "files": files}))
 
@@ -54,11 +58,15 @@ def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> 
     render_report(DATA, out)
     assert tree_hash(DATA) == before
     index = json.loads((out / "data_index.json").read_text())
-    rows = [json.loads(line) for line in
-            (DATA / "episodes" / "episodes.jsonl").read_text().splitlines()]
+    rows = [
+        json.loads(line) for line in (DATA / "episodes" / "episodes.jsonl").read_text().splitlines()
+    ]
     for entry in index["displayed_counts"]:
-        group = [r for r in rows if r["plan_id"] == entry["plan_id"]
-                 and r["condition_id"] == entry["condition_id"]]
+        group = [
+            r
+            for r in rows
+            if r["plan_id"] == entry["plan_id"] and r["condition_id"] == entry["condition_id"]
+        ]
         if group:
             assert entry["successes"] == sum(r["success"] for r in group)
             assert entry["planned"] == len(group)
@@ -74,8 +82,9 @@ def test_changed_episode_record_is_refused(tmp_path: Path) -> None:
     episodes = copy / "episodes" / "episodes.jsonl"
     lines = episodes.read_text().splitlines()
     row = json.loads(lines[0])
-    row.update(success=not row["success"],
-               outcome="time_limit_truncation" if row["success"] else "success")
+    row.update(
+        success=not row["success"], outcome="time_limit_truncation" if row["success"] else "success"
+    )
     lines[0] = json.dumps(row, sort_keys=True)
     episodes.write_text("\n".join(lines) + "\n")
     refresh_manifest(copy)
@@ -93,8 +102,20 @@ def test_tampered_file_fails_manifest_check(tmp_path: Path) -> None:
 
 
 def test_render_script_runs_without_heavy_packages(tmp_path: Path) -> None:
-    banned = ["torch", "torchvision", "cv2", "mujoco", "dm_control", "lerobot", "gymnasium",
-              "gym_aloha", "onnxruntime", "onnx", "huggingface_hub", "requests"]
+    banned = [
+        "torch",
+        "torchvision",
+        "cv2",
+        "mujoco",
+        "dm_control",
+        "lerobot",
+        "gymnasium",
+        "gym_aloha",
+        "onnxruntime",
+        "onnx",
+        "huggingface_hub",
+        "requests",
+    ]
     runner = f"""
 import runpy, sys
 from importlib.abc import MetaPathFinder
@@ -104,13 +125,14 @@ class Ban(MetaPathFinder):
         if name.split(".")[0] in BANNED:
             raise ImportError("blocked " + name)
 sys.meta_path.insert(0, Ban())
-sys.argv = ["render_v1.py", "--input", {str(DATA)!r}, "--out", {str(tmp_path / "out")!r}]
+sys.argv = ["render_benchmark.py", "--input", {str(DATA)!r}, "--out", {str(tmp_path / "out")!r}]
 try:
-    runpy.run_path({str(ROOT / "scripts" / "render_v1.py")!r}, run_name="__main__")
+    runpy.run_path({str(ROOT / "scripts" / "render_benchmark.py")!r}, run_name="__main__")
 except SystemExit as exc:
     sys.exit(exc.code)
 """
-    proc = subprocess.run([sys.executable, "-c", runner], capture_output=True, text=True,
-                          cwd=tmp_path, check=False)
+    proc = subprocess.run(
+        [sys.executable, "-c", runner], capture_output=True, text=True, cwd=tmp_path, check=False
+    )
     assert proc.returncode == 0, proc.stderr
     assert (tmp_path / "out" / "index.html").is_file()

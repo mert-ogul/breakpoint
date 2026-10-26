@@ -579,7 +579,7 @@ def _image_sweep_cfgs(kind: str) -> list[tuple[str, Any]]:
 
 
 def _cmd_write_export_validation_v2(args: argparse.Namespace) -> int:
-    from breakpoint_eval.export_validation_v2 import build_validation_v2_from_artifacts
+    from breakpoint_eval.export_validation import build_validation_v2_from_artifacts
 
     repo_root = (args.repo_root or _repo_root_from_package()).resolve()
     try:

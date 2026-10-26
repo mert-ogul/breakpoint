@@ -212,9 +212,7 @@ def contiguous_window_starts(
     if n_episodes < 1:
         raise ValueError("n_episodes must be >= 1")
     if n_trace < window_length:
-        raise ValueError(
-            f"trace length {n_trace} is shorter than window_length {window_length}"
-        )
+        raise ValueError(f"trace length {n_trace} is shorter than window_length {window_length}")
     if n_episodes == 1:
         return [0]
     span = n_trace - window_length

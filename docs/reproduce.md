@@ -1,7 +1,7 @@
 # Reproduce ACT FP32 / INT8 release validation (v0.1)
 
 Pinned stack: LeRobot `3c0a209…`, ACT transfer Hub `9e935457…`,
-`requirements-feasibility.txt` + `requirements-onnx.txt`. Do not invent pins.
+`requirements-simulation.txt` + `requirements-onnx.txt`. Do not invent pins.
 
 Seed pools (disjoint):
 
@@ -97,13 +97,13 @@ PY
 
 ## 5. Fixed v0.1 protocol (smoke / full / profile)
 
-See [v1_protocol.md](v1_protocol.md) for `scripts/run_v1.py`, `scripts/profile_v1.py`,
+See [benchmark_protocol.md](benchmark_protocol.md) for `scripts/run_benchmark.py`, `scripts/profile_device.py`,
 and `configs/v1.json`. Prefer `--dry-run` before any long eval.
 
 ## 6. Package, report, and media for the completed full run
 
 See [`benchmarks/act-transfer/v1/REPRODUCE.md`](../benchmarks/act-transfer/v1/REPRODUCE.md)
-for `scripts/package_v1.py`, `scripts/render_v1.py`, and `scripts/media_v1.py`.
+for `scripts/package_benchmark.py`, `scripts/render_benchmark.py`, and `scripts/render_benchmark_media.py`.
 
 ## Notes
 

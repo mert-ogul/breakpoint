@@ -1,6 +1,6 @@
 """Load a packaged v0.1 run and validate every displayed count against episode records.
 
-Reads only the packaged data directory (see scripts/package_v1.py). No Torch, MuJoCo,
+Reads only the packaged data directory (see scripts/package_benchmark.py). No Torch, MuJoCo,
 network, or model access.
 """
 
@@ -20,7 +20,7 @@ from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.experiment_summary import wilson_interval
 from breakpoint_eval.latency_trace import contiguous_window_starts
 
-LOGGER = logging.getLogger("breakpoint_eval.v1_report_data")
+LOGGER = logging.getLogger("breakpoint_eval.benchmark_report_data")
 
 AXIS_TITLES = {
     "latency_ms": "Constant added delay",
@@ -161,9 +161,7 @@ def load_rows(data_dir: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
-def rows_by_condition(
-    rows: list[dict[str, Any]], plan_id: str
-) -> dict[str, list[dict[str, Any]]]:
+def rows_by_condition(rows: list[dict[str, Any]], plan_id: str) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         if row["plan_id"] == plan_id:
@@ -175,7 +173,9 @@ def rows_by_condition(
 
 def count_successes(rows: list[dict[str, Any]]) -> tuple[int, int, int]:
     errors = sum(1 for r in rows if r["outcome"] == EpisodeOutcome.RUNTIME_ERROR.value)
-    successes = sum(1 for r in rows if r["success"] and r["outcome"] == EpisodeOutcome.SUCCESS.value)
+    successes = sum(
+        1 for r in rows if r["success"] and r["outcome"] == EpisodeOutcome.SUCCESS.value
+    )
     return successes, len(rows) - errors, errors
 
 
@@ -185,18 +185,25 @@ def paired_counts(baseline: list[dict[str, Any]], stress: list[dict[str, Any]]) 
     for row in stress:
         b, s = base[row["seed"]], row["success"]
         key = (
-            "both_success" if b and s else
-            "baseline_only" if b else
-            "stress_only" if s else
-            "both_fail"
+            "both_success"
+            if b and s
+            else "baseline_only"
+            if b
+            else "stress_only"
+            if s
+            else "both_fail"
         )
         counts[key] += 1
     return counts
 
 
 def condition_view(
-    *, entry: dict[str, Any], rows: list[dict[str, Any]], baseline_id: str,
-    saved: dict[str, Any] | None, contrasts: dict[str, dict[str, Any]],
+    *,
+    entry: dict[str, Any],
+    rows: list[dict[str, Any]],
+    baseline_id: str,
+    saved: dict[str, Any] | None,
+    contrasts: dict[str, dict[str, Any]],
 ) -> ConditionView:
     successes, eligible, errors = count_successes(rows)
     return ConditionView(
@@ -224,15 +231,20 @@ def build_axis(
     baseline_id = summary["baseline_condition_id"] if summary else baseline_override
     ratio = summary["ratio"] if summary else 0.8
     floor = summary["baseline_success_floor"] if summary else 0.5
-    contrasts = {c["condition_id"]: c for c in (summary or {}).get("paired_contrasts_vs_baseline", [])}
+    contrasts = {
+        c["condition_id"]: c for c in (summary or {}).get("paired_contrasts_vs_baseline", [])
+    }
     axis_summary = (summary or {}).get("axis_summary", {})
     saved_points = {
         p["condition_id"]: p for p in axis_summary.get("points", axis_summary.get("recipes", []))
     }
     views = [
         condition_view(
-            entry=entry, rows=grouped[entry["condition_id"]], baseline_id=baseline_id,
-            saved=saved_points.get(entry["condition_id"]), contrasts=contrasts,
+            entry=entry,
+            rows=grouped[entry["condition_id"]],
+            baseline_id=baseline_id,
+            saved=saved_points.get(entry["condition_id"]),
+            contrasts=contrasts,
         )
         for entry in plan["conditions"]
     ]
@@ -241,11 +253,16 @@ def build_axis(
         baseline_rows = rows_by_condition(rows, "v0.1_full_latency")[baseline_id]
         baseline_view = condition_view(
             entry={"condition_id": baseline_id, "label": "shared baseline: constant delay 0 ms"},
-            rows=baseline_rows, baseline_id=baseline_id, saved=None, contrasts={},
+            rows=baseline_rows,
+            baseline_id=baseline_id,
+            saved=None,
+            contrasts={},
         )
         views.insert(0, baseline_view)
-    baseline_rate = next(v for v in views if v.is_baseline).successes / next(
-        v for v in views if v.is_baseline).eligible
+    baseline_rate = (
+        next(v for v in views if v.is_baseline).successes
+        / next(v for v in views if v.is_baseline).eligible
+    )
     threshold = ratio * baseline_rate
     for view in views:
         rate = view.successes / view.eligible
@@ -254,10 +271,18 @@ def build_axis(
         view.threshold_inside_interval = (not view.is_baseline) and low <= threshold <= high
         view.paired = None if view.is_baseline else paired_counts(baseline_rows, view.rows)
     return AxisView(
-        axis=plan["axis"], plan_id=plan_id, title=AXIS_TITLES[plan["axis"]],
-        unit=AXIS_UNITS[plan["axis"]], phase=plan["phase"], baseline_condition_id=baseline_id,
-        ratio=ratio, baseline_floor=floor, baseline_rate=baseline_rate, threshold_rate=threshold,
-        conditions=views, derived=summary is None,
+        axis=plan["axis"],
+        plan_id=plan_id,
+        title=AXIS_TITLES[plan["axis"]],
+        unit=AXIS_UNITS[plan["axis"]],
+        phase=plan["phase"],
+        baseline_condition_id=baseline_id,
+        ratio=ratio,
+        baseline_floor=floor,
+        baseline_rate=baseline_rate,
+        threshold_rate=threshold,
+        conditions=views,
+        derived=summary is None,
         saved_breakpoint=axis_summary.get("breakpoint") if summary else None,
         saved_note=axis_summary.get("note") if summary else None,
         isolation_notes=(summary or {}).get("isolation_notes", plan.get("notes", [])),
@@ -309,12 +334,18 @@ def build_profile(data_dir: Path, device: str, rows: list[dict[str, Any]]) -> Pr
     window_values = np.concatenate([samples[s : s + PROFILE_WINDOW_LENGTH] for s in starts])
     consumed = [i for r in device_rows for i in r["consumed_trace_indices"]]
     return ProfileView(
-        device=device, samples_s=samples, full_stats=sample_stats(samples),
-        window_stats=sample_stats(window_values), used_stats=sample_stats(samples[consumed]),
-        window_starts=starts, consumed_indices=sorted(set(consumed)),
+        device=device,
+        samples_s=samples,
+        full_stats=sample_stats(samples),
+        window_stats=sample_stats(window_values),
+        used_stats=sample_stats(samples[consumed]),
+        window_starts=starts,
+        consumed_indices=sorted(set(consumed)),
         telemetry=summarize_telemetry(meta["telemetry"]) if device == "rpi5" else {},
-        meta=meta, profile_path=f"profiles/{device}/profile.json",
-        model_sha256=profile["model"]["sha256"], environment_notes=profile["environment_notes"],
+        meta=meta,
+        profile_path=f"profiles/{device}/profile.json",
+        model_sha256=profile["model"]["sha256"],
+        environment_notes=profile["environment_notes"],
     )
 
 
@@ -327,8 +358,12 @@ def validate_summaries(axes: list[AxisView]) -> list[Check]:
         mismatches: list[str] = []
         for view in axis.conditions:
             record = saved[view.condition_id]
-            expected = (record["successes"], record["eligible"], record["n_runtime_error"],
-                        record["planned"])
+            expected = (
+                record["successes"],
+                record["eligible"],
+                record["n_runtime_error"],
+                record["planned"],
+            )
             actual = (view.successes, view.eligible, view.n_runtime_error, len(view.rows))
             if expected != actual:
                 mismatches.append(f"{view.condition_id}: saved {expected} vs records {actual}")
@@ -339,10 +374,13 @@ def validate_summaries(axes: list[AxisView]) -> list[Check]:
                     mismatches.append(f"{view.condition_id}: wilson {key}")
             if view.saved_contrast and view.saved_contrast["n_pairs"] != view.eligible:
                 mismatches.append(f"{view.condition_id}: n_pairs")
-        checks.append(Check(
-            f"{axis.plan_id}: saved summary counts and Wilson intervals equal episode records",
-            not mismatches, "; ".join(mismatches) or f"{len(axis.conditions)} conditions",
-        ))
+        checks.append(
+            Check(
+                f"{axis.plan_id}: saved summary counts and Wilson intervals equal episode records",
+                not mismatches,
+                "; ".join(mismatches) or f"{len(axis.conditions)} conditions",
+            )
+        )
     return checks
 
 
@@ -362,38 +400,66 @@ def validate_rows(
                 problems.append(f"{plan['plan_id']}/{condition_id}: policy RNG seeds differ")
     for row in rows:
         if row["success"] != (row["outcome"] == EpisodeOutcome.SUCCESS.value):
-            problems.append(f"{row['condition_id']}#{row['episode_index']}: success/outcome mismatch")
-    checks.append(Check("episode rows: planned seeds, policy RNG seeds, success flag vs outcome",
-                        not problems, "; ".join(problems[:5]) or f"{len(rows)} rows"))
-    checks.append(Check("no runtime errors or policy failures in any episode",
-                        all(r["outcome"] in {"success", "terminated_no_success",
-                                             "time_limit_truncation"} for r in rows),
-                        "outcomes: " + ", ".join(sorted({r["outcome"] for r in rows}))))
-    checks.append(Check("displayed counts: every axis lists each planned condition once",
-                        all(len({v.condition_id for v in a.conditions}) == len(a.conditions)
-                            for a in axes), f"{sum(len(a.conditions) for a in axes)} condition rows"))
+            problems.append(
+                f"{row['condition_id']}#{row['episode_index']}: success/outcome mismatch"
+            )
+    checks.append(
+        Check(
+            "episode rows: planned seeds, policy RNG seeds, success flag vs outcome",
+            not problems,
+            "; ".join(problems[:5]) or f"{len(rows)} rows",
+        )
+    )
+    checks.append(
+        Check(
+            "no runtime errors or policy failures in any episode",
+            all(
+                r["outcome"] in {"success", "terminated_no_success", "time_limit_truncation"}
+                for r in rows
+            ),
+            "outcomes: " + ", ".join(sorted({r["outcome"] for r in rows})),
+        )
+    )
+    checks.append(
+        Check(
+            "displayed counts: every axis lists each planned condition once",
+            all(len({v.condition_id for v in a.conditions}) == len(a.conditions) for a in axes),
+            f"{sum(len(a.conditions) for a in axes)} condition rows",
+        )
+    )
     return checks
 
 
 def validate_baseline_reuse(rows: list[dict[str, Any]]) -> Check:
-    own = {r["seed"]: r["outcome"] for r in rows
-           if r["condition_id"] == "latency_ms_0" and not r["referenced_baseline"]}
+    own = {
+        r["seed"]: r["outcome"]
+        for r in rows
+        if r["condition_id"] == "latency_ms_0" and not r["referenced_baseline"]
+    }
     shared = [r for r in rows if r["referenced_baseline"]]
-    differing = sorted({(r["condition_id"], r["seed"]) for r in shared if own[r["seed"]] != r["outcome"]})
-    return Check("shared baseline outcomes equal the latency axis 0 ms condition seed by seed",
-                 not differing, f"{len(shared)} referenced rows; differing: {differing[:5]}")
+    differing = sorted(
+        {(r["condition_id"], r["seed"]) for r in shared if own[r["seed"]] != r["outcome"]}
+    )
+    return Check(
+        "shared baseline outcomes equal the latency axis 0 ms condition seed by seed",
+        not differing,
+        f"{len(shared)} referenced rows; differing: {differing[:5]}",
+    )
 
 
-def validate_replay(axes: list[AxisView], profiles: list[ProfileView],
-                    rows: list[dict[str, Any]]) -> list[Check]:
+def validate_replay(
+    axes: list[AxisView], profiles: list[ProfileView], rows: list[dict[str, Any]]
+) -> list[Check]:
     checks: list[Check] = []
     problems: list[str] = []
     for profile in profiles:
         cond = f"device_profile_{profile.device}_fp32"
-        group = sorted((r for r in rows if r["condition_id"] == cond),
-                       key=lambda r: r["episode_index"])
+        group = sorted(
+            (r for r in rows if r["condition_id"] == cond), key=lambda r: r["episode_index"]
+        )
         starts = contiguous_window_starts(
-            profile.samples_s.size, window_length=PROFILE_WINDOW_LENGTH, n_episodes=len(group))
+            profile.samples_s.size, window_length=PROFILE_WINDOW_LENGTH, n_episodes=len(group)
+        )
         for row, start in zip(group, starts, strict=True):
             idx = row["consumed_trace_indices"]
             delays = row["consumed_delays_s"]
@@ -402,28 +468,43 @@ def validate_replay(axes: list[AxisView], profiles: list[ProfileView],
             if any(not start <= i < start + PROFILE_WINDOW_LENGTH for i in idx):
                 problems.append(f"{cond}#{row['episode_index']}: index outside window")
             if not np.array_equal(profile.samples_s[idx], np.asarray(delays)):
-                problems.append(f"{cond}#{row['episode_index']}: delays differ from profile samples")
+                problems.append(
+                    f"{cond}#{row['episode_index']}: delays differ from profile samples"
+                )
             if len(idx) != row["n_inference_calls"]:
                 problems.append(f"{cond}#{row['episode_index']}: consumed count != inference calls")
-    checks.append(Check(
-        "device replay: windows follow the locked design and consumed delays equal profile samples",
-        not problems, "; ".join(problems[:5]) or f"{len(profiles)} profiles"))
+    checks.append(
+        Check(
+            "device replay: windows follow the locked design and consumed delays equal profile samples",
+            not problems,
+            "; ".join(problems[:5]) or f"{len(profiles)} profiles",
+        )
+    )
     return checks
 
 
 def validate_constant_latency(rows: list[dict[str, Any]]) -> Check:
-    bad = [f"{r['condition_id']}#{r['episode_index']}" for r in rows
-           if r["axis"] == "latency_ms"
-           and abs(r["constant_latency_s"] * 1000 - float(r["condition_id"].rsplit("_", 1)[1])) > 1e-6]
-    return Check("latency axis: recorded constant delay equals the condition label",
-                 not bad, "; ".join(bad[:5]) or "all episodes")
+    bad = [
+        f"{r['condition_id']}#{r['episode_index']}"
+        for r in rows
+        if r["axis"] == "latency_ms"
+        and abs(r["constant_latency_s"] * 1000 - float(r["condition_id"].rsplit("_", 1)[1])) > 1e-6
+    ]
+    return Check(
+        "latency axis: recorded constant delay equals the condition label",
+        not bad,
+        "; ".join(bad[:5]) or "all episodes",
+    )
 
 
 def validate_identities(lock: dict[str, Any], profiles: list[ProfileView]) -> Check:
     fp32 = lock["artifacts"]["fp32_sha256"]
     bad = [p.device for p in profiles if p.model_sha256 != fp32]
-    return Check("device profiles were measured on the locked FP32 graph", not bad,
-                 f"fp32 sha256 {fp32[:12]}")
+    return Check(
+        "device profiles were measured on the locked FP32 graph",
+        not bad,
+        f"fp32 sha256 {fp32[:12]}",
+    )
 
 
 def load_report_data(data_dir: Path) -> ReportData:
@@ -439,15 +520,28 @@ def load_report_data(data_dir: Path) -> ReportData:
     axes = [build_axis(data_dir, rows, plan, "latency_ms_0") for plan in plans]
     lock = load_json(data_dir / "protocol" / "v1_protocol_lock.json")
     profiles = [build_profile(data_dir, d, rows) for d in ("laptop-m3", "rpi5")]
-    checks = [manifest_check, *validate_rows(axes, rows, plans), *validate_summaries(axes),
-              validate_baseline_reuse(rows), validate_constant_latency(rows),
-              *validate_replay(axes, profiles, rows), validate_identities(lock, profiles)]
+    checks = [
+        manifest_check,
+        *validate_rows(axes, rows, plans),
+        *validate_summaries(axes),
+        validate_baseline_reuse(rows),
+        validate_constant_latency(rows),
+        *validate_replay(axes, profiles, rows),
+        validate_identities(lock, profiles),
+    ]
     validation_files = {
-        p.name: load_json(p) for p in sorted((data_dir / "validation").glob("export_validation*.json"))
+        p.name: load_json(p)
+        for p in sorted((data_dir / "validation").glob("export_validation*.json"))
     }
     return ReportData(
-        data_dir=data_dir, axes=axes, profiles=profiles,
-        identities=load_json(data_dir / "identities" / "identities.json"), lock=lock,
+        data_dir=data_dir,
+        axes=axes,
+        profiles=profiles,
+        identities=load_json(data_dir / "identities" / "identities.json"),
+        lock=lock,
         large_evidence=load_json(data_dir / "large_evidence.json")["files"],
-        validation_files=validation_files, manifest_sha256=manifest_sha, rows=rows, checks=checks,
+        validation_files=validation_files,
+        manifest_sha256=manifest_sha,
+        rows=rows,
+        checks=checks,
     )

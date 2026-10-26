@@ -6,8 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "breakpoint-eval"
 version = "0.1.0"
 description = "Evaluate pretrained robot policies under controlled simulation stress."
+readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "Apache-2.0" }
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+]
 # Core: CLI help / argparse only. No torch, LeRobot, MuJoCo, or ONNX.
 dependencies = []
 
@@ -15,7 +21,8 @@ dependencies = []
 # Offline unit/dev checks (no MuJoCo / gym-aloha required).
 # With only [dev]: ONNX tests skip (importorskip onnx/onnxruntime), report plot
 # tests skip (importorskip matplotlib), H.264 stream encode tests skip without
-# FFmpeg+PyAV. Integration markers need requirements-feasibility.txt + vendor LeRobot.
+# FFmpeg+PyAV. BREAKPOINT_FAIL_ON_SKIP=1 turns those skips into failures (CI sets it).
+# Integration markers need requirements-simulation.txt + vendor LeRobot.
 # Full offline suite: pip install -e ".[dev,onnx,report,h264]"
 dev = [
   "ruff>=0.8.0",
@@ -42,7 +49,7 @@ h264 = [
   "numpy>=1.26,<3",
   "av>=12,<19",
 ]
-# Simulator stack pins live in requirements-feasibility.txt (install separately from
+# Simulator stack pins live in requirements-simulation.txt (install separately from
 # this editable package). Run / export / real policy smoke need that file + vendor LeRobot.
 # Pi/edge ORT profile: requirements-pi-profile.txt + [onnx] only (no torch/sim).
 
@@ -63,4 +70,5 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
 testpaths = ["tests"]
 markers = [
   "integration: requires local sim / Hub downloads",
+  "requires_onnx: needs onnx and onnxruntime ([onnx] extra); skipped with a reason when absent",
 ]

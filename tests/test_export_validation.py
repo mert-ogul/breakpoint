@@ -9,18 +9,15 @@ import pytest
 import torch
 from torch import nn
 
-pytest.importorskip("onnx")
-pytest.importorskip("onnxruntime")
-
-from breakpoint_eval.act_export import (  # noqa: E402
+from breakpoint_eval.act_export import (
     INPUT_IMAGES,
     INPUT_STATE,
     OUTPUT_CHUNK,
     RECIPE_ONNX_FP32,
     sha256_file,
 )
-from breakpoint_eval.export_runtime import resolve_onnx_runtime  # noqa: E402
-from breakpoint_eval.export_validation_v2 import (  # noqa: E402
+from breakpoint_eval.export_runtime import resolve_onnx_runtime
+from breakpoint_eval.export_validation import (
     SCHEMA_VERSION,
     ValidationBinding,
     assert_validation_v2_acceptable,
@@ -200,7 +197,16 @@ def test_task_outcomes_reject_unfinished_or_arbitrary_outcomes() -> None:
 
     # Mismatched task success still counts as completed smoke (not a numerical gate).
     mismatch = evaluate_closed_loop_task_outcomes(
-        [_seed_outcome(2100, pytorch_success=True, onnx_success=False, onnx_outcome="time_limit_truncation", onnx_terminated=False, onnx_truncated=True)]
+        [
+            _seed_outcome(
+                2100,
+                pytorch_success=True,
+                onnx_success=False,
+                onnx_outcome="time_limit_truncation",
+                onnx_terminated=False,
+                onnx_truncated=True,
+            )
+        ]
     )
     assert mismatch["passed"] is True
     assert mismatch["seeds"][0]["task_success_match"] is False
@@ -312,6 +318,7 @@ def _write_export_with_v2(tmp_path: Path, *, v2_passed: bool) -> Path:
     return model_path
 
 
+@pytest.mark.requires_onnx
 def test_resolve_accepts_v2_when_v1_closed_loop_failed(tmp_path: Path) -> None:
     model_path = _write_export_with_v2(tmp_path, v2_passed=True)
     resolved = resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
@@ -319,6 +326,7 @@ def test_resolve_accepts_v2_when_v1_closed_loop_failed(tmp_path: Path) -> None:
     assert resolved.export_validation.get("passed") is True
 
 
+@pytest.mark.requires_onnx
 def test_resolve_rejects_failed_v2(tmp_path: Path) -> None:
     model_path = _write_export_with_v2(tmp_path, v2_passed=False)
     with pytest.raises(ValueError, match="export_validation_v2.passed"):

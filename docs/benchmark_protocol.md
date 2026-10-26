@@ -27,7 +27,7 @@ replay.
 source .venv/bin/activate
 # On Pi: pip install -r requirements-pi-profile.txt  (no torch/sim)
 
-python scripts/profile_v1.py \
+python scripts/profile_device.py \
   --device-label laptop-m3 \
   --export-dir artifacts/export/act-v1 \
   --output-dir profiles/laptop-m3/fp32 \
@@ -36,7 +36,7 @@ python scripts/profile_v1.py \
   --power-note "AC power" \
   --cooling-note "passive"
 
-python scripts/profile_v1.py \
+python scripts/profile_device.py \
   --device-label rpi5 \
   --export-dir artifacts/export/act-v1 \
   --output-dir profiles/rpi5/fp32 \
@@ -55,12 +55,12 @@ clean status).
 ```bash
 source .venv/bin/activate
 
-python scripts/run_v1.py \
+python scripts/run_benchmark.py \
   --phase smoke \
   --out outputs/v1/smoke \
   --dry-run
 
-python scripts/run_v1.py \
+python scripts/run_benchmark.py \
   --phase full \
   --out outputs/v1/full \
   --dry-run
@@ -74,18 +74,18 @@ directories or evaluating episodes.
 ```bash
 # Smoke: seeds 3000–3004, policy +10000; baseline, 640 ms, 60x80, JPEG 10,
 # INT8 if runnable, both FP32 device traces.
-python scripts/run_v1.py --phase smoke --out outputs/v1/smoke
+python scripts/run_benchmark.py --phase smoke --out outputs/v1/smoke
 
 # Full: seeds 5000–5029; isolated latency / resolution / JPEG / precision /
 # device-profile axes. Resume matching lock only:
-python scripts/run_v1.py --phase full --out outputs/v1/full
-python scripts/run_v1.py --phase full --out outputs/v1/full --resume
+python scripts/run_benchmark.py --phase full --out outputs/v1/full
+python scripts/run_benchmark.py --phase full --out outputs/v1/full --resume
 ```
 
 Overrides (still identity-strict):
 
 ```bash
-python scripts/run_v1.py --phase smoke --out outputs/v1/smoke \
+python scripts/run_benchmark.py --phase smoke --out outputs/v1/smoke \
   --export-dir PATH/TO/export \
   --profile-laptop PATH/TO/laptop.json \
   --profile-rpi5 PATH/TO/rpi5.json
@@ -98,6 +98,6 @@ seeds stays separate from exploration.
 ## Help
 
 ```bash
-python scripts/run_v1.py --help
-python scripts/profile_v1.py --help
+python scripts/run_benchmark.py --help
+python scripts/profile_device.py --help
 ```

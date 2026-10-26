@@ -30,7 +30,7 @@ _PROFILE_ENTRYPOINTS = (
     "breakpoint_eval.latency_trace",
     "breakpoint_eval.device_profile",
     "breakpoint_eval.run_profile",
-    "breakpoint_eval.v1_profile",
+    "breakpoint_eval.benchmark_profile",
 )
 
 
@@ -40,9 +40,7 @@ class _BanHeavyFinder:
     def find_spec(self, fullname, path, target=None):  # noqa: ANN001
         root = fullname.split(".", 1)[0]
         if root in _BANNED_ROOTS:
-            raise ImportError(
-                f"profile import boundary violated: attempted to import {fullname!r}"
-            )
+            raise ImportError(f"profile import boundary violated: attempted to import {fullname!r}")
         return None
 
 
@@ -57,22 +55,25 @@ def test_profile_modules_import_without_torch_sim() -> None:
             # Keep candidate_map / seed_list free modules; purge profile-related and heavy.
             if root in _BANNED_ROOTS:
                 del sys.modules[name]
-            elif name in _PROFILE_ENTRYPOINTS or name.startswith(
-                (
-                    "breakpoint_eval.v1_profile",
-                    "breakpoint_eval.device_profile",
-                    "breakpoint_eval.latency_trace",
-                    "breakpoint_eval.run_profile",
-                    "breakpoint_eval.source_revision",
-                    "breakpoint_eval.v1_protocol",  # must not be required by v1_profile
+            elif (
+                name in _PROFILE_ENTRYPOINTS
+                or name.startswith(
+                    (
+                        "breakpoint_eval.benchmark_profile",
+                        "breakpoint_eval.device_profile",
+                        "breakpoint_eval.latency_trace",
+                        "breakpoint_eval.run_profile",
+                        "breakpoint_eval.source_revision",
+                        "breakpoint_eval.benchmark_protocol",  # must not be required by benchmark_profile
+                    )
                 )
             ):
                 del sys.modules[name]
     try:
         for mod_name in _PROFILE_ENTRYPOINTS:
             importlib.import_module(mod_name)
-        # Explicitly prove v1_profile does not need v1_protocol (torch chain).
-        assert "breakpoint_eval.v1_protocol" not in sys.modules
+        # Explicitly prove benchmark_profile does not need benchmark_protocol (torch chain).
+        assert "breakpoint_eval.benchmark_protocol" not in sys.modules
         loaded_banned = sorted(
             name for name in sys.modules if name.split(".", 1)[0] in _BANNED_ROOTS
         )
@@ -82,8 +83,8 @@ def test_profile_modules_import_without_torch_sim() -> None:
             sys.meta_path.remove(finder)
 
 
-def test_profile_v1_script_help_subprocess_blocks_torch() -> None:
-    """Subprocess imports profile_v1 with a torch ban (catches module-level leaks)."""
+def test_profile_device_script_help_subprocess_blocks_torch() -> None:
+    """Subprocess imports profile_device with a torch ban (catches module-level leaks)."""
     ban = ",".join(sorted(_BANNED_ROOTS))
     code = f"""
 import sys
@@ -100,9 +101,9 @@ class Ban(MetaPathFinder):
 sys.meta_path.insert(0, Ban())
 sys.path.insert(0, {str(ROOT / "src")!r})
 import runpy
-sys.argv = ["profile_v1", "--help"]
+sys.argv = ["profile_device", "--help"]
 try:
-    runpy.run_path({str(ROOT / "scripts" / "profile_v1.py")!r}, run_name="__main__")
+    runpy.run_path({str(ROOT / "scripts" / "profile_device.py")!r}, run_name="__main__")
 except SystemExit as exc:
     raise SystemExit(exc.code or 0)
 """
@@ -121,11 +122,11 @@ except SystemExit as exc:
     assert "No module named 'torch'" not in proc.stderr
 
 
-def test_v1_profile_does_not_import_v1_protocol() -> None:
+def test_benchmark_profile_does_not_import_benchmark_protocol() -> None:
     import inspect
 
-    import breakpoint_eval.v1_profile as mod
+    import breakpoint_eval.benchmark_profile as mod
 
     src = inspect.getsource(mod)
-    assert "v1_protocol" not in src
+    assert "benchmark_protocol" not in src
     assert "source_revision" in src

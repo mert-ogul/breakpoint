@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from breakpoint_eval.v1_media import (
+from breakpoint_eval.benchmark_media import (
     FrameTap,
     MediaVerificationError,
     PanelSpec,
@@ -25,14 +25,24 @@ EPISODES = ROOT / "benchmarks" / "act-transfer" / "v1" / "data" / "episodes" / "
 
 
 def row(condition: str, seed: int, success: bool) -> dict:
-    return {"plan_id": "v0.1_full_latency", "condition_id": condition, "seed": seed,
-            "policy_rng_seed": seed + 10000, "success": success}
+    return {
+        "plan_id": "v0.1_full_latency",
+        "condition_id": condition,
+        "seed": seed,
+        "policy_rng_seed": seed + 10000,
+        "success": success,
+    }
 
 
 def test_select_pair_takes_lowest_seed_where_baseline_succeeded_and_stress_did_not() -> None:
     rows = []
-    for seed, (base, stress) in {10: (False, False), 11: (True, True), 12: (True, False),
-                                 13: (True, False), 14: (False, True)}.items():
+    for seed, (base, stress) in {
+        10: (False, False),
+        11: (True, True),
+        12: (True, False),
+        13: (True, False),
+        14: (False, True),
+    }.items():
         rows += [row("latency_ms_0", seed, base), row("latency_ms_640", seed, stress)]
     selection = select_pair(rows)
     assert selection["seed"] == 12
@@ -88,11 +98,12 @@ def test_frame_tap_keeps_true_final_frame_not_autoreset_frame() -> None:
 
 
 def make_recording(n_steps: int, event: dict) -> Recording:
-    steps = [{"is_success": False, "truncated": False, "sim_time_s": 0.02 * (i + 1)}
-             for i in range(n_steps)]
+    steps = [
+        {"is_success": False, "truncated": False, "sim_time_s": 0.02 * (i + 1)}
+        for i in range(n_steps)
+    ]
     steps[-1].update(event)
-    frames = {k: np.full((48, 64, 3), k % 255, dtype=np.uint8)
-              for k in range(0, n_steps + 1, 4)}
+    frames = {k: np.full((48, 64, 3), k % 255, dtype=np.uint8) for k in range(0, n_steps + 1, 4)}
     frames[n_steps] = np.full((48, 64, 3), 200, dtype=np.uint8)
     return Recording("c", 1, 2, frames, {"steps": steps}, n_steps)
 
@@ -114,10 +125,13 @@ def test_compose_frames_aligns_by_simulation_time_and_holds(tmp_path: Path) -> N
     pytest.importorskip("matplotlib")
     short = make_recording(8, {"is_success": True})
     long = make_recording(16, {"truncated": True})
-    panels = [PanelSpec("BASELINE", "a", (37, 99, 235), short, "Success", 0.16),
-              PanelSpec("STRESS", "b", (180, 83, 9), long, "Timeout", 0.32)]
-    info = compose_frames(panels, ["one", "two"], width=640, fps=12.5, hold_frames=3,
-                          out_dir=tmp_path)
+    panels = [
+        PanelSpec("BASELINE", "a", (37, 99, 235), short, "Success", 0.16),
+        PanelSpec("STRESS", "b", (180, 83, 9), long, "Timeout", 0.32),
+    ]
+    info = compose_frames(
+        panels, ["one", "two"], width=640, fps=12.5, hold_frames=3, out_dir=tmp_path
+    )
     assert info["control_steps_per_output_frame"] == 4
     assert info["n_motion_frames"] == 5 and info["n_frames"] == 8
     assert info["first_source_frames"] == [0, 0]

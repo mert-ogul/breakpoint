@@ -11,6 +11,16 @@ from pathlib import Path
 
 import pytest
 
+from breakpoint_eval.benchmark_protocol import (
+    assert_lock_matches,
+    build_full_axis_plans,
+    build_smoke_plan,
+    condition_is_shared_baseline,
+    freeze_protocol_lock,
+    host_settings_from_config,
+    load_benchmark_config,
+    resolve_profile_by_identity,
+)
 from breakpoint_eval.experiment_plan import ExperimentAxis
 from breakpoint_eval.latency_trace import (
     EndOfTraceBehavior,
@@ -20,23 +30,13 @@ from breakpoint_eval.latency_trace import (
     extract_contiguous_window,
 )
 from breakpoint_eval.source_revision import read_source_revision
-from breakpoint_eval.v1_protocol import (
-    assert_lock_matches,
-    build_full_axis_plans,
-    build_smoke_plan,
-    condition_is_shared_baseline,
-    freeze_protocol_lock,
-    host_settings_from_config,
-    load_v1_config,
-    resolve_profile_by_identity,
-)
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "configs" / "v1.json"
 
 
 def test_config_loads() -> None:
-    cfg = load_v1_config(CONFIG_PATH)
+    cfg = load_benchmark_config(CONFIG_PATH)
     assert cfg["protocol"] == "v0.1"
     assert cfg["statistics"]["breakpoint_ratio"] == 0.8
     assert cfg["statistics"]["baseline_success_floor"] == 0.5
@@ -99,9 +99,9 @@ def test_window_rejects_block_resample_mix() -> None:
 
 
 def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
-    cfg = load_v1_config(CONFIG_PATH)
+    cfg = load_benchmark_config(CONFIG_PATH)
     # Minimal fake artifacts object via building conditions without resolve.
-    from breakpoint_eval.v1_protocol import ResolvedArtifacts
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
 
     fake = ResolvedArtifacts(
         export_dir=tmp_path,
@@ -236,9 +236,9 @@ def test_identity_profile_resolution_strict(tmp_path: Path) -> None:
 
 
 def test_resume_refuses_identity_change() -> None:
-    cfg = load_v1_config(CONFIG_PATH)
+    cfg = load_benchmark_config(CONFIG_PATH)
     host = host_settings_from_config(cfg)
-    from breakpoint_eval.v1_protocol import ResolvedArtifacts
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
 
     arts = ResolvedArtifacts(
         export_dir=Path("/tmp/export"),
@@ -274,25 +274,25 @@ def test_source_revision_archive_context(tmp_path: Path) -> None:
     assert info["dirty"] is None
 
 
-def test_v1_profile_module_avoids_heavy_imports() -> None:
-    # Ensure importing v1_profile does not pull torch/sim.
+def test_benchmark_profile_module_avoids_heavy_imports() -> None:
+    # Ensure importing benchmark_profile does not pull torch/sim.
     banned = {"torch", "mujoco", "dm_control", "lerobot", "gymnasium"}
     before = set(sys.modules) & banned
-    mod = importlib.import_module("breakpoint_eval.v1_profile")
+    mod = importlib.import_module("breakpoint_eval.benchmark_profile")
     after = set(sys.modules) & banned
     assert after == before
     assert hasattr(mod, "resolve_validated_fp32_bundle")
-    assert hasattr(mod, "run_v1_device_profile")
+    assert hasattr(mod, "run_benchmark_profile")
 
 
 def test_scripts_help_and_dry_run() -> None:
     py = str(ROOT / ".venv" / "bin" / "python")
     if not Path(py).is_file():
         py = sys.executable
-    run_v1 = ROOT / "scripts" / "run_v1.py"
-    profile_v1 = ROOT / "scripts" / "profile_v1.py"
+    run_benchmark = ROOT / "scripts" / "run_benchmark.py"
+    profile_device = ROOT / "scripts" / "profile_device.py"
     help_run = subprocess.run(
-        [py, str(run_v1), "--help"],
+        [py, str(run_benchmark), "--help"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -304,7 +304,7 @@ def test_scripts_help_and_dry_run() -> None:
     assert "--resume" in help_run.stdout
 
     help_prof = subprocess.run(
-        [py, str(profile_v1), "--help"],
+        [py, str(profile_device), "--help"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -325,7 +325,7 @@ def test_scripts_help_and_dry_run() -> None:
     dry = subprocess.run(
         [
             py,
-            str(run_v1),
+            str(run_benchmark),
             "--phase",
             "smoke",
             "--out",

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install ruff==0.17.0
+      - run: ruff check .
+      - run: ruff format --check .
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install FFmpeg (H.264 stream tests)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install CPU PyTorch first so the dev extra does not pull CUDA wheels
+        run: python -m pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install -e '.[dev,onnx,report,h264]'
+      - name: Offline tests (integration tests are deselected; any skip is a failure)
+        env:
+          BREAKPOINT_FAIL_ON_SKIP: "1"
+        run: python -m pytest -m "not integration" -rs
+
+  wheel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install build
+      - run: python -m build --wheel --outdir dist
+      - name: Install the wheel outside the checkout, run the CLI, render the saved example
+        run: python scripts/check_wheel.py --wheel dist/*.whl --example-data benchmarks/act-transfer/v1/data
+
+  saved-example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install -e '.[report]'
+      - run: python scripts/render_benchmark.py --input benchmarks/act-transfer/v1/data --out "$RUNNER_TEMP/report"
+      - name: Rendered Markdown matches the committed report
+        run: diff -u benchmarks/act-transfer/v1/report/report.md "$RUNNER_TEMP/report/report.md"

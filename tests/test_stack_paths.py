@@ -174,8 +174,24 @@ def test_clone_lerobot_at_pin_configures_lfs_before_fetch(
     assert ["git", "config", "--local", "filter.lfs.required", "false"] in calls
     fetch_idx = next(i for i, c in enumerate(calls) if c[:2] == ["git", "fetch"])
     process_idx = next(
-        i for i, c in enumerate(calls) if c[:4] == ["git", "config", "--local", "filter.lfs.process"]
+        i
+        for i, c in enumerate(calls)
+        if c[:4] == ["git", "config", "--local", "filter.lfs.process"]
     )
     assert process_idx < fetch_idx
     assert ["git", "fetch", "--depth", "1", "origin", LEROBOT_COMMIT] in calls
     assert ["git", "checkout", LEROBOT_COMMIT] in calls
+
+
+def test_installed_package_uses_explicit_workspace_not_site_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import breakpoint_eval.stack as stack
+
+    installed = tmp_path / "venv" / "lib" / "python3.11" / "site-packages" / "breakpoint_eval"
+    installed.mkdir(parents=True)
+    workspace = tmp_path / "workspace"
+    monkeypatch.setattr(stack, "__file__", str(installed / "stack.py"))
+    monkeypatch.setenv("BREAKPOINT_ROOT", str(workspace))
+    assert stack.repo_root_from_package() == workspace.resolve()
+    assert not (installed / "vendor").exists()

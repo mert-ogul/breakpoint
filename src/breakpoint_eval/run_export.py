@@ -539,7 +539,7 @@ def run_export(req: ExportRequest) -> Path:
         **chunk_dict_by_sample_id(eval_samples, ort_fp32_chunks),
     )
     if req.attempt_int8:
-        from breakpoint_eval.export_validation_v2 import write_int8_validation_from_export
+        from breakpoint_eval.export_validation import write_int8_validation_from_export
 
         int8_val = write_int8_validation_from_export(output_dir)
         LOGGER.info("Wrote INT8 validation sidecar %s", int8_val)

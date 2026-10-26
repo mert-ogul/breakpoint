@@ -30,7 +30,7 @@ Nothing below invents success rates for candidates that were not evaluated.
 | FFmpeg + libx264 | host binary on `PATH` | Optional H.264 only (`requirements-h264.txt` / `[h264]`); not in core |
 | draccus | git `9b690730ca108930519f48cc5dead72a72fd27cb` | LeRobot `poetry.lock` resolved_reference |
 
-Portable simulator pins: [`requirements-feasibility.txt`](../requirements-feasibility.txt)
+Portable simulator pins: [`requirements-simulation.txt`](../requirements-simulation.txt)
 (third-party packages only). Install the repo separately with `pip install -e .`.
 That file is a **tested pin set** from a feasibility probe, not an automatically
 frozen lockfile. Optional extras: `[dev]`, `[onnx]`, `[report]`, `[h264]` /
@@ -44,14 +44,14 @@ documented above (`torch==2.6.0`, `gym-aloha==0.1.1`, vendor LeRobot
 
 | Profile | Purpose | Authoritative pins | Install |
 | --- | --- | --- | --- |
-| **macOS Apple Silicon (CPU eval / sim)** | Offline tests + optional MuJoCo/LeRobot runs | `requirements-feasibility.txt` + `requirements-onnx.txt` | `uv venv --python 3.11 .venv && uv pip install -r requirements-feasibility.txt -r requirements-onnx.txt && uv pip install -e '.[dev,report]' && uv pip check` |
+| **macOS Apple Silicon (CPU eval / sim)** | Offline tests + optional MuJoCo/LeRobot runs | `requirements-simulation.txt` + `requirements-onnx.txt` | `uv venv --python 3.11 .venv && uv pip install -r requirements-simulation.txt -r requirements-onnx.txt && uv pip install -e '.[dev,report]' && uv pip check` |
 | **Pi / edge ORT profile** | `breakpoint profile` only | `requirements-pi-profile.txt` (= `requirements-onnx.txt`) | `uv pip install -r requirements-pi-profile.txt && uv pip install -e '.[onnx]' && uv pip check` |
 
 Mac notes:
 
 - Use the project `.venv` (Python 3.11, arm64). After a successful Mac install,
   `constraints-macos-arm64.txt` records the third-party freeze that passed
-  `uv pip check` on this host (use as `uv pip install -r requirements-feasibility.txt -c constraints-macos-arm64.txt` when re-resolving).
+  `uv pip check` on this host (use as `uv pip install -r requirements-simulation.txt -c constraints-macos-arm64.txt` when re-resolving).
 - LeRobot is a **vendor checkout** under `vendor/lerobot@3c0a209…`, not a pip
   package. Reuse an existing pin; never force-checkout over local edits.
   **git-lfs is not required**: checkout uses `git init` + shallow fetch of the
@@ -67,7 +67,7 @@ Pi notes:
 
 - Keep the profile **free of Torch, MuJoCo, gym-*, and LeRobot**. Ship the ONNX
   graph + corpus from a Mac/desktop export; measure ORT latency on device only.
-- Do not install `requirements-feasibility.txt` into the Pi profile venv.
+- Do not install `requirements-simulation.txt` into the Pi profile venv.
 
 ### Install shapes
 
@@ -76,7 +76,7 @@ Pi notes:
 | Core CLI help only | `pip install -e .` then `breakpoint --help` |
 | Offline unit tests (torch/cv2) | `pip install -e ".[dev]"` — ONNX/report/H.264 tests **skip** without extras (`importorskip` / FFmpeg fixture) |
 | Full offline suite | `pip install -e ".[dev,onnx,report,h264]"` (+ system FFmpeg for H.264 encode) |
-| Simulator / policy runs (Mac) | `pip install -r requirements-feasibility.txt` then `pip install -e '.[dev,report]'` (+ vendor LeRobot) |
+| Simulator / policy runs (Mac) | `pip install -r requirements-simulation.txt` then `pip install -e '.[dev,report]'` (+ vendor LeRobot) |
 | ORT profile (no sim; Mac or Pi) | `pip install -r requirements-pi-profile.txt` then `pip install -e '.[onnx]'` |
 
 Do **not** assume `pip install lerobot` (latest) reproduces these cards. Hub issues
@@ -289,7 +289,7 @@ session or Linux with EGL/OSMesa):
 ```bash
 uv venv --python 3.11 .venv
 source .venv/bin/activate
-uv pip install -r requirements-feasibility.txt
+uv pip install -r requirements-simulation.txt
 uv pip install -e .
 ```
 

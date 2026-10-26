@@ -11,17 +11,17 @@ from pathlib import Path
 from typing import Any
 
 from breakpoint_eval import __version__
-from breakpoint_eval.v1_report_data import (
+from breakpoint_eval.benchmark_report_data import (
     AxisView,
     ConditionView,
     ProfileView,
     ReportData,
     load_report_data,
 )
-from breakpoint_eval.v1_report_plots import render_all_plots, short_label
-from breakpoint_eval.v1_report_style import CSS
+from breakpoint_eval.benchmark_report_plots import render_all_plots, short_label
+from breakpoint_eval.benchmark_report_style import CSS
 
-LOGGER = logging.getLogger("breakpoint_eval.v1_report")
+LOGGER = logging.getLogger("breakpoint_eval.benchmark_report")
 
 GLYPH_SUCCESS = "\u25cf"
 GLYPH_FAIL = "\u25cb"
@@ -95,8 +95,10 @@ def matrix_html(axis: AxisView) -> str:
             f'<td class="{kind}" title="seed {seed}: {esc(outcome)}">{glyph}</td>'
             for glyph, kind, seed, outcome in cells
         )
-        body.append(f'<tr><th scope="row">{esc(short_label(view.condition_id).replace(chr(10), " "))}'
-                    f"</th>{tds}</tr>")
+        body.append(
+            f'<tr><th scope="row">{esc(short_label(view.condition_id).replace(chr(10), " "))}'
+            f"</th>{tds}</tr>"
+        )
     return (
         '<div class="scroll"><table class="matrix"><caption>Per-seed outcomes. Columns are the '
         f"last two digits of env seeds {seeds[0]}\u2013{seeds[-1]}.</caption>"
@@ -128,8 +130,10 @@ def paired_text(view: ConditionView) -> str:
     if view.paired is None:
         return "reference"
     p = view.paired
-    return (f"lost {p['baseline_only']} &middot; gained {p['stress_only']} &middot; "
-            f"both succeeded {p['both_success']} &middot; neither {p['both_fail']}")
+    return (
+        f"lost {p['baseline_only']} &middot; gained {p['stress_only']} &middot; "
+        f"both succeeded {p['both_success']} &middot; neither {p['both_fail']}"
+    )
 
 
 def paired_text_plain(view: ConditionView) -> str:
@@ -149,7 +153,7 @@ def condition_table_html(axis: AxisView) -> str:
         cls = "baseline" if view.is_baseline else "stress"
         rows.append(
             f'<tr class="{cls}"><th scope="row">{esc(view.label)}'
-            f'<code>{esc(view.condition_id)}</code></th>'
+            f"<code>{esc(view.condition_id)}</code></th>"
             f'<td class="num">{view.successes}/{view.eligible}</td>'
             f'<td class="num">{pct(view.successes / view.eligible)}</td>'
             f'<td class="num">{wilson_text(view)}</td>'
@@ -159,12 +163,12 @@ def condition_table_html(axis: AxisView) -> str:
         )
     return (
         '<div class="scroll"><table class="data"><caption>Success counts with Wilson 95% '
-        "intervals</caption><thead><tr><th scope=\"col\">Condition</th><th scope=\"col\">Success"
+        'intervals</caption><thead><tr><th scope="col">Condition</th><th scope="col">Success'
         '</th><th scope="col">Rate</th><th scope="col">Wilson 95%</th><th scope="col">vs '
         f'{axis.ratio:g} &times; baseline ({pct(axis.threshold_rate)})</th><th scope="col">Paired '
         'with baseline seeds</th><th scope="col">p &minus; '
-        f'{axis.ratio:g}&middot;p<sub>base</sub>, paired bootstrap 95%</th></tr></thead>'
-        f'<tbody>{"".join(rows)}</tbody></table></div>'
+        f"{axis.ratio:g}&middot;p<sub>base</sub>, paired bootstrap 95%</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
     )
 
 
@@ -174,8 +178,11 @@ def breakpoint_sentence(axis: AxisView) -> str:
         return (
             "No saved experiment summary exists for this axis. Counts, intervals, and paired "
             "tables here are derived by this report from the episode records. "
-            + (f"Point estimate below threshold: {', '.join(below)}." if below
-               else "No condition is below the threshold.")
+            + (
+                f"Point estimate below threshold: {', '.join(below)}."
+                if below
+                else "No condition is below the threshold."
+            )
         )
     bp = axis.saved_breakpoint
     if bp is None:
@@ -224,24 +231,31 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
         "Conditions whose Wilson interval includes the threshold (state of the threshold "
         f"comparison is unresolved at n={episodes_per_condition(data)}): "
         + ", ".join(esc(v.condition_id) for v in unresolved)
-        if unresolved else "No condition interval includes the threshold."
+        if unresolved
+        else "No condition interval includes the threshold."
     )
-    links = [("Episode records (all axes, compact JSONL)", "episodes/episodes.jsonl"),
-             (f"Plan: {axis.plan_id}", f"protocol/plans/{axis.plan_id}.json")]
+    links = [
+        ("Episode records (all axes, compact JSONL)", "episodes/episodes.jsonl"),
+        (f"Plan: {axis.plan_id}", f"protocol/plans/{axis.plan_id}.json"),
+    ]
     if not axis.derived:
-        links.insert(1, ("Saved experiment summary",
-                         f"summaries/{axis.plan_id}.experiment_summary.json"))
-    derived = ('<p class="callout derived"><strong>Derived axis.</strong> No experiment summary '
-               "was saved for the device replay; this report computed its values from episode "
-               "records. The baseline is the shared constant 0 ms condition.</p>"
-               if axis.derived else "")
+        links.insert(
+            1, ("Saved experiment summary", f"summaries/{axis.plan_id}.experiment_summary.json")
+        )
+    derived = (
+        '<p class="callout derived"><strong>Derived axis.</strong> No experiment summary '
+        "was saved for the device replay; this report computed its values from episode "
+        "records. The baseline is the shared constant 0 ms condition.</p>"
+        if axis.derived
+        else ""
+    )
     return (
         f'<section class="panel" id="panel-{axis.axis}" aria-labelledby="h-{axis.axis}">'
         f'<h2 id="h-{axis.axis}">{esc(axis.title)}</h2>'
         f'<p class="unit">Stress variable: <code>{esc(axis.unit)}</code>. Phase: '
         f"{esc(axis.phase)}.</p>{derived}"
         f'<ul class="plain">{notes}</ul>'
-        f'{picture_html(f"success_{axis.axis}", f"Success rate by condition for {axis.title}", plots_rel)}'
+        f"{picture_html(f'success_{axis.axis}', f'Success rate by condition for {axis.title}', plots_rel)}"
         f"{condition_table_html(axis)}"
         f"<p>{esc(breakpoint_sentence(axis))}</p>"
         f"<p>{unresolved_text}</p>"
@@ -252,18 +266,17 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
 
 def stats_row(label: str, stats: dict[str, float], note: str) -> str:
     return (
-        f"<tr><th scope=\"row\">{esc(label)}</th><td class=\"num\">{stats['count']}</td>"
-        f"<td class=\"num\">{ms(stats['min_s'])}</td><td class=\"num\">{ms(stats['median_s'])}</td>"
-        f"<td class=\"num\">{ms(stats['p95_s'])}</td><td class=\"num\">{ms(stats['p99_s'])}</td>"
-        f"<td class=\"num\">{ms(stats['max_s'])}</td><td>{esc(note)}</td></tr>"
+        f'<tr><th scope="row">{esc(label)}</th><td class="num">{stats["count"]}</td>'
+        f'<td class="num">{ms(stats["min_s"])}</td><td class="num">{ms(stats["median_s"])}</td>'
+        f'<td class="num">{ms(stats["p95_s"])}</td><td class="num">{ms(stats["p99_s"])}</td>'
+        f'<td class="num">{ms(stats["max_s"])}</td><td>{esc(note)}</td></tr>'
     )
 
 
 def telemetry_html(profile: ProfileView) -> str:
     t = profile.telemetry
     if not t:
-        return ("<p>No throttling or temperature telemetry was recorded for this laptop "
-                "profile.</p>")
+        return "<p>No throttling or temperature telemetry was recorded for this laptop profile.</p>"
     return (
         '<p class="callout caution"><strong>Pi thermal state during profiling.</strong> '
         f"Of {t['n_samples']} telemetry samples, {t['throttled_now']} reported throttling active, "
@@ -285,23 +298,36 @@ def timing_panel_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         label = profile.device
         blocks.append(
             f"<h3>{esc(label)}</h3>"
-            f'{picture_html(f"latency_trace_{label}", f"Latency over sample index for {label}", plots_rel)}'
+            f"{picture_html(f'latency_trace_{label}', f'Latency over sample index for {label}', plots_rel)}"
             '<div class="scroll"><table class="data"><caption>Latency statistics, milliseconds'
             '</caption><thead><tr><th scope="col">Set</th><th scope="col">n</th>'
             '<th scope="col">min</th><th scope="col">median</th><th scope="col">p95</th>'
             '<th scope="col">p99</th><th scope="col">max</th><th scope="col">Meaning</th></tr>'
             "</thead><tbody>"
             + stats_row("full profile", profile.full_stats, "all measured calls")
-            + stats_row("replay windows", profile.window_stats,
-                        "union of the 32-sample windows assigned to episodes")
-            + stats_row("consumed", profile.used_stats,
-                        "samples actually applied to fresh chunks across 30 episodes")
+            + stats_row(
+                "replay windows",
+                profile.window_stats,
+                "union of the 32-sample windows assigned to episodes",
+            )
+            + stats_row(
+                "consumed",
+                profile.used_stats,
+                "samples actually applied to fresh chunks across 30 episodes",
+            )
             + "</tbody></table></div>"
             + telemetry_html(profile)
-            + evidence_links_html(data, [(f"{label} profile (raw timing samples)",
-                                          profile.profile_path),
-                                         (f"{label} run metadata and telemetry",
-                                          f"profiles/{label}/profile_run_meta.json")], out_dir)
+            + evidence_links_html(
+                data,
+                [
+                    (f"{label} profile (raw timing samples)", profile.profile_path),
+                    (
+                        f"{label} run metadata and telemetry",
+                        f"profiles/{label}/profile_run_meta.json",
+                    ),
+                ],
+                out_dir,
+            )
         )
     return (
         '<section class="panel" id="panel-timing" aria-labelledby="h-timing">'
@@ -310,7 +336,8 @@ def timing_panel_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         "<code>floor(i&middot;(N&minus;32)/(n&minus;1))</code>. A 400-step episode requests about "
         "four fresh chunks, so only the first few samples of each window are consumed. Replayed "
         "delays are applied on simulated time; host inference time is never added.</p>"
-        + "".join(blocks) + "</section>"
+        + "".join(blocks)
+        + "</section>"
     )
 
 
@@ -324,46 +351,63 @@ def honest_notes(data: ReportData) -> list[str]:
     int8 = data.lock["artifacts"]["int8_status"]
     notes = [
         f"Errors: {errors} runtime errors or policy failures in {n} episode records. Outcomes: "
-        + ", ".join(f"{v} {k}" for k, v in sorted(outcomes.items())) + ".",
+        + ", ".join(f"{v} {k}" for k, v in sorted(outcomes.items()))
+        + ".",
         f"Unsupported conditions: none skipped. INT8 export status is '{int8}' and the INT8 "
         "graph ran in every planned episode. The INT8 graph has no FP32 numerical-parity "
         "requirement; see the provenance section for its recorded chunk error.",
         f"Baseline strength: {baseline_view(first).successes}/{baseline_view(first).eligible} "
         f"({pct(first.baseline_rate)}) against the project floor of {first.baseline_floor:g}. "
-        + ("The baseline is not weak by that floor." if first.baseline_rate >= first.baseline_floor
-           else "The baseline is below the floor; breakpoint claims are not supported."),
+        + (
+            "The baseline is not weak by that floor."
+            if first.baseline_rate >= first.baseline_floor
+            else "The baseline is below the floor; breakpoint claims are not supported."
+        ),
         f"Sample size: {episodes_per_condition(data)} paired episodes per condition. Intervals "
         "are wide; the run is exploratory and does not locate an exact boundary.",
     ]
-    unresolved = [f"{a.axis}: {', '.join(v.condition_id for v in unresolved_conditions(a))}"
-                  for a in data.axes if unresolved_conditions(a)]
-    notes.append("Unresolved threshold comparisons (Wilson interval includes the threshold): "
-                 + "; ".join(unresolved) + ".")
+    unresolved = [
+        f"{a.axis}: {', '.join(v.condition_id for v in unresolved_conditions(a))}"
+        for a in data.axes
+        if unresolved_conditions(a)
+    ]
+    notes.append(
+        "Unresolved threshold comparisons (Wilson interval includes the threshold): "
+        + "; ".join(unresolved)
+        + "."
+    )
     resolution = next(a for a in data.axes if a.axis == "resolution")
     if len({v.ordered_value for v in resolution.conditions[1:]}) == 1:
-        notes.append("Resolution ordering: the saved summary stored the same ordered value for "
-                     "every resolution, so conditions are ordered by plan order (native, "
-                     "240x320, 120x160, 60x80), which is mild to severe.")
+        notes.append(
+            "Resolution ordering: the saved summary stored the same ordered value for "
+            "every resolution, so conditions are ordered by plan order (native, "
+            "240x320, 120x160, 60x80), which is mild to severe."
+        )
     rpi = next(p for p in data.profiles if p.device == "rpi5")
     notes.append(
         f"Pi 5 timings were captured while throttling was reported in "
         f"{rpi.telemetry['throttled_now']} of {rpi.telemetry['n_samples']} telemetry samples; "
-        "cooling and power were not recorded.")
+        "cooling and power were not recorded."
+    )
     return notes
 
 
 def observations(data: ReportData) -> list[str]:
     base = baseline_view(data.axes[0])
-    lines = [f"Baseline (ONNX FP32, native image, 0 ms delay): {base.successes}/{base.eligible} "
-             f"({pct(base.successes / base.eligible)}; Wilson 95% {wilson_text(base)})."]
+    lines = [
+        f"Baseline (ONNX FP32, native image, 0 ms delay): {base.successes}/{base.eligible} "
+        f"({pct(base.successes / base.eligible)}; Wilson 95% {wilson_text(base)})."
+    ]
     for axis in data.axes:
         below = [v for v in axis.conditions if v.below_threshold]
         if below:
             first = below[0]
             tag = " (interval includes threshold)" if first.threshold_inside_interval else ""
-            lines.append(f"{axis.title}: first point below {axis.ratio:g} x baseline is "
-                         f"{short_label(first.condition_id).replace(chr(10), ' ')} at "
-                         f"{first.successes}/{first.eligible}{tag}.")
+            lines.append(
+                f"{axis.title}: first point below {axis.ratio:g} x baseline is "
+                f"{short_label(first.condition_id).replace(chr(10), ' ')} at "
+                f"{first.successes}/{first.eligible}{tag}."
+            )
         else:
             lines.append(f"{axis.title}: no condition fell below {axis.ratio:g} x baseline.")
     return lines
@@ -377,11 +421,14 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
     runtime = int8_validation.get("runtime_checks", {})
     checks = "".join(
         f'<tr><td class="num">{"pass" if c.passed else "FAIL"}</td><td>{esc(c.name)}</td>'
-        f"<td>{esc(c.detail)}</td></tr>" for c in data.checks)
+        f"<td>{esc(c.detail)}</td></tr>"
+        for c in data.checks
+    )
     large = "".join(
-        f"<tr><td><code>{esc(e['path'])}</code></td><td class=\"num\">{e['bytes']:,}</td>"
+        f'<tr><td><code>{esc(e["path"])}</code></td><td class="num">{e["bytes"]:,}</td>'
         f"<td>{esc(e['role'])}</td><td><code>{e['sha256'][:16]}&hellip;</code></td></tr>"
-        for e in data.large_evidence)
+        for e in data.large_evidence
+    )
     return (
         '<h2 id="provenance">Provenance</h2>'
         "<details><summary>Model, runtime, and protocol identities</summary><dl>"
@@ -446,7 +493,8 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     tabs = [(a.axis, a.title) for a in data.axes] + [("timing", "Device timing")]
     radios = "".join(
         f'<input type="radio" name="view" id="tab-{key}"{" checked" if i == 0 else ""}>'
-        for i, (key, _) in enumerate(tabs))
+        for i, (key, _) in enumerate(tabs)
+    )
     labels = "".join(f'<label for="tab-{key}">{esc(title)}</label>' for key, title in tabs)
     panels = "".join(axis_panel_html(data, a, out_dir, plots_rel) for a in data.axes)
     panels += timing_panel_html(data, out_dir, plots_rel)
@@ -466,7 +514,7 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         f"<style>{CSS}{tab_css([k for k, _ in tabs])}</style></head><body><main>"
         '<header><p class="eyebrow">Breakpoint &middot; v0.1 &middot; exploratory</p>'
         "<h1>ACT cube transfer under isolated stress</h1>"
-        "<p class=\"lead\">One pretrained ACT policy (<code>lerobot/act_aloha_sim_transfer_cube_human"
+        '<p class="lead">One pretrained ACT policy (<code>lerobot/act_aloha_sim_transfer_cube_human'
         "</code>) in the ALOHA TransferCube simulation, run as ONNX Runtime on CPU. Four isolated "
         "stress axes and a device latency replay, with paired seeds. Simulation only: nothing here "
         "describes a physical robot.</p>"
@@ -477,7 +525,7 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         f'<ul class="plain caveats">{notes}</ul></section>'
         f'<div class="tabs">{radios}<div class="tablist" role="presentation">{labels}</div>'
         f"{panels}</div>{provenance_html(data, out_dir)}"
-        f"<footer><p>Generated by <code>scripts/render_v1.py</code> (breakpoint-eval {__version__}) "
+        f"<footer><p>Generated by <code>scripts/render_benchmark.py</code> (breakpoint-eval {__version__}) "
         f"from packaged data with manifest sha256 <code>{data.manifest_sha256[:16]}&hellip;</code>."
         "</p></footer></main></body></html>"
     )
@@ -485,68 +533,127 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
 
 def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     lines = [
-        "# Breakpoint v0.1: ACT cube transfer under isolated stress", "",
+        "# Breakpoint v0.1: ACT cube transfer under isolated stress",
+        "",
         "Simulation only. One pretrained ACT policy, ONNX Runtime on CPU, paired seeds "
         f"{seed_range(data)}, {episodes_per_condition(data)} episodes per condition. "
-        "Exploratory run.", "",
-        "## What was measured", "", *[f"- {line}" for line in observations(data)], "",
-        "## Read before the numbers", "", *[f"- {line}" for line in honest_notes(data)], "",
+        "Exploratory run.",
+        "",
+        "## What was measured",
+        "",
+        *[f"- {line}" for line in observations(data)],
+        "",
+        "## Read before the numbers",
+        "",
+        *[f"- {line}" for line in honest_notes(data)],
+        "",
     ]
     for axis in data.axes:
-        lines += [f"## {axis.title}", "", f"Stress variable: `{axis.unit}`.", "",
-                  f"![{axis.title}]({plots_rel}/success_{axis.axis}.png)", "",
-                  "| Condition | Success | Rate | Wilson 95% | Status | Paired with baseline |",
-                  "| --- | ---: | ---: | ---: | --- | --- |"]
+        lines += [
+            f"## {axis.title}",
+            "",
+            f"Stress variable: `{axis.unit}`.",
+            "",
+            f"![{axis.title}]({plots_rel}/success_{axis.axis}.png)",
+            "",
+            "| Condition | Success | Rate | Wilson 95% | Status | Paired with baseline |",
+            "| --- | ---: | ---: | ---: | --- | --- |",
+        ]
         for v in axis.conditions:
             lines.append(
                 f"| `{v.condition_id}` | {v.successes}/{v.eligible} | "
                 f"{pct(v.successes / v.eligible)} | {wilson_text(v)} | "
-                f"{status_glyph(v)} {status_text(axis, v)} | {paired_text_plain(v)} |")
-        lines += ["", breakpoint_sentence(axis), "", "Per-seed outcomes "
-                  f"({GLYPH_SUCCESS} success, {GLYPH_FAIL} none, {GLYPH_LOST} lost, "
-                  f"{GLYPH_GAINED} gained):", "", "```"]
+                f"{status_glyph(v)} {status_text(axis, v)} | {paired_text_plain(v)} |"
+            )
+        lines += [
+            "",
+            breakpoint_sentence(axis),
+            "",
+            "Per-seed outcomes "
+            f"({GLYPH_SUCCESS} success, {GLYPH_FAIL} none, {GLYPH_LOST} lost, "
+            f"{GLYPH_GAINED} gained):",
+            "",
+            "```",
+        ]
         for view, cells in matrix_strings(axis):
             lines.append(f"{view.condition_id:<32}" + "".join(c[0] for c in cells))
         lines += ["```", ""]
     lines += ["## Device timing", ""]
     for p in data.profiles:
-        lines += [f"### {p.device}", "", f"![{p.device} latency]({plots_rel}/latency_trace_{p.device}.png)",
-                  "", "| Set | n | median ms | p95 ms | p99 ms |", "| --- | ---: | ---: | ---: | ---: |"]
-        for name, s in (("full profile", p.full_stats), ("replay windows", p.window_stats),
-                        ("consumed", p.used_stats)):
-            lines.append(f"| {name} | {s['count']} | {ms(s['median_s'])} | {ms(s['p95_s'])} | "
-                         f"{ms(s['p99_s'])} |")
+        lines += [
+            f"### {p.device}",
+            "",
+            f"![{p.device} latency]({plots_rel}/latency_trace_{p.device}.png)",
+            "",
+            "| Set | n | median ms | p95 ms | p99 ms |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+        for name, s in (
+            ("full profile", p.full_stats),
+            ("replay windows", p.window_stats),
+            ("consumed", p.used_stats),
+        ):
+            lines.append(
+                f"| {name} | {s['count']} | {ms(s['median_s'])} | {ms(s['p95_s'])} | "
+                f"{ms(s['p99_s'])} |"
+            )
         lines.append("")
-    lines += ["## Checks", "", *[f"- {'pass' if c.passed else 'FAIL'}: {c.name} ({c.detail})"
-                                 for c in data.checks], ""]
+    lines += [
+        "## Checks",
+        "",
+        *[f"- {'pass' if c.passed else 'FAIL'}: {c.name} ({c.detail})" for c in data.checks],
+        "",
+    ]
     return "\n".join(lines)
 
 
 def displayed_counts(data: ReportData) -> list[dict[str, Any]]:
     return [
-        {"axis": a.axis, "plan_id": a.plan_id, "condition_id": v.condition_id,
-         "successes": v.successes, "eligible": v.eligible, "runtime_errors": v.n_runtime_error,
-         "planned": len(v.rows), "wilson_low": v.wilson["low"], "wilson_high": v.wilson["high"],
-         "derived_by_report": a.derived}
-        for a in data.axes for v in a.conditions
+        {
+            "axis": a.axis,
+            "plan_id": a.plan_id,
+            "condition_id": v.condition_id,
+            "successes": v.successes,
+            "eligible": v.eligible,
+            "runtime_errors": v.n_runtime_error,
+            "planned": len(v.rows),
+            "wilson_low": v.wilson["low"],
+            "wilson_high": v.wilson["high"],
+            "derived_by_report": a.derived,
+        }
+        for a in data.axes
+        for v in a.conditions
     ]
 
 
 def write_data_index(data: ReportData, out_dir: Path, written: list[Path]) -> Path:
-    files = [{"path": p.relative_to(out_dir).as_posix(), "bytes": p.stat().st_size,
-              "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(written)]
+    files = [
+        {
+            "path": p.relative_to(out_dir).as_posix(),
+            "bytes": p.stat().st_size,
+            "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+        }
+        for p in sorted(written)
+    ]
     payload = {
         "schema_version": 1,
-        "generator": "scripts/render_v1.py",
+        "generator": "scripts/render_benchmark.py",
         "breakpoint_eval_version": __version__,
-        "input": {"manifest_sha256": data.manifest_sha256, "episode_rows": len(data.rows),
-                  "simulated_runs": data.n_runs},
-        "validation": [{"name": c.name, "passed": c.passed, "detail": c.detail}
-                       for c in data.checks],
+        "input": {
+            "manifest_sha256": data.manifest_sha256,
+            "episode_rows": len(data.rows),
+            "simulated_runs": data.n_runs,
+        },
+        "validation": [
+            {"name": c.name, "passed": c.passed, "detail": c.detail} for c in data.checks
+        ],
         "displayed_counts": displayed_counts(data),
-        "derived_by_report": ["device_profile axis counts and paired tables",
-                              "threshold-inside-interval flags", "timing statistics",
-                              "Pi telemetry summary"],
+        "derived_by_report": [
+            "device_profile axis counts and paired tables",
+            "threshold-inside-interval flags",
+            "timing statistics",
+            "Pi telemetry summary",
+        ],
         "files": files,
     }
     path = out_dir / "data_index.json"

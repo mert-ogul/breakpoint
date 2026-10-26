@@ -132,9 +132,13 @@ def _condition_run_request(
     elif axis == "device_profile":
         profile_path = params.get("latency_profile_path") or latency_profile
         if profile_path is None:
-            raise ValueError("device_profile axis requires latency_profile_path in condition params")
+            raise ValueError(
+                "device_profile axis requires latency_profile_path in condition params"
+            )
         if onnx_model is None:
-            raise ValueError("device_profile axis requires --onnx-model (FP32 graph matching profile)")
+            raise ValueError(
+                "device_profile axis requires --onnx-model (FP32 graph matching profile)"
+            )
         profile = load_latency_profile(Path(profile_path).resolve())
         model_path = Path(onnx_model).resolve()
         resolve_onnx_runtime(

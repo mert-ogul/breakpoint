@@ -1,11 +1,11 @@
 # Tested third-party freeze: macOS arm64, Python 3.11.17, 2026-10-19.
-# Resolved from requirements-feasibility.txt + requirements-onnx.txt +
+# Resolved from requirements-simulation.txt + requirements-onnx.txt +
 # editable breakpoint-eval[dev,report]. Passed: uv pip check.
-# Authoritative policy/sim pins remain requirements-feasibility.txt;
+# Authoritative policy/sim pins remain requirements-simulation.txt;
 # this file is a host-verified constraint snapshot for re-install, not a
 # license to upgrade the stack. Exclude breakpoint-eval itself.
 # Usage:
-#   uv pip install -r requirements-feasibility.txt -r requirements-onnx.txt -c constraints-macos-arm64.txt
+#   uv pip install -r requirements-simulation.txt -r requirements-onnx.txt -c constraints-macos-arm64.txt
 #   uv pip install -e '.[dev,report]'
 #
 absl-py==2.5.1

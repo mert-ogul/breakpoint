@@ -9,10 +9,7 @@ import pytest
 import torch
 from torch import nn
 
-pytest.importorskip("onnx")
-pytest.importorskip("onnxruntime")
-
-from breakpoint_eval.act_export import (  # noqa: E402
+from breakpoint_eval.act_export import (
     INPUT_IMAGES,
     INPUT_STATE,
     OUTPUT_CHUNK,
@@ -23,7 +20,7 @@ from breakpoint_eval.act_export import (  # noqa: E402
     inspect_onnx_graph,
     sha256_file,
 )
-from breakpoint_eval.export_corpus import (  # noqa: E402
+from breakpoint_eval.export_corpus import (
     SYNTHETIC_SOURCE,
     SYNTHETIC_UNSUITABLE_NOTE,
     build_synthetic_corpus,
@@ -32,17 +29,17 @@ from breakpoint_eval.export_corpus import (  # noqa: E402
     sample_step_indices,
     save_corpus,
 )
-from breakpoint_eval.export_parity import (  # noqa: E402
+from breakpoint_eval.export_parity import (
     ParityTolerances,
     compare_paired_action_traces,
     evaluate_corpus_parity,
 )
-from breakpoint_eval.export_quantize import (  # noqa: E402
+from breakpoint_eval.export_quantize import (
     quantize_int4_weight_only,
     quantize_int8_static_qdq,
     try_fp16_convert,
 )
-from breakpoint_eval.export_tolerances import (  # noqa: E402
+from breakpoint_eval.export_tolerances import (
     ONNX_FP32_PARITY_ATOL,
     ONNX_FP32_PARITY_MAX_ABS,
 )
@@ -94,6 +91,7 @@ def test_declared_tolerances_are_finite_and_positive() -> None:
     assert tol.max_abs == ONNX_FP32_PARITY_MAX_ABS
 
 
+@pytest.mark.requires_onnx
 def test_tiny_onnx_fp32_parity(tmp_path: Path) -> None:
     path, mod = _export_tiny(tmp_path)
     graph = inspect_onnx_graph(path)
@@ -251,6 +249,7 @@ def test_closed_loop_reports_per_seed_and_unmatched_tails() -> None:
     assert diverged["length_mismatch"] is False
 
 
+@pytest.mark.requires_onnx
 def test_int8_recipe_pinned_and_runs(tmp_path: Path) -> None:
     path, _mod = _export_tiny(tmp_path)
     calib = build_synthetic_corpus([9000, 9001], image_shape=(1, 3, 8, 8), state_dim=2)
@@ -271,6 +270,7 @@ def test_int8_recipe_pinned_and_runs(tmp_path: Path) -> None:
     assert np.isfinite(y).all()
 
 
+@pytest.mark.requires_onnx
 def test_int4_capability_explicit(tmp_path: Path) -> None:
     path, _mod = _export_tiny(tmp_path)
     probe = build_synthetic_corpus([1], image_shape=(1, 3, 8, 8), state_dim=2)[0]
@@ -290,6 +290,7 @@ def test_int4_capability_explicit(tmp_path: Path) -> None:
         assert out.effective_activation_precision == "float32"
 
 
+@pytest.mark.requires_onnx
 def test_fp16_optional_capability(tmp_path: Path) -> None:
     path, _mod = _export_tiny(tmp_path)
     probe = build_synthetic_corpus([1], image_shape=(1, 3, 8, 8), state_dim=2)[0]
@@ -303,6 +304,7 @@ def test_fp16_optional_capability(tmp_path: Path) -> None:
     assert out.label == "fp16"
 
 
+@pytest.mark.requires_onnx
 def test_no_silent_fallback_on_missing_provider(tmp_path: Path) -> None:
     path, _mod = _export_tiny(tmp_path)
     with pytest.raises(RuntimeError, match="not available"):

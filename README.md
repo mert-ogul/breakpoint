@@ -36,7 +36,7 @@ or model download.
 ```bash
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -e '.[report]'
-.venv/bin/python scripts/render_v1.py \
+.venv/bin/python scripts/render_benchmark.py \
   --input benchmarks/act-transfer/v1/data --out /tmp/breakpoint-report
 ```
 
@@ -52,13 +52,31 @@ Then open `/tmp/breakpoint-report/index.html`.
 
 ## Installation
 
-Install from a checkout; there is no package index release.
+There is no package index release; `pip install breakpoint-eval` is not a supported route.
+Install from a Git clone (tested with Python 3.11):
 
-| Goal | Command |
+```bash
+git clone https://github.com/mert-ogul/breakpoint.git
+cd breakpoint
+python3.11 -m venv .venv
+```
+
+| Goal | Command (run with the venv active) |
 | --- | --- |
 | Report only | `pip install -e '.[report]'` |
 | Pi or edge ONNX profiling | `pip install -r requirements-pi-profile.txt && pip install -e '.[onnx]'` |
+| Development and offline tests | `pip install -e '.[dev,onnx,report,h264]'` (see [CONTRIBUTING.md](CONTRIBUTING.md)) |
 | Simulator runs (macOS) | see [docs/compatibility.md](docs/compatibility.md) |
+
+The Pi route installs only ONNX Runtime and NumPy, with no Torch or simulator. It was checked
+on macOS arm64 (`pip check`, `breakpoint profile --help`), not on a Raspberry Pi. The profiling protocol is in
+[docs/benchmark_protocol.md](docs/benchmark_protocol.md).
+
+An editable checkout writes `outputs/`, `artifacts/`, `vendor/` and `.cache/` inside the clone
+(all git-ignored). A regular (wheel) install never writes into `site-packages`: caches, the
+pinned LeRobot checkout and default artifacts go to `$BREAKPOINT_ROOT` or, if unset,
+`~/.local/share/breakpoint-eval`. Commands that take `--repo-root` or `--output-dir` use them
+explicitly.
 
 ## Limitations
 
@@ -73,3 +91,8 @@ Install from a checkout; there is no package index release.
   another setup.
 - About 390 MB of raw control-step logs are kept locally, not in the repository; hashes are in
   [`large_evidence.json`](benchmarks/act-transfer/v1/data/large_evidence.json).
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). Upstream projects, the pretrained policy and their
+licenses are listed in [NOTICE](NOTICE). No author or citation metadata is declared yet.

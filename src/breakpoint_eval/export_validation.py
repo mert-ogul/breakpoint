@@ -421,9 +421,10 @@ def assert_validation_v2_acceptable(
             f"export_validation_v2 schema_version must be {SCHEMA_VERSION}; "
             f"got {result.get('schema_version')!r}"
         )
-    if result.get("variant_label") == "int8" or (result.get("binding") or {}).get(
-        "variant_label"
-    ) == "int8":
+    if (
+        result.get("variant_label") == "int8"
+        or (result.get("binding") or {}).get("variant_label") == "int8"
+    ):
         raise ValueError(
             "FP32 deployment resolve refused INT8 validation sidecar; "
             "use export_validation_v2_int8.json for INT8 graphs"

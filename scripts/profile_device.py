@@ -13,13 +13,13 @@ _SRC = _ROOT / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from breakpoint_eval.benchmark_profile import run_benchmark_profile  # noqa: E402
 from breakpoint_eval.device_profile import DEFAULT_MEASURED, DEFAULT_WARMUPS  # noqa: E402
-from breakpoint_eval.v1_profile import run_v1_device_profile  # noqa: E402
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        prog="profile_v1",
+        prog="profile_device",
         description=(
             "Profile validated onnx_fp32 with CPUExecutionProvider, "
             "4 intra-op / 1 inter-op threads. ONNX-only; no simulator/Torch."
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _parse_args(argv)
     try:
-        path = run_v1_device_profile(
+        path = run_benchmark_profile(
             device_label=args.device_label,
             export_dir=args.export_dir.resolve(),
             output_dir=args.output_dir.resolve(),

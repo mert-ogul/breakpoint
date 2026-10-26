@@ -16,14 +16,7 @@ _SRC = _ROOT / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from breakpoint_eval.experiment_summary import (  # noqa: E402
-    summarize_from_plan_file,
-)
-from breakpoint_eval.render_report import render_report  # noqa: E402
-from breakpoint_eval.run_baseline import RunRequest, run_baseline  # noqa: E402
-from breakpoint_eval.run_plan_execute import _condition_run_request  # noqa: E402
-from breakpoint_eval.source_revision import read_source_revision  # noqa: E402
-from breakpoint_eval.v1_protocol import (  # noqa: E402
+from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     PROTOCOL_LOCK_NAME,
     assert_lock_matches,
     build_full_axis_plans,
@@ -33,18 +26,25 @@ from breakpoint_eval.v1_protocol import (  # noqa: E402
     describe_plan_commands,
     freeze_protocol_lock,
     host_settings_from_config,
-    load_v1_config,
-    resolve_v1_artifacts,
+    load_benchmark_config,
+    resolve_benchmark_artifacts,
     write_plan_bundle,
     write_unsupported_int8_record,
 )
+from breakpoint_eval.experiment_summary import (  # noqa: E402
+    summarize_from_plan_file,
+)
+from breakpoint_eval.render_report import render_report  # noqa: E402
+from breakpoint_eval.run_baseline import RunRequest, run_baseline  # noqa: E402
+from breakpoint_eval.run_plan_execute import _condition_run_request  # noqa: E402
+from breakpoint_eval.source_revision import read_source_revision  # noqa: E402
 
-LOGGER = logging.getLogger("run_v1")
+LOGGER = logging.getLogger("run_benchmark")
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        prog="run_v1",
+        prog="run_benchmark",
         description="Fixed Breakpoint v0.1 smoke/full protocol (thin script, not a new framework).",
     )
     p.add_argument("--phase", choices=("smoke", "full"), required=True)
@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     repo_root = args.repo_root.resolve()
     try:
-        config = load_v1_config(args.config.resolve())
+        config = load_benchmark_config(args.config.resolve())
         host = host_settings_from_config(config)
         if host.compute_device != "cpu":
             raise ValueError("v0.1 protocol requires host.compute_device=cpu (no MPS inheritance)")
@@ -239,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.profile_rpi5 is not None:
             overrides["rpi5"] = args.profile_rpi5.resolve()
 
-        artifacts = resolve_v1_artifacts(
+        artifacts = resolve_benchmark_artifacts(
             config,
             repo_root=repo_root,
             export_dir=args.export_dir.resolve() if args.export_dir else None,

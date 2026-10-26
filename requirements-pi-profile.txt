@@ -2,7 +2,7 @@
 # Python: 3.11 (aarch64). No Torch, MuJoCo, gym, or LeRobot.
 #
 # Use only for `breakpoint profile` against an already-exported ONNX graph +
-# recorded corpus. Do not install requirements-feasibility.txt on this profile.
+# recorded corpus. Do not install requirements-simulation.txt on this profile.
 #
 #   uv venv --python 3.11 .venv-pi
 #   source .venv-pi/bin/activate

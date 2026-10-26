@@ -34,7 +34,7 @@ from breakpoint_eval.latency_trace import (
     require_unique_device_profile,
 )
 
-LOGGER = logging.getLogger("breakpoint_eval.v1_protocol")
+LOGGER = logging.getLogger("breakpoint_eval.benchmark_protocol")
 
 PROTOCOL_LOCK_NAME = "v1_protocol_lock.json"
 DEFAULT_CONFIG_REL = Path("configs/v1.json")
@@ -63,7 +63,7 @@ class V1HostSettings:
     inter_op_num_threads: int
 
 
-def load_v1_config(path: Path) -> dict[str, Any]:
+def load_benchmark_config(path: Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if int(payload.get("schema_version", -1)) != 1:
         raise ValueError(f"unsupported v1 config schema_version={payload.get('schema_version')!r}")
@@ -148,7 +148,7 @@ def resolve_profile_by_identity(
     return matches[0]
 
 
-def resolve_v1_artifacts(
+def resolve_benchmark_artifacts(
     config: dict[str, Any],
     *,
     repo_root: Path,

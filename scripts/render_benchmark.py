@@ -8,7 +8,8 @@ import logging
 import sys
 from pathlib import Path
 
-LOGGER = logging.getLogger("render_v1")
+LOGGER = logging.getLogger("render_benchmark")
+REPORT_EXTRA_MODULES = frozenset({"matplotlib", "numpy"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,10 +19,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
-        from breakpoint_eval.v1_report import ReportValidationError, render_report
-        from breakpoint_eval.v1_report_data import ReportDataError
-    except ImportError as exc:
-        LOGGER.error("report dependencies are missing (%s); install with: pip install -e '.[report]'", exc)
+        from breakpoint_eval.benchmark_report import ReportValidationError, render_report
+        from breakpoint_eval.benchmark_report_data import ReportDataError
+    except ModuleNotFoundError as exc:
+        if exc.name not in REPORT_EXTRA_MODULES:
+            raise
+        LOGGER.error(
+            "report dependency %r is missing; install with: pip install -e '.[report]'", exc.name
+        )
         return 2
     try:
         written = render_report(args.input, args.out)

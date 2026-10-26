@@ -199,9 +199,7 @@ def run_shadow_chunk_parity(
             finite_ok = False
             errors.append(float("nan"))
         else:
-            err = float(
-                np.max(np.abs(pt_chunk.astype(np.float64) - ort_chunk.astype(np.float64)))
-            )
+            err = float(np.max(np.abs(pt_chunk.astype(np.float64) - ort_chunk.astype(np.float64))))
             errors.append(err)
         action_step = driver.select_action(proc)
         if action_step.requested_fresh_chunk:
@@ -325,7 +323,7 @@ def run_closed_loop_diagnosis(req: ClosedLoopDiagnosisRequest) -> Path:
                         "export manifest onnx_fp32 graph sha256 does not match file on disk: "
                         f"manifest={graph_sha} file={model_sha256}"
                     )
-        corpus_eval = ((source_manifest.get("corpus") or {}).get("evaluation") or {})
+        corpus_eval = (source_manifest.get("corpus") or {}).get("evaluation") or {}
         if corpus_eval.get("sha256"):
             artifact_binding["corpus_eval_sha256"] = str(corpus_eval["sha256"])
     if "recipe_id" not in artifact_binding:

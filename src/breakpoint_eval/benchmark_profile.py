@@ -24,7 +24,7 @@ from breakpoint_eval.device_profile import (
 )
 from breakpoint_eval.source_revision import read_source_revision
 
-LOGGER = logging.getLogger("breakpoint_eval.v1_profile")
+LOGGER = logging.getLogger("breakpoint_eval.benchmark_profile")
 
 FP32_VARIANT = "onnx_fp32"
 RECIPE_ONNX_FP32 = "torch_onnx_export_fp32_opset17"
@@ -75,7 +75,11 @@ def read_boot_id() -> dict[str, Any]:
     if not path.is_file():
         return {"available": False, "boot_id": None, "error": "boot_id file absent"}
     try:
-        return {"available": True, "boot_id": path.read_text(encoding="utf-8").strip(), "error": None}
+        return {
+            "available": True,
+            "boot_id": path.read_text(encoding="utf-8").strip(),
+            "error": None,
+        }
     except OSError as exc:
         return {"available": False, "boot_id": None, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -205,9 +209,7 @@ def resolve_validated_fp32_bundle(export_dir: Path) -> ExportBundleFp32:
     graph = variant.get("graph") or {}
     declared = graph.get("sha256")
     if declared and declared != digest:
-        raise ValueError(
-            f"FP32 hash mismatch: file={digest} manifest={declared}"
-        )
+        raise ValueError(f"FP32 hash mismatch: file={digest} manifest={declared}")
     recipe_id = str(variant.get("recipe_id") or RECIPE_ONNX_FP32)
     validation_path = export_dir / "export_validation_v2.json"
     validation_passed = False
@@ -216,9 +218,7 @@ def resolve_validated_fp32_bundle(export_dir: Path) -> ExportBundleFp32:
         binding = validation.get("binding") or {}
         bound_sha = binding.get("model_sha256") or validation.get("model_sha256")
         if bound_sha and bound_sha != digest:
-            raise ValueError(
-                f"export_validation_v2 bound sha256={bound_sha} != model {digest}"
-            )
+            raise ValueError(f"export_validation_v2 bound sha256={bound_sha} != model {digest}")
         validation_passed = bool(validation.get("passed"))
     if not validation_passed:
         raise ValueError(
@@ -284,8 +284,7 @@ def refuse_completed_output_dir(output_dir: Path) -> None:
     marker = output_dir / "profile_run_complete.json"
     if marker.is_file():
         raise FileExistsError(
-            f"refuse to overwrite completed profile output: {output_dir} "
-            f"(found {marker.name})"
+            f"refuse to overwrite completed profile output: {output_dir} (found {marker.name})"
         )
     if output_dir.is_dir() and any(output_dir.iterdir()):
         # Non-empty incomplete dir is also refused to avoid mixed runs.
@@ -295,7 +294,7 @@ def refuse_completed_output_dir(output_dir: Path) -> None:
         )
 
 
-def run_v1_device_profile(
+def run_benchmark_profile(
     *,
     device_label: str,
     export_dir: Path,
@@ -336,7 +335,7 @@ def run_v1_device_profile(
         runtime_versions["onnxruntime"] = ort.__version__
         runtime_versions["available_providers"] = ort.get_available_providers()
     except ImportError as exc:
-        raise ImportError("profile_v1 requires onnxruntime ([onnx] extra)") from exc
+        raise ImportError("profile_device requires onnxruntime ([onnx] extra)") from exc
     try:
         import onnx
 

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOGGER = logging.getLogger("package_v1")
+LOGGER = logging.getLogger("package_benchmark")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FULL = REPO_ROOT / "outputs" / "v1" / "full"
@@ -75,7 +75,12 @@ def first_success_step(steps: list[dict[str, Any]]) -> int | None:
 
 
 def compact_episode_row(
-    *, axis: str, plan_id: str, condition_id: str, referenced: bool, source: str,
+    *,
+    axis: str,
+    plan_id: str,
+    condition_id: str,
+    referenced: bool,
+    source: str,
     episode: dict[str, Any],
 ) -> dict[str, Any]:
     steps = episode["steps"]
@@ -134,10 +139,16 @@ def collect_episode_rows(full_root: Path, large: list[dict[str, Any]]) -> list[d
             referenced = record["status"] == "referenced_baseline"
             source = repo_relative(report_path)
             for episode in report["episodes"]:
-                rows.append(compact_episode_row(
-                    axis=axis, plan_id=plan_id, condition_id=record["condition_id"],
-                    referenced=referenced, source=source, episode=episode,
-                ))
+                rows.append(
+                    compact_episode_row(
+                        axis=axis,
+                        plan_id=plan_id,
+                        condition_id=record["condition_id"],
+                        referenced=referenced,
+                        source=source,
+                        episode=episode,
+                    )
+                )
             if report_path in hashed:
                 continue
             hashed.add(report_path)
@@ -146,7 +157,9 @@ def collect_episode_rows(full_root: Path, large: list[dict[str, Any]]) -> list[d
             if jsonl.exists():
                 check_episodes_jsonl_duplicates_report(report, jsonl)
                 large.append(large_entry(jsonl, "duplicate_of_run_report_episodes"))
-            LOGGER.info("episodes %s/%s: %d", plan_id, record["condition_id"], len(report["episodes"]))
+            LOGGER.info(
+                "episodes %s/%s: %d", plan_id, record["condition_id"], len(report["episodes"])
+            )
     return rows
 
 
@@ -185,15 +198,22 @@ def package_historical(full_root: Path, out: Path) -> None:
             src = cond / name
             if src.exists():
                 copy_verbatim(src, out / "historical" / cond.parts[-3] / cond.name / name)
-    fingerprint = full_root / "shared_baselines" / "default_fp32_native_L0" / "baseline_fingerprint.json"
+    fingerprint = (
+        full_root / "shared_baselines" / "default_fp32_native_L0" / "baseline_fingerprint.json"
+    )
     copy_verbatim(fingerprint, out / "historical" / "shared_baselines" / fingerprint.name)
 
 
 def package_validation(out: Path, large: list[dict[str, Any]]) -> None:
     for name in EXPORT_VALIDATION_FILES:
         copy_verbatim(EXPORT_DIR / name, out / "validation" / name)
-    for name in ("act_chunk_fp32.onnx", "act_chunk_int8_qdq.onnx", "corpus_eval.npz",
-                 "corpus_calibration.npz", "eval_chunks_onnx_fp32.npz"):
+    for name in (
+        "act_chunk_fp32.onnx",
+        "act_chunk_int8_qdq.onnx",
+        "corpus_eval.npz",
+        "corpus_calibration.npz",
+        "eval_chunks_onnx_fp32.npz",
+    ):
         large.append(large_entry(EXPORT_DIR / name, "model_or_corpus_artifact"))
 
 
@@ -204,13 +224,17 @@ def package_profiles(out: Path, large: list[dict[str, Any]]) -> None:
         meta = load_json(src / "profile_run_meta.json")
         raw_telemetry = load_json(src / "telemetry_raw.json")
         if raw_telemetry != meta["telemetry"]:
-            raise ValueError(f"{device}: telemetry_raw.json differs from profile_run_meta telemetry")
+            raise ValueError(
+                f"{device}: telemetry_raw.json differs from profile_run_meta telemetry"
+            )
         target = out / "profiles" / device
         copy_verbatim(profile, target / "profile.json")
         copy_verbatim(src / "profile_run_meta.json", target / "profile_run_meta.json")
         copy_verbatim(src / "profile_run_complete.json", target / "profile_run_complete.json")
-        for extra, role in (("telemetry_raw.json", "duplicate_of_profile_run_meta_telemetry"),
-                            (profile.with_suffix(".npz").name, "duplicate_of_profile_samples")):
+        for extra, role in (
+            ("telemetry_raw.json", "duplicate_of_profile_run_meta_telemetry"),
+            (profile.with_suffix(".npz").name, "duplicate_of_profile_samples"),
+        ):
             large.append(large_entry(src / extra, role))
 
 
@@ -223,7 +247,10 @@ def package_identities(full_root: Path, out: Path) -> None:
         if sha256_file(local) != artifacts[key]:
             raise ValueError(f"{local} does not match locked sha256")
     identities = {
-        "model_fp32": {"sha256": artifacts["fp32_sha256"], "recipe_id": artifacts["fp32_recipe_id"]},
+        "model_fp32": {
+            "sha256": artifacts["fp32_sha256"],
+            "recipe_id": artifacts["fp32_recipe_id"],
+        },
         "model_int8_qdq": {"sha256": artifacts["int8_sha256"], "status": artifacts["int8_status"]},
         "profile_identities": artifacts["profile_identities"],
         "lock_keys": sorted(lock),
@@ -237,7 +264,11 @@ def build_manifest(out: Path) -> dict[str, Any]:
         "schema_version": 1,
         "note": HISTORICAL_NOTE,
         "files": [
-            {"path": p.relative_to(out).as_posix(), "bytes": p.stat().st_size, "sha256": sha256_file(p)}
+            {
+                "path": p.relative_to(out).as_posix(),
+                "bytes": p.stat().st_size,
+                "sha256": sha256_file(p),
+            }
             for p in files
         ],
     }
@@ -257,11 +288,14 @@ def package(full_root: Path, out: Path) -> int:
     package_validation(out, large)
     package_profiles(out, large)
     package_identities(full_root, out)
-    write_json(out / "large_evidence.json", {
-        "schema_version": 1,
-        "note": "Not copied into the repository. Present locally under the listed paths.",
-        "files": large,
-    })
+    write_json(
+        out / "large_evidence.json",
+        {
+            "schema_version": 1,
+            "note": "Not copied into the repository. Present locally under the listed paths.",
+            "files": large,
+        },
+    )
     write_json(out / "manifest.json", build_manifest(out))
     LOGGER.info("packaged %d episode rows -> %s", len(rows), out)
     return 0
