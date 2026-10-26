@@ -262,119 +262,119 @@
   ],
   "files": [
     {
-      "bytes": 90067,
+      "bytes": 93536,
       "path": "index.html",
-      "sha256": "292ced2ca03b7bdf7ae492b937381d5a566d88bfda04ff35a1fb83c5b1a79387"
+      "sha256": "2364f700f1f50e52f1655b4ee00212afd2edf91427748fafd394ff67fa7f3897"
     },
     {
-      "bytes": 76950,
+      "bytes": 76927,
       "path": "plots/latency_trace_laptop-m3.dark.svg",
-      "sha256": "64efa3f66a961a0a6b1e1bf22b2462ba69573e2786574dfff80f4fd93072fe16"
+      "sha256": "276f659c20b8a3210b1ce43c6d77fab8decdd74088751366666d34c6f2d7221b"
     },
     {
-      "bytes": 91985,
+      "bytes": 90338,
       "path": "plots/latency_trace_laptop-m3.png",
-      "sha256": "d3885e4feccfe9b4df20e3868e7b2a1f910de0e1ff337922dc00b93094e2aa11"
+      "sha256": "c4799eb7f7eef90497828bccf97d8fc0cd406bdb727d668b7a8033500a040adf"
     },
     {
-      "bytes": 76950,
+      "bytes": 76927,
       "path": "plots/latency_trace_laptop-m3.svg",
-      "sha256": "81c517504b63459ff47612eaad4a630f13269a01314fc51f60eec37a01b2809b"
+      "sha256": "a3112ac003f3465f54cfc9f3095a8bf4fc47df403a6a28e895b4a8eeedbd3665"
     },
     {
-      "bytes": 81264,
+      "bytes": 81241,
       "path": "plots/latency_trace_rpi5.dark.svg",
-      "sha256": "612ee069558ef6ace55268f03b4c7d3305aaf5784a9121376606a37a0a6a5d39"
+      "sha256": "26b68acbc079b7b113fdbb3a3c47f45f2d88054832c5f84aca93bca15dd929e9"
     },
     {
-      "bytes": 220661,
+      "bytes": 219062,
       "path": "plots/latency_trace_rpi5.png",
-      "sha256": "908ada8d4f9daf1e12237106893d7894918f9f8a33eeadec13b67389e1cf6801"
+      "sha256": "9c96d4ae63900585b87d3457aada8d671fbf4efb31de256e8a3271c12dc27545"
     },
     {
-      "bytes": 81264,
+      "bytes": 81241,
       "path": "plots/latency_trace_rpi5.svg",
-      "sha256": "1d9e600d3beadf8e41eaee22b8c8d85f25f3f6e0c337d387e60ff29ad3322e87"
+      "sha256": "c69e1bb47f19004f1605f6c6b774849152c76372934e42a67feda9d7a307bea2"
     },
     {
-      "bytes": 14782,
+      "bytes": 15931,
       "path": "plots/success_device_profile.dark.svg",
-      "sha256": "7286ab5b635ca05e7a6a591ec11b2fe606508131408e0668edbcbb9e3adfc553"
+      "sha256": "f905d20c24ae58af2793cb7acae11e072cf9736b280ddaa15ba76f7acf3ecebe"
     },
     {
-      "bytes": 60021,
+      "bytes": 60143,
       "path": "plots/success_device_profile.png",
-      "sha256": "13ca7a6c27a0948827f33b89a7ea51a618933d3bc3e03831af040e729263b32b"
+      "sha256": "ba3cdd9f9d1df68653e694459bc801f01334930b3d648f20b3d65715ad24170b"
     },
     {
-      "bytes": 14782,
+      "bytes": 15931,
       "path": "plots/success_device_profile.svg",
-      "sha256": "e00cd41a5279ebd5ed5a5c44509d41850a6775cd4b86f95d0e4380e7cca4856e"
+      "sha256": "8e21e23cb926b9da39e6ba5bf9859c397df655cb8eb6e3a9730466d674d5ec47"
     },
     {
-      "bytes": 18876,
+      "bytes": 20383,
       "path": "plots/success_jpeg.dark.svg",
-      "sha256": "002cbcdb808a1b346d13daacffcfe3a23e46abb81dc311c354526dcb5faa9ac5"
+      "sha256": "f63ac94748b16b5b62bba45045ae8cb02a9b4abcc74b6388cd50785233ac1454"
     },
     {
-      "bytes": 58143,
+      "bytes": 56670,
       "path": "plots/success_jpeg.png",
-      "sha256": "6369e1140663267f5186823ea2f650f672fd8fbfc440dc409eab58fab07a48a2"
+      "sha256": "c73de3e7e02d37f7930a1989ae646c250e9b1eee8c68bf9738bb633923d2dd8d"
     },
     {
-      "bytes": 18876,
+      "bytes": 20383,
       "path": "plots/success_jpeg.svg",
-      "sha256": "06fe1ec880e8fedec3ca8ca0bca646cd82b8977809d4e97a8a7c944c33b4021b"
+      "sha256": "f45e0c5e52e4e9bc492fddf3e38ef1138afec61043edd071f5fe5f30c656e6db"
     },
     {
-      "bytes": 19074,
+      "bytes": 20581,
       "path": "plots/success_latency_ms.dark.svg",
-      "sha256": "d9daa1e8317d2a8d3fb833451610eff49a46e2ae9657374f6ddf3694d0dcf759"
+      "sha256": "4ee95ddbbc04e140439411d5f2e73d4e6166dd9f0b90cae87fa4b67d7d36aa08"
     },
     {
-      "bytes": 60049,
+      "bytes": 59070,
       "path": "plots/success_latency_ms.png",
-      "sha256": "6ed883e105b6fa27976286f3aabfee402757cb609310731aeb5d508dc7a9e6ba"
+      "sha256": "f13a423733feb8ce813fcf9e64c1925d678ac0f1affebf82156d3b2c101c54cd"
     },
     {
-      "bytes": 19074,
+      "bytes": 20581,
       "path": "plots/success_latency_ms.svg",
-      "sha256": "70666937e1bd18d6b859560d7181a5e75a629cf56eec756aa29c89fa68cf32eb"
+      "sha256": "4ffd4fb55644583f323b106b75ec7fc60c0eced261c032423f936f3aea481652"
     },
     {
-      "bytes": 12776,
+      "bytes": 13560,
       "path": "plots/success_precision.dark.svg",
-      "sha256": "d59dcd36ef96feb03bf5520255a6f22419d803603c85add34a9de685d837d210"
+      "sha256": "c6b1813a2924c72a4834309c1278f68bcaaf6ae22a3967d1f8717cb249918964"
     },
     {
-      "bytes": 50906,
+      "bytes": 49825,
       "path": "plots/success_precision.png",
-      "sha256": "32ffbaa0364176df1f3079bbc56aea1f6045d5857a34efb4a2ace303ca99a871"
+      "sha256": "df2332fa47be3757530d666c0d1cb0b01ddbce4d3b9c6917a98743dbf72d8f85"
     },
     {
-      "bytes": 12776,
+      "bytes": 13560,
       "path": "plots/success_precision.svg",
-      "sha256": "f508626098ab402e145b2d2f36b65224246d0769b03d1e7e4e803e389313fdc9"
+      "sha256": "71cc048b2f929e6dce838e919291e8c0d9df0c70ab594cffd6005352e3aae148"
     },
     {
-      "bytes": 16179,
+      "bytes": 17376,
       "path": "plots/success_resolution.dark.svg",
-      "sha256": "5cb6b5c9612306c5f338487d88a92dbf55f898fb6d9a6b473144547de6b7c731"
+      "sha256": "b95b187b041628b56c29353a51ff1de12163cc1b82745fb97f9b4fff6afad11d"
     },
     {
-      "bytes": 62765,
+      "bytes": 61244,
       "path": "plots/success_resolution.png",
-      "sha256": "7c9919912ebca9e1580353015dc9115276c7f90a60d0d0ddf088d450bd157c73"
+      "sha256": "13006db2cf4dbf9e067c869c2596125eec2b6c3633382bbe2d6de3c9f36375b6"
     },
     {
-      "bytes": 16179,
+      "bytes": 17376,
       "path": "plots/success_resolution.svg",
-      "sha256": "2af166435ffe25d3ff25d5b058ab643cbc427bd5370d9050f078ecb6fc7fc154"
+      "sha256": "691931591bbeada322f8b2553c09c0f6d4f31898d2cc19423c2536b14f41f618"
     },
     {
-      "bytes": 11948,
+      "bytes": 13385,
       "path": "report.md",
-      "sha256": "aee271587a93315ab8924429d05d3620f283199510effaf6079cefbf48b80b45"
+      "sha256": "3d6d4fdd8a6fe5337fbdd9840fab00a10bad5ad130dffb3e41b195543a9cea83"
     }
   ],
   "generator": "scripts/render_benchmark.py",

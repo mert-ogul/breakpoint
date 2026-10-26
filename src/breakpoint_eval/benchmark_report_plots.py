@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from breakpoint_eval.benchmark_report_data import AxisView, ProfileView  # noqa: E402
+from breakpoint_eval.benchmark_report_data import AxisView, ConditionView, ProfileView  # noqa: E402
 
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_report_plots")
 
@@ -56,6 +56,13 @@ def short_label(condition_id: str) -> str:
     if condition_id.startswith("device_profile_"):
         return condition_id.removeprefix("device_profile_").removesuffix("_fp32") + "\nreplay"
     return condition_id
+
+
+def tick_label(axis: AxisView, view: ConditionView) -> str:
+    label = short_label(view.condition_id)
+    if view.is_baseline and axis.axis == "device_profile":
+        return f"{label}\nbaseline"
+    return label
 
 
 def apply_theme(theme: Theme) -> None:
@@ -117,12 +124,13 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
             ha="center",
             fontsize=9,
             color=theme.foreground,
+            bbox={"facecolor": theme.background, "edgecolor": "none", "pad": 1.0},
         )
-    ax.set_xticks(range(n), [short_label(v.condition_id) for v in axis.conditions])
+    ax.set_xticks(range(n), [tick_label(axis, v) for v in axis.conditions])
     ax.set_xlim(-0.6, n - 0.4)
     ax.set_ylim(0, 1.08)
     ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0], ["0%", "25%", "50%", "75%", "100%"])
-    ax.set_ylabel("episodes succeeded (Wilson 95%)")
+    ax.set_ylabel(f"success rate (n = {axis.conditions[0].eligible} per condition)")
     ax.set_xlabel(axis.unit, fontsize=8.5, color=theme.muted)
     handles = [
         plt.Line2D(
@@ -143,7 +151,7 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
             markeredgewidth=1.6,
             linestyle="none",
             markersize=8,
-            label="stress, estimate not below threshold",
+            label="stress, not below threshold",
         ),
         plt.Line2D(
             [],
@@ -152,7 +160,7 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
             color=STRESS_AMBER,
             linestyle="none",
             markersize=8,
-            label="stress, estimate below threshold",
+            label="stress, below threshold",
         ),
         plt.Line2D(
             [],
@@ -161,12 +169,21 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
             linestyle=(0, (4, 3)),
             label=f"threshold: {axis.ratio:g} x baseline = {100 * axis.threshold_rate:.1f}%",
         ),
+        plt.Line2D(
+            [],
+            [],
+            marker="|",
+            color=theme.muted,
+            linestyle="none",
+            markersize=11,
+            label="bar: Wilson 95% interval",
+        ),
     ]
     ax.legend(
         handles=handles,
         loc="upper center",
         bbox_to_anchor=(0.5, -0.24),
-        ncol=2,
+        ncol=3,
         frameon=False,
         fontsize=8.5,
     )
@@ -210,7 +227,7 @@ def trace_figure(profile: ProfileView, theme: Theme) -> plt.Figure:
     strip.set_xlim(0, length)
     strip.set_xlabel("profile sample index (after 50 discarded warmups)")
     handles = [
-        plt.Line2D([], [], color=theme.muted, linewidth=1.2, label="all 1000 profile samples"),
+        plt.Line2D([], [], color=theme.muted, linewidth=1.2, label="measured calls, in order"),
         plt.Line2D(
             [],
             [],
@@ -225,7 +242,7 @@ def trace_figure(profile: ProfileView, theme: Theme) -> plt.Figure:
             marker="s",
             linestyle="none",
             markersize=4,
-            label="samples consumed by episodes (also solid in the strip)",
+            label="samples consumed by episodes",
         ),
         plt.Rectangle(
             (0, 0),
@@ -233,7 +250,7 @@ def trace_figure(profile: ProfileView, theme: Theme) -> plt.Figure:
             1,
             color=STRESS_AMBER,
             alpha=0.4,
-            label="strip: one 32-sample window per episode",
+            label="strip: 32-sample replay window per episode",
         ),
     ]
     fig.legend(handles=handles, loc="lower center", ncol=1, frameon=False, fontsize=8.5)

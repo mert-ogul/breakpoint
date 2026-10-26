@@ -86,6 +86,15 @@ def cell_glyph(baseline_success: bool | None, success: bool) -> tuple[str, str]:
     return (GLYPH_SUCCESS if success else GLYPH_FAIL), "same"
 
 
+def plain_label(condition_id: str) -> str:
+    return short_label(condition_id).replace("\n", " ")
+
+
+def display_label(view: ConditionView) -> str:
+    label = plain_label(view.condition_id)
+    return f"{label} (baseline)" if view.is_baseline else label
+
+
 def baseline_view(axis: AxisView) -> ConditionView:
     return next(v for v in axis.conditions if v.is_baseline)
 
@@ -113,10 +122,7 @@ def matrix_html(axis: AxisView) -> str:
             f'<td class="{kind}" title="seed {seed}: {esc(outcome)}">{glyph}</td>'
             for glyph, kind, seed, outcome in cells
         )
-        body.append(
-            f'<tr><th scope="row">{esc(short_label(view.condition_id).replace(chr(10), " "))}'
-            f"</th>{tds}</tr>"
-        )
+        body.append(f'<tr><th scope="row">{esc(plain_label(view.condition_id))}</th>{tds}</tr>')
     return (
         '<div class="scroll"><table class="matrix"><caption>Per-seed outcomes. Columns are the '
         f"last two digits of env seeds {seeds[0]}\u2013{seeds[-1]}.</caption>"
@@ -178,30 +184,43 @@ def contrast_text(view: ConditionView) -> str:
     return f"{c['point']:+.3f} [{c['low']:+.3f}, {c['high']:+.3f}]"
 
 
-def condition_table_html(axis: AxisView) -> str:
+def condition_table_html(axis: AxisView, n_episodes: int) -> str:
     rows = []
     for view in axis.conditions:
         cls = "baseline" if view.is_baseline else "stress"
         rows.append(
-            f'<tr class="{cls}"><th scope="row">{esc(view.label)}'
-            f"<code>{esc(view.condition_id)}</code></th>"
+            f'<tr class="{cls}"><th scope="row">{esc(display_label(view))}</th>'
             f'<td class="num">{view.successes}/{view.eligible}</td>'
             f'<td class="num">{pct(view.successes / view.eligible)}</td>'
             f'<td class="num">{wilson_text(view)}</td>'
-            f'<td><span class="mark {cls}">{status_glyph(axis, view)}</span> {esc(status_text(axis, view))}</td>'
-            f"<td>{paired_text(view)}</td>"
-            f'<td class="num">{esc(contrast_text(view))}</td></tr>'
+            f'<td><span class="mark {cls}" aria-hidden="true">{status_glyph(axis, view)}</span> '
+            f"{esc(status_text(axis, view))}</td></tr>"
         )
     return (
-        '<div class="scroll"><table class="data"><caption>Success counts with Wilson 95% '
-        "score intervals. The threshold is estimated from the baseline sample, so an interval "
-        "that overlaps it is not a paired significance test.</caption>"
-        '<thead><tr><th scope="col">Condition</th><th scope="col">Success'
-        '</th><th scope="col">Rate</th><th scope="col">Wilson 95%</th><th scope="col">vs '
-        f'{axis.ratio:g} &times; baseline ({pct(axis.threshold_rate)})</th><th scope="col">Paired '
-        'with baseline seeds</th><th scope="col">Paired bootstrap 95% interval (pointwise) for '
-        f"p &minus; {axis.ratio:g}&middot;p<sub>base</sub></th></tr></thead>"
+        f'<div class="scroll"><table class="data"><caption>Successes out of {n_episodes} paired '
+        f"episodes per condition, with the Wilson 95% interval. Threshold: {axis.ratio:g} "
+        f"&times; baseline rate = {pct(axis.threshold_rate)}.</caption>"
+        '<thead><tr><th scope="col">Condition</th><th scope="col">Successes</th>'
+        '<th scope="col">Rate</th><th scope="col">Wilson 95% interval</th>'
+        '<th scope="col">Against threshold</th></tr></thead>'
         f"<tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def paired_table_html(axis: AxisView) -> str:
+    rows = "".join(
+        f'<tr><th scope="row">{esc(display_label(v))}<code>{esc(v.condition_id)}</code></th>'
+        f"<td>{paired_text(v)}</td>"
+        f'<td class="num">{esc(contrast_text(v))}</td></tr>'
+        for v in axis.conditions
+    )
+    return (
+        '<div class="scroll"><table class="data"><caption>Seeds compared with the baseline, and '
+        "the paired bootstrap 95% interval (pointwise) for "
+        f"p &minus; {axis.ratio:g}&middot;p<sub>base</sub>.</caption>"
+        '<thead><tr><th scope="col">Condition</th><th scope="col">Paired with baseline seeds'
+        '</th><th scope="col">Bootstrap interval</th></tr></thead>'
+        f"<tbody>{rows}</tbody></table></div>"
     )
 
 
@@ -211,7 +230,7 @@ def breakpoint_sentence(axis: AxisView) -> str:
             f"Threshold comparison not reported: {axis.suppressed_reason}. Counts and intervals "
             "are shown without a below-threshold judgement."
         )
-    below = [v.condition_id for v in axis.conditions if v.below_threshold]
+    below = [plain_label(v.condition_id) for v in axis.conditions if v.below_threshold]
     derived = (
         "No saved experiment summary exists for this axis; counts, intervals, and paired "
         "tables are derived by this report from the episode records. "
@@ -242,9 +261,14 @@ def breakpoint_sentence(axis: AxisView) -> str:
         recovery = bp.get("recovery_condition_ids") or []
         return (
             f"Saved summary: on this exploratory grid the first point below threshold is "
-            f"{bp['first_below']}; the observed crossing lies between "
-            f"{interval['above_condition_id']} and {interval['below_condition_id']}. "
-            + (f"Later points recover above it: {', '.join(recovery)}. " if recovery else "")
+            f"{plain_label(bp['first_below'])}; the observed crossing lies between "
+            f"{plain_label(interval['above_condition_id'])} and "
+            f"{plain_label(interval['below_condition_id'])}. "
+            + (
+                f"Later points recover above it: {', '.join(plain_label(r) for r in recovery)}. "
+                if recovery
+                else ""
+            )
             + (axis.saved_note or "")
         )
     if bp["status"] == "not_reached_within_tested_range":
@@ -280,19 +304,20 @@ def rel_link(data: ReportData, out_dir: Path, path: str) -> str:
 
 
 def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: str) -> str:
+    n = episodes_per_condition(data)
     unresolved = unresolved_conditions(axis)
-    notes = "".join(f"<li>{esc(n)}</li>" for n in axis.isolation_notes)
-    unresolved_text = (
-        "Conditions whose Wilson interval includes the threshold (the comparison is "
-        f"unresolved at n={episodes_per_condition(data)}; this is an interval overlap, not a "
-        "paired significance test): " + ", ".join(esc(v.condition_id) for v in unresolved)
-        if unresolved
-        else (
-            "Threshold comparison not reported for this axis."
-            if axis.suppressed_reason
-            else "No condition interval includes the threshold."
+    notes = "".join(f"<li>{esc(note)}</li>" for note in axis.isolation_notes)
+    if unresolved:
+        unresolved_text = (
+            f"Wilson interval includes the threshold (unresolved at n={n}; an interval overlap, "
+            "not a paired significance test): "
+            + ", ".join(esc(plain_label(v.condition_id)) for v in unresolved)
+            + "."
         )
-    )
+    elif axis.suppressed_reason:
+        unresolved_text = "Threshold comparison not reported for this axis."
+    else:
+        unresolved_text = "No condition's Wilson interval includes the threshold."
     links = [
         ("Episode records (all axes, compact JSONL)", "episodes/episodes.jsonl"),
         (f"Plan: {axis.plan_id}", f"protocol/plans/{axis.plan_id}.json"),
@@ -301,26 +326,29 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
         links.insert(
             1, ("Saved experiment summary", f"summaries/{axis.plan_id}.experiment_summary.json")
         )
-    derived = (
-        '<p class="callout derived"><strong>Derived axis.</strong> No experiment summary '
-        "was saved for the device replay; this report computed its values from episode "
-        f"records. The baseline is the shared condition <code>{esc(axis.baseline_condition_id)}"
+    baseline_note = (
+        f"<p>Baseline for this axis: shared condition <code>{esc(axis.baseline_condition_id)}"
         "</code>.</p>"
         if axis.derived
         else ""
     )
+    condition_ids = "".join(
+        f"<li>{esc(plain_label(v.condition_id))}: <code>{esc(v.condition_id)}</code></li>"
+        for v in axis.conditions
+    )
     return (
         f'<section class="panel" id="panel-{axis.axis}" aria-labelledby="h-{axis.axis}">'
         f'<h2 id="h-{axis.axis}">{esc(axis.title)}</h2>'
-        f'<p class="unit">Stress variable: <code>{esc(axis.unit)}</code>. Phase: '
-        f"{esc(axis.phase)}.</p>{derived}"
-        f'<ul class="plain">{notes}</ul>'
+        f'<p class="unit">Stress variable: {esc(axis.unit)}.</p>'
         f"{picture_html(f'success_{axis.axis}', f'Success rate by condition for {axis.title}', plots_rel)}"
-        f"{condition_table_html(axis)}"
+        f"{condition_table_html(axis, n)}"
         f"<p>{esc(breakpoint_sentence(axis))}</p>"
         f"<p>{unresolved_text}</p>"
-        f"<h3>Paired outcome matrix</h3>{matrix_html(axis)}"
-        f"<h3>Evidence</h3>{evidence_links_html(data, links, out_dir)}</section>"
+        "<details><summary>Paired outcomes by seed</summary>"
+        f"{paired_table_html(axis)}{matrix_html(axis)}</details>"
+        "<details><summary>Evidence and condition IDs</summary>"
+        f'{baseline_note}<ul class="plain">{notes}</ul><ul class="evidence">{condition_ids}</ul>'
+        f"{evidence_links_html(data, links, out_dir)}</details></section>"
     )
 
 
@@ -441,7 +469,7 @@ def report_limitations(data: ReportData) -> list[str]:
         "are wide; the run is exploratory and does not locate an exact boundary.",
     ]
     unresolved = [
-        f"{a.axis}: {', '.join(v.condition_id for v in unresolved_conditions(a))}"
+        f"{a.title}: {', '.join(plain_label(v.condition_id) for v in unresolved_conditions(a))}"
         for a in data.axes
         if unresolved_conditions(a)
     ]
@@ -450,7 +478,7 @@ def report_limitations(data: ReportData) -> list[str]:
         "is estimated from the same baseline, so this overlap is not a paired significance "
         "test): " + ("; ".join(unresolved) if unresolved else "none") + "."
     )
-    suppressed = [f"{a.axis}: {a.suppressed_reason}" for a in data.axes if a.suppressed_reason]
+    suppressed = [f"{a.title}: {a.suppressed_reason}" for a in data.axes if a.suppressed_reason]
     if suppressed:
         notes.append("Threshold comparisons not reported: " + "; ".join(suppressed) + ".")
     resolution = next(a for a in data.axes if a.axis == "resolution")
@@ -487,14 +515,14 @@ def observations(data: ReportData) -> list[str]:
                 tag = " (interval includes threshold)" if first.threshold_inside_interval else ""
                 lines.append(
                     f"{axis.title}: first grid point below {axis.ratio:g} x baseline is "
-                    f"{short_label(first.condition_id).replace(chr(10), ' ')} at "
+                    f"{plain_label(first.condition_id)} at "
                     f"{first.successes}/{first.eligible}{tag}."
                 )
             else:
                 lines.append(f"{axis.title}: no condition fell below {axis.ratio:g} x baseline.")
         else:
             verdicts = [
-                f"{short_label(v.condition_id).replace(chr(10), ' ')} {v.successes}/{v.eligible} "
+                f"{plain_label(v.condition_id)} {v.successes}/{v.eligible} "
                 f"{'below' if v.below_threshold else 'not below'}"
                 for v in axis.conditions
                 if not v.is_baseline
@@ -583,6 +611,22 @@ def tab_css(axes_ids: list[str]) -> str:
     return "".join(rules)
 
 
+def changed_items(data: ReportData) -> list[str]:
+    return [
+        f"{axis.title}: {', '.join(display_label(v) for v in axis.conditions)}"
+        for axis in data.axes
+    ]
+
+
+def limitation_statement(data: ReportData) -> str:
+    return (
+        f"Exploratory simulation run with {episodes_per_condition(data)} paired episodes per "
+        "condition. Intervals are wide, the results have not been confirmed with fresh seeds, "
+        "and a grid point below the threshold is not an exact boundary. The rpi5 replay "
+        "reflects one throttled Pi state."
+    )
+
+
 def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     tabs = [(a.axis, a.title) for a in data.axes] + [("timing", "Device timing")]
     radios = "".join(
@@ -592,13 +636,13 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     labels = "".join(f'<label for="tab-{key}">{esc(title)}</label>' for key, title in tabs)
     panels = "".join(axis_panel_html(data, a, out_dir, plots_rel) for a in data.axes)
     panels += timing_panel_html(data, out_dir, plots_rel)
+    changed = "".join(f"<li>{esc(line)}</li>" for line in changed_items(data))
     obs = "".join(f"<li>{esc(line)}</li>" for line in observations(data))
     notes = "".join(f"<li>{esc(line)}</li>" for line in report_limitations(data))
+    n_conditions = sum(len(a.conditions) for a in data.axes)
     summary = (
-        f"{len(data.rows)} episode records &middot; {data.n_runs} simulated runs "
-        f"({sum(len(a.conditions) for a in data.axes)} condition rows; the baseline is reused by "
-        f"reference) &middot; {episodes_per_condition(data)} paired episodes per condition "
-        f"&middot; env seeds {seed_range(data)}"
+        f"{len(data.rows)} episode records &middot; {episodes_per_condition(data)} paired "
+        f"episodes per condition &middot; env seeds {seed_range(data)}"
     )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
@@ -608,16 +652,23 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         f"<style>{CSS}{tab_css([k for k, _ in tabs])}</style></head><body><main>"
         '<header><p class="eyebrow">Breakpoint &middot; ACT deployment stress benchmark &middot; exploratory</p>'
         "<h1>ACT cube transfer under isolated stress</h1>"
-        '<p class="lead">One pretrained ACT policy (<code>lerobot/act_aloha_sim_transfer_cube_human'
-        "</code>) in the ALOHA TransferCube simulation, run as ONNX Runtime on CPU. Four isolated "
-        "stress axes and a device latency replay, with paired seeds. Simulation only: nothing here "
-        "describes a physical robot.</p>"
         f'<p class="facts">{summary}</p></header>'
-        '<section aria-labelledby="h-obs"><h2 id="h-obs">What was measured</h2>'
-        f'<ul class="plain">{obs}</ul></section>'
-        '<section aria-labelledby="h-caveats"><h2 id="h-caveats">Read before the numbers</h2>'
-        f'<ul class="plain caveats">{notes}</ul></section>'
-        f'<div class="tabs">{radios}<div class="tablist" role="presentation">{labels}</div>'
+        '<section aria-labelledby="h-summary"><h2 id="h-summary">Summary</h2>'
+        '<dl class="summary"><dt>What was evaluated</dt><dd>One pretrained ACT policy '
+        "(<code>lerobot/act_aloha_sim_transfer_cube_human</code>) on the ALOHA TransferCube "
+        "task in simulation, run as ONNX Runtime on CPU. No physical robot is involved.</dd>"
+        "<dt>What changed</dt><dd>One stress at a time, everything else at baseline."
+        f'<ul class="plain">{changed}</ul></dd>'
+        "<dt>What the evidence shows</dt><dd>Paired seeds, so every condition faces the same "
+        f'episodes as the baseline.<ul class="plain">{obs}</ul></dd></dl>'
+        f'<p class="callout">{esc(limitation_statement(data))}</p>'
+        "<details><summary>Validation, errors and caveats</summary>"
+        f'<ul class="plain caveats">{notes}</ul>'
+        f"<p>{data.n_runs} simulated runs back {n_conditions} condition rows; the shared "
+        "baseline is reused by reference.</p></details></section>"
+        '<div class="tabs" role="radiogroup" aria-labelledby="tabs-hint">'
+        '<p class="tabs-hint" id="tabs-hint">Results by stress axis. Choose one:</p>'
+        f'{radios}<div class="tablist">{labels}</div>'
         f"{panels}</div>{provenance_html(data, out_dir)}"
         f"<footer><p>Generated by <code>scripts/render_benchmark.py</code> (breakpoint-eval {__version__}) "
         f"from packaged data with manifest sha256 <code>{data.manifest_sha256[:16]}&hellip;</code>."
@@ -629,15 +680,27 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     lines = [
         "# ACT deployment stress benchmark: cube transfer under isolated stress",
         "",
-        "Simulation only. One pretrained ACT policy, ONNX Runtime on CPU, paired seeds "
-        f"{seed_range(data)}, {episodes_per_condition(data)} episodes per condition. "
-        "Exploratory run.",
+        f"{len(data.rows)} episode records, {episodes_per_condition(data)} paired episodes per "
+        f"condition, env seeds {seed_range(data)}. Exploratory run.",
         "",
-        "## What was measured",
+        "## Summary",
+        "",
+        "**What was evaluated.** One pretrained ACT policy "
+        "(`lerobot/act_aloha_sim_transfer_cube_human`) on the ALOHA TransferCube task in "
+        "simulation, run as ONNX Runtime on CPU. No physical robot is involved.",
+        "",
+        "**What changed.** One stress at a time, everything else at baseline:",
+        "",
+        *[f"- {line}" for line in changed_items(data)],
+        "",
+        "**What the evidence shows.** Paired seeds: every condition faces the same episodes as "
+        "the baseline.",
         "",
         *[f"- {line}" for line in observations(data)],
         "",
-        "## Read before the numbers",
+        f"> {limitation_statement(data)}",
+        "",
+        "## Validation, errors and caveats",
         "",
         *[f"- {line}" for line in report_limitations(data)],
         "",
@@ -646,7 +709,7 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         lines += [
             f"## {axis.title}",
             "",
-            f"Stress variable: `{axis.unit}`.",
+            f"Stress variable: {axis.unit}.",
             "",
             f"![{axis.title}]({plots_rel}/success_{axis.axis}.png)",
             "",
@@ -655,7 +718,7 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         ]
         for v in axis.conditions:
             lines.append(
-                f"| `{md_cell(v.condition_id)}` | {v.successes}/{v.eligible} | "
+                f"| {md_cell(display_label(v))} | {v.successes}/{v.eligible} | "
                 f"{pct(v.successes / v.eligible)} | {md_cell(wilson_text(v))} | "
                 f"{md_cell(f'{status_glyph(axis, v)} {status_text(axis, v)}')} | "
                 f"{md_cell(paired_text_plain(v))} |"
@@ -671,7 +734,7 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
             "```",
         ]
         for view, cells in matrix_strings(axis):
-            lines.append(f"{view.condition_id:<32}" + "".join(c[0] for c in cells))
+            lines.append(f"{plain_label(view.condition_id):<18}" + "".join(c[0] for c in cells))
         lines += ["```", ""]
     lines += ["## Device timing", ""]
     for p in data.profiles:
@@ -697,6 +760,17 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         "## Checks",
         "",
         *[f"- {'pass' if c.passed else 'FAIL'}: {c.name} ({c.detail})" for c in data.checks],
+        "",
+        "## Condition IDs",
+        "",
+        "| Axis | Condition | ID |",
+        "| --- | --- | --- |",
+        *[
+            f"| {md_cell(a.title)} | {md_cell(plain_label(v.condition_id))} | "
+            f"`{md_cell(v.condition_id)}` |"
+            for a in data.axes
+            for v in a.conditions
+        ],
         "",
     ]
     return "\n".join(lines)
@@ -774,7 +848,7 @@ def results_markdown(data: ReportData) -> str:
     ]
     for axis in data.axes:
         cells = [
-            f"{short_label(v.condition_id).replace(chr(10), ' ')}: {v.successes}"
+            f"{plain_label(v.condition_id)}: {v.successes}"
             for v in axis.conditions
             if not (axis.axis == "device_profile" and v.condition_id == axis.baseline_condition_id)
         ]

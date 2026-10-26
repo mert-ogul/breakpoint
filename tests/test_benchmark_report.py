@@ -71,7 +71,7 @@ def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> 
             assert entry["successes"] == sum(r["success"] for r in group)
             assert entry["planned"] == len(group)
     html = (out / "index.html").read_text()
-    assert "14/30" in html and "Read before the numbers" in html
+    assert "14/30" in html and "Validation, errors and caveats" in html
     assert (out / "plots" / "success_latency_ms.svg").is_file()
     assert (out / "plots" / "success_latency_ms.png").is_file()
 
@@ -447,3 +447,18 @@ def test_saved_example_counts_are_unchanged() -> None:
     }
     assert len(data.rows) == 600 and data.n_runs == 18
     assert data.trace_window_length == 32
+
+
+def test_main_labels_are_readable_and_ids_stay_in_evidence() -> None:
+    from breakpoint_eval import benchmark_report as report
+
+    data = report.load_validated_data(DATA)
+    for axis in data.axes:
+        table = report.condition_table_html(axis, 30)
+        assert not any(v.condition_id in table for v in axis.conditions)
+        assert "(baseline)" in table
+        assert not any(v.condition_id in report.breakpoint_sentence(axis) for v in axis.conditions)
+    markdown = report.render_markdown(data, Path("."), "plots")
+    assert "## Condition IDs" in markdown
+    assert "`latency_ms_640`" in markdown.split("## Condition IDs")[1]
+    assert "`latency_ms_640`" not in markdown.split("## Condition IDs")[0]
