@@ -66,7 +66,8 @@ def condition_report_path(full_root: Path, plan_id: str, record: dict[str, Any])
     if record["status"] == "referenced_baseline":
         reference_dir = Path(record["reference_dir"]).name
         return full_root / "shared_baselines" / reference_dir / "run_report.json"
-    if record["status"] != "complete":
+    # "resumed_complete" was written by earlier resumed runs.
+    if record["status"] not in {"complete", "resumed_complete"}:
         raise ValueError(f"{plan_id}/{record['condition_id']} has status {record['status']!r}")
     return full_root / "axes" / plan_id / "conditions" / record["condition_id"] / "run_report.json"
 

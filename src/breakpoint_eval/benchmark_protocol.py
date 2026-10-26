@@ -574,15 +574,31 @@ def freeze_protocol_lock(
     }
 
 
+# Lock fields that may differ on resume: they record where and when a run happened,
+# not what it executes. Every other field is compared.
+RESUME_METADATA_FIELDS = frozenset({"source_revision"})
+_LOCK_IDENTITY_FIELDS = frozenset({"protocol", "protocol_name", "protocol_version"})
+SUPPORTED_LOCK_SCHEMA_VERSION = 1
+_COMPLETED_EPISODE_OUTCOMES = frozenset(
+    {"success", "terminated_no_success", "time_limit_truncation", "policy_failed"}
+)
+
+
 def assert_lock_matches(existing: dict[str, Any], fresh: dict[str, Any]) -> None:
-    """Refuse resume when identity or protocol config changed."""
+    """Refuse resume when schema, protocol identity, or any execution-defining field changed."""
+    for label, lock in (("existing lock", existing), ("current configuration", fresh)):
+        if lock.get("schema_version") != SUPPORTED_LOCK_SCHEMA_VERSION:
+            raise ValueError(
+                f"resume refused: {label} schema_version={lock.get('schema_version')!r}; "
+                f"supported is {SUPPORTED_LOCK_SCHEMA_VERSION}"
+            )
     if protocol_identity(existing) != protocol_identity(fresh):
         raise ValueError(
             "resume refused: protocol identity changed between lock and current configuration. "
             "Use a fresh --out directory for identity/config changes."
         )
-    keys = ("phase", "candidate", "artifacts", "host", "trace_window", "statistics")
-    for key in keys:
+    ignored = RESUME_METADATA_FIELDS | _LOCK_IDENTITY_FIELDS
+    for key in sorted((set(existing) | set(fresh)) - ignored):
         if existing.get(key) != fresh.get(key):
             raise ValueError(
                 f"resume refused: {key} changed between lock and current resolution. "
@@ -590,23 +606,182 @@ def assert_lock_matches(existing: dict[str, Any], fresh: dict[str, Any]) -> None
             )
 
 
-def condition_completed(condition_dir: Path) -> bool:
-    report = condition_dir / "run_report.json"
-    if not report.is_file():
-        return False
-    ref = condition_dir / "baseline_reference.json"
-    if ref.is_file():
-        return True
+def _expected_runtime(condition: ConditionSpec) -> dict[str, Any]:
+    """Runtime identity a finished report must show for this condition."""
+    params = condition.params
+    axis = condition.axis
+    expected: dict[str, Any] = {
+        "latency_mode": "trace_replay"
+        if axis == ExperimentAxis.DEVICE_PROFILE.value
+        else "constant",
+        "latency_s": float(params["latency_s"]) if axis == ExperimentAxis.LATENCY_MS.value else 0.0,
+        "image_mode": "native",
+        "variant_label": "onnx_fp32",
+    }
+    if axis in {ExperimentAxis.RESOLUTION.value, ExperimentAxis.JPEG.value}:
+        expected["image_mode"] = "native" if params.get("bypass") else params["mode"]
+    if axis in {ExperimentAxis.PRECISION.value, ExperimentAxis.DEVICE_PROFILE.value}:
+        expected["variant_label"] = params["variant_label"]
+    return expected
+
+
+def _shared_baseline_runtime() -> dict[str, Any]:
+    fingerprint = _baseline_fingerprint()
+    return {
+        "latency_mode": "constant",
+        "latency_s": fingerprint["latency_s"],
+        "image_mode": fingerprint["image_mode"],
+        "variant_label": fingerprint["variant_label"],
+    }
+
+
+def _load_json_object(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     try:
-        payload = json.loads(report.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    summary = payload.get("summary") or {}
-    if summary.get("n_runtime_error", 0) > 0:
-        return False
-    if (payload.get("provenance") or {}).get("env_created") is False:
-        return False
-    return True
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, f"{path.name} unreadable: {exc}"
+    if not isinstance(payload, dict):
+        return None, f"{path.name} is not a JSON object"
+    return payload, None
+
+
+def run_report_problem(
+    report_path: Path,
+    *,
+    plan: ExperimentPlan,
+    expected_runtime: dict[str, Any],
+) -> str | None:
+    """Return why a run report is not a finished run of the planned episodes, else None.
+
+    Task outcomes that end an episode (success, termination, time-limit truncation) are
+    complete; runtime errors and failed environment creation are not.
+    """
+    report, problem = _load_json_object(Path(report_path))
+    if report is None:
+        return problem
+    episodes = report.get("episodes")
+    if not isinstance(episodes, list) or not episodes:
+        return "report has no episodes"
+    provenance = report.get("provenance")
+    summary = report.get("summary")
+    if not isinstance(provenance, dict) or not isinstance(summary, dict):
+        return "report missing provenance or summary"
+    if provenance.get("env_created") is not True:
+        return f"environment was not created ({provenance.get('env_error')!r})"
+    if provenance.get("candidate") != plan.candidate:
+        return f"candidate {provenance.get('candidate')!r} != plan {plan.candidate!r}"
+    env_seeds = [pair.env_seed for pair in plan.seed_pairs]
+    policy_seeds = [pair.policy_rng_seed for pair in plan.seed_pairs]
+    if provenance.get("env_seeds") != env_seeds:
+        return "provenance env_seeds differ from the plan"
+    if provenance.get("policy_rng_seeds") != policy_seeds:
+        return "provenance policy_rng_seeds differ from the plan"
+    if provenance.get("latency_mode") != expected_runtime["latency_mode"]:
+        return f"latency_mode {provenance.get('latency_mode')!r} differs from the condition"
+    onnx_runtime = provenance.get("onnx_runtime")
+    if not isinstance(onnx_runtime, dict) or (
+        onnx_runtime.get("variant_label") != expected_runtime["variant_label"]
+    ):
+        return f"runtime variant is not {expected_runtime['variant_label']!r}"
+    if summary.get("n_episodes_total") != len(episodes):
+        return "summary episode count differs from episodes"
+    if summary.get("n_runtime_error"):
+        return f"{summary['n_runtime_error']} runtime-error episodes"
+
+    indices = [ep.get("episode_index") if isinstance(ep, dict) else None for ep in episodes]
+    if sorted(i for i in indices if isinstance(i, int)) != list(range(plan.n_episodes)):
+        return f"episode indices {indices} are not exactly 0..{plan.n_episodes - 1}"
+    for ep in episodes:
+        index = ep["episode_index"]
+        if ep.get("seed") != env_seeds[index] or ep.get("policy_rng_seed") != policy_seeds[index]:
+            return f"episode {index} seeds differ from the plan"
+        if ep.get("outcome") not in _COMPLETED_EPISODE_OUTCOMES or ep.get("runtime_error"):
+            return f"episode {index} outcome={ep.get('outcome')!r} runtime_error={ep.get('runtime_error')!r}"
+        if ep.get("latency_mode") != expected_runtime["latency_mode"]:
+            return f"episode {index} latency_mode differs from the condition"
+        if expected_runtime["latency_mode"] == "constant" and (
+            ep.get("latency_s") != expected_runtime["latency_s"]
+        ):
+            return f"episode {index} latency_s={ep.get('latency_s')!r} differs from the condition"
+        if ep.get("image_mode") != expected_runtime["image_mode"]:
+            return f"episode {index} image_mode={ep.get('image_mode')!r} differs from the condition"
+    return None
+
+
+def condition_report_problem(
+    report_path: Path, plan: ExperimentPlan, condition: ConditionSpec
+) -> str | None:
+    problem = run_report_problem(
+        report_path, plan=plan, expected_runtime=_expected_runtime(condition)
+    )
+    if problem is not None or condition.axis != ExperimentAxis.DEVICE_PROFILE.value:
+        return problem
+    starts = condition.params.get("window_starts")
+    episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
+    for ep in episodes:
+        window = (ep.get("latency_trace_provenance") or {}).get("window_start")
+        if starts is not None and window != starts[ep["episode_index"]]:
+            return f"episode {ep['episode_index']} replay window_start differs from the condition"
+    return None
+
+
+def shared_baseline_problem(shared_baseline_dir: Path, *, plan: ExperimentPlan) -> str | None:
+    """Check the shared baseline report that reference conditions point to."""
+    report_path = Path(shared_baseline_dir) / "run_report.json"
+    if not report_path.is_file():
+        return f"shared baseline report missing: {report_path}"
+    return run_report_problem(report_path, plan=plan, expected_runtime=_shared_baseline_runtime())
+
+
+def condition_incomplete_reason(
+    condition_dir: Path,
+    *,
+    plan: ExperimentPlan,
+    condition: ConditionSpec,
+    shared_baseline_dir: Path,
+) -> str | None:
+    """Return why a condition directory is not a finished, matching run, else None."""
+    condition_dir = Path(condition_dir)
+    report_path = condition_dir / "run_report.json"
+    if not report_path.is_file():
+        return "run_report.json missing"
+    reference_path = condition_dir / "baseline_reference.json"
+    if not reference_path.is_file():
+        return condition_report_problem(report_path, plan, condition)
+
+    reference, problem = _load_json_object(reference_path)
+    if reference is None:
+        return problem
+    if reference.get("status") != "referenced_baseline":
+        return f"baseline_reference status={reference.get('status')!r}"
+    if reference.get("condition_id") != condition.condition_id:
+        return "baseline_reference belongs to another condition"
+    if not condition_is_shared_baseline(condition):
+        return "condition is not eligible for baseline reuse"
+    if Path(str(reference.get("reference_dir", ""))).name != Path(shared_baseline_dir).name:
+        return "baseline_reference points to a different shared baseline"
+    problem = shared_baseline_problem(shared_baseline_dir, plan=plan)
+    if problem is not None:
+        return f"referenced baseline: {problem}"
+    shared_report = Path(shared_baseline_dir) / "run_report.json"
+    if report_path.read_bytes() != shared_report.read_bytes():
+        return "condition run_report.json differs from the referenced baseline report"
+    return None
+
+
+def condition_completed(
+    condition_dir: Path,
+    *,
+    plan: ExperimentPlan,
+    condition: ConditionSpec,
+    shared_baseline_dir: Path,
+) -> bool:
+    reason = condition_incomplete_reason(
+        condition_dir, plan=plan, condition=condition, shared_baseline_dir=shared_baseline_dir
+    )
+    if reason is not None:
+        LOGGER.warning("condition %s not complete: %s", condition.condition_id, reason)
+    return reason is None
 
 
 def write_unsupported_int8_record(

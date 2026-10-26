@@ -77,7 +77,11 @@ def test_legacy_protocol_label_maps_to_named_identity(tmp_path: Path) -> None:
     assert protocol_identity(legacy) == (PROTOCOL_NAME, PROTOCOL_VERSION)
     _write(tmp_path / "old.json", legacy)
     assert load_benchmark_config(tmp_path / "old.json")["protocol"] == "v0.1"
-    fresh = {"protocol_name": PROTOCOL_NAME, "protocol_version": PROTOCOL_VERSION}
+    fresh = {
+        "schema_version": 1,
+        "protocol_name": PROTOCOL_NAME,
+        "protocol_version": PROTOCOL_VERSION,
+    }
     assert_lock_matches(legacy, fresh)
     with pytest.raises(ValueError, match="protocol identity changed"):
         assert_lock_matches(legacy, {**fresh, "protocol_version": "0.2"})

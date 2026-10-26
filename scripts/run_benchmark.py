@@ -28,11 +28,13 @@ from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     build_smoke_plan,
     condition_completed,
     condition_is_shared_baseline,
+    condition_report_problem,
     describe_plan_commands,
     freeze_protocol_lock,
     host_settings_from_config,
     load_benchmark_config,
     resolve_benchmark_artifacts,
+    shared_baseline_problem,
     write_plan_bundle,
     write_unsupported_int8_record,
 )
@@ -111,6 +113,15 @@ def _execute_condition(
         and condition.condition_id != "latency_ms_0"
         and baseline_report.is_file()
     ):
+        problem = shared_baseline_problem(shared_baseline, plan=plan)
+        if problem is not None:
+            LOGGER.error("condition %s: referenced baseline: %s", condition.condition_id, problem)
+            return {
+                "condition_id": condition.condition_id,
+                "status": "incomplete",
+                "error": f"referenced baseline: {problem}",
+                "reference_report": str(baseline_report),
+            }
         ref = {
             "status": "referenced_baseline",
             "reference_report": str(baseline_report),
@@ -123,8 +134,7 @@ def _execute_condition(
             json.dumps(ref, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
         dest = condition_dir / "run_report.json"
-        if not dest.exists():
-            shutil.copy2(baseline_report, dest)
+        shutil.copy2(baseline_report, dest)
         return {**ref, "report": str(dest)}
 
     onnx_model = artifacts.fp32_path
@@ -203,6 +213,22 @@ def _execute_condition(
         )
         return {"condition_id": condition.condition_id, "status": "errored", "error": err}
 
+    problem = condition_report_problem(report, plan, condition)
+    if problem is not None:
+        LOGGER.error("condition %s incomplete: %s", condition.condition_id, problem)
+        (condition_dir / "condition_error.json").write_text(
+            json.dumps({"error": problem, "report": str(report), "planned": planned}, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+        return {
+            "condition_id": condition.condition_id,
+            "status": "incomplete",
+            "error": problem,
+            "report": str(report),
+            "planned": planned,
+        }
+
     # Capture shared baseline from latency_ms_0.
     if condition.condition_id == "latency_ms_0" and shared_baseline is not None:
         shared_baseline.mkdir(parents=True, exist_ok=True)
@@ -226,6 +252,19 @@ def _execute_condition(
         "report": str(report),
         "planned": planned,
     }
+
+
+def _resumed_record(condition_dir: Path, condition, report: Path) -> dict:
+    """Rebuild the record of a finished condition, keeping whether it reused the baseline."""
+    reference_path = condition_dir / "baseline_reference.json"
+    if reference_path.is_file():
+        record = json.loads(reference_path.read_text(encoding="utf-8"))
+    else:
+        record = {"condition_id": condition.condition_id, "status": "complete"}
+        planned_path = condition_dir / "planned_settings.json"
+        if planned_path.is_file():
+            record["planned"] = json.loads(planned_path.read_text(encoding="utf-8"))
+    return {**record, "report": str(report), "resumed": True}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -340,16 +379,12 @@ def main(argv: list[str] | None = None) -> int:
 
         for condition in plan.conditions:
             condition_dir = axis_out / "conditions" / condition.condition_id
-            if args.resume and condition_completed(condition_dir):
+            if args.resume and condition_completed(
+                condition_dir, plan=plan, condition=condition, shared_baseline_dir=shared
+            ):
                 LOGGER.info("resume skip completed %s", condition.condition_id)
                 report = condition_dir / "run_report.json"
-                records.append(
-                    {
-                        "condition_id": condition.condition_id,
-                        "status": "resumed_complete",
-                        "report": str(report),
-                    }
-                )
+                records.append(_resumed_record(condition_dir, condition, report))
                 condition_reports[condition.condition_id] = report
                 continue
 
@@ -364,11 +399,10 @@ def main(argv: list[str] | None = None) -> int:
                 baseline_report=baseline_report if baseline_report.is_file() else None,
             )
             records.append(rec)
-            if rec.get("status") in {"errored", "unsupported"}:
-                if rec.get("status") == "errored":
-                    incomplete = True
+            incomplete_condition = rec.get("status") in {"errored", "incomplete"}
+            incomplete = incomplete or incomplete_condition
             report_path = condition_dir / "run_report.json"
-            if report_path.is_file():
+            if report_path.is_file() and not incomplete_condition:
                 condition_reports[condition.condition_id] = report_path
             # Refresh baseline path after latency_ms_0.
             if (shared / "run_report.json").is_file():
