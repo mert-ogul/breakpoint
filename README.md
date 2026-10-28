@@ -1,4 +1,9 @@
-# Breakpoint
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/logo-dark.svg">
+    <img src="assets/branding/logo-light.svg" alt="Breakpoint" width="420">
+  </picture>
+</h1>
 
 Breakpoint measures how inference delay, camera quality, and quantization affect a robot policy's success in simulation. It runs a pretrained ACT policy on the ALOHA TransferCube task with paired seeds and reports uncertainty for each condition.
 
