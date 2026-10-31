@@ -40,6 +40,7 @@ Interventions act on the raw rendered pixels (uint8 RGB under `observation["pixe
 | `native` | Copy, no resize and no codec |
 | `downsample` | Resize to the requested height and width with OpenCV `INTER_AREA`, then back to native size with `INTER_LINEAR` |
 | `jpeg` | JPEG encode and decode at native size with OpenCV. Quality 1 to 100 is a codec parameter, not a bitrate. Quality 100 is still encoded |
+| `h264` | One persistent libx264 encoder and decoder pair per camera, created fresh for every episode. Every rendered frame is encoded in order at the control rate (50 fps) with zerolatency, no B-frames, no lookahead and a single encoder thread. Each frame is decoded in the same control step; a frame that is not decoded is an error, not a hold. Bitrate is ABR; measured encoded bytes per frame are recorded. Quality only: no codec, transport or jitter delay is added |
 
 Provenance records the OpenCV and NumPy versions, quality, requested and effective size, compressed byte counts and frame rate.
 
@@ -56,6 +57,8 @@ The FP32 graph is accepted for profiling and evaluation only through `export_val
 A synthetic corpus cannot produce a passed validation. Independent closed-loop trajectories need not match PyTorch step for step. That comparison is a diagnostic.
 
 INT8 is ONNX Runtime static QDQ (`QUInt8` activations, `QInt8` weights, MinMax calibration) on calibration seeds that do not overlap the evaluation seeds. It is validated for identity, finite outputs, shapes and calibration coverage, with its own validation file. Matching FP32 numerically is not required. Task degradation is the measurement. Each variant runs with its own weights, and a failed recipe is recorded, not replaced.
+
+INT4 is ONNX Runtime MatMulNBits weight-only RTN: 4 bits, block size 128, symmetric, MatMul only. It is added to an existing export with `breakpoint quantize-int4`, so the FP32 graph and its profiles are unchanged. Only weights of constant 2D MatMuls are stored as 4-bit blocks; Conv, Gemm and activation MatMuls stay FP32. Weights are dequantized and computed in float (`accuracy_level=0`). Validation is its own `export_validation_int4.json`: identity, finite outputs, shapes and recorded coverage on the evaluation corpus. FP32 numerical parity is not required. This is not a full-model INT4 result, and there is no INT4 device timing.
 
 ## Outcomes and denominators
 
@@ -84,8 +87,8 @@ A condition is below threshold when `p_c < 0.8 * p_b`, where `p_b` is the baseli
 
 For ordered axes (delay, resolution, JPEG quality), the report lists every tested point and names the first tested point below threshold. It does not interpolate an exact boundary. It flags a later recovery, and says "not reached" if no point falls below. Precision recipes and device profiles are categories. They are compared one by one against the baseline, with no ordering or crossing point.
 
-Isolation: constant-delay runs hold precision at FP32 and a native image. Precision runs use zero delay. Device replay is a separate condition, not a replacement for the delay axis. Effects measured on separate axes are not additive.
+Isolation: constant-delay runs hold precision at FP32 and a native image. Precision runs use zero delay. H.264 runs at FP32, native resolution and 0 ms delay. INT4 runs at a native image and 0 ms delay. Device replay is a separate condition, not a replacement for the delay axis. Effects measured on separate axes are not additive.
 
 ## Experimental, outside the benchmark
 
-The package also contains an H.264 image mode (causal libx264 stream through FFmpeg and PyAV, installed with `.[h264]`), INT4 and FP16 export options (off unless requested), and Diffusion PushT and ACT insertion candidates. None of these is validated or used by the benchmark. Unsupported combinations are reported as unsupported.
+The package also contains FP16 export (off unless requested), an H.264 deployment mode that models codec buffering delay, and Diffusion PushT and ACT insertion candidates. None of these is validated or used by the benchmark. Unsupported combinations are reported as unsupported.

@@ -17,12 +17,12 @@ Run every command from the clone root. The commands call `.venv/bin/...` directl
 
 ```bash
 python3.11 -m venv .venv
-.venv/bin/python -m pip install -r requirements-simulation.txt -r requirements-onnx.txt -e '.[dev,report]'
+.venv/bin/python -m pip install -r requirements-simulation.txt -r requirements-onnx.txt -e '.[dev,report,h264]'
 .venv/bin/python -m pip check
 export MUJOCO_GL=glfw
 ```
 
-`MUJOCO_GL=glfw` is for macOS. Breakpoint also applies it automatically before it imports MuJoCo.
+`MUJOCO_GL=glfw` is for macOS. Breakpoint also applies it automatically before it imports MuJoCo. The `h264` extra installs PyAV. H.264 also needs FFmpeg with libx264 on `PATH` (`brew install ffmpeg` or `sudo apt-get install -y ffmpeg`).
 
 ## 2. Export and validate the FP32 model
 
@@ -53,7 +53,16 @@ Seeds: calibration `9000` to `9007`, held-out evaluation `2000` to `2007`, close
 
 An export made earlier at another path works if you pass that path explicitly (for example `--export-dir artifacts/export/act-v1`).
 
-## 3. Profile the FP32 graph on each device
+## 3. Add the INT4 weight-only variant
+
+```bash
+.venv/bin/breakpoint quantize-int4 \
+  --export-dir artifacts/export/act-transfer
+```
+
+This writes `act_chunk_int4_matmul_nbits.onnx`, updates `export_manifest.json` with the `int4_weight_only` variant, and writes `export_validation_int4.json`. It refuses to overwrite an existing INT4 graph or manifest entry. A failed or unsupported recipe is recorded in the manifest and validation sidecar; no other recipe replaces it. The FP32 graph and its profiles are unchanged.
+
+## 4. Profile the FP32 graph on each device
 
 Profiling is ONNX Runtime only. It validates the export bundle first and refuses a graph without a passed `export_validation.json`. Defaults are 50 warm-up and 1000 measured calls. Add `--power-note` and `--cooling-note` to record the power source and cooling.
 
@@ -88,7 +97,7 @@ If the Pi clone has no `.git` directory (a source archive), put the commit hash 
 
 Copy the Pi's `profiles/rpi5/fp32` directory to the same path on the Mac. The Pi records temperature and throttling telemetry through `vcgencmd` when it is available. A profile taken while the board throttles describes that state only.
 
-## 4. Evaluate
+## 5. Evaluate
 
 The configuration is `configs/act-transfer.json`. Evaluation runs on CPU with ONNX Runtime (4 intra-op, 1 inter-op threads). Check the plan first. A dry run validates identities and creates no results:
 
@@ -96,23 +105,25 @@ The configuration is `configs/act-transfer.json`. Evaluation runs on CPU with ON
 .venv/bin/python scripts/run_benchmark.py --phase smoke --out outputs/act-transfer/smoke --dry-run
 ```
 
-Smoke phase: env seeds `3000` to `3004`, the baseline, 640 ms, 60x80, JPEG 10, INT8 if available, and both device profiles.
+Smoke phase: env seeds `3000` to `3004`, the baseline, 640 ms, 60x80, JPEG 10, INT8 and INT4 if available, H.264 at 100 kbps if supported, and both device profiles.
 
 ```bash
 .venv/bin/python scripts/run_benchmark.py --phase smoke --out outputs/act-transfer/smoke
 ```
 
-Full phase: env seeds `5000` to `5029`, one isolated axis at a time.
+Full phase: env seeds `5000` to `5029`, one isolated axis at a time, including the H.264 quality-only plan (`bypass`, then 2000, 1000, 500, 250 and 100 kbps).
 
 ```bash
 .venv/bin/python scripts/run_benchmark.py --phase full --out outputs/act-transfer/full
 ```
 
+H.264 needs FFmpeg with libx264 on `PATH` and the `h264` extra. Otherwise the axis is recorded as unsupported and left out of the plan. Do not upgrade FFmpeg or PyAV during a run: resume refuses a changed encoder lock.
+
 Re-run the same command with `--resume` to continue an interrupted run. Resume refuses any change to the configuration, identities or seeds, and re-runs conditions that are not complete. The command exits nonzero if a condition is incomplete.
 
 Use `--export-dir`, `--profile-laptop` and `--profile-rpi5` when the inputs are not at the configured paths. A run started with the old `artifacts/export/act-v1` export resumes only with `--export-dir artifacts/export/act-v1`.
 
-## 5. Package and render the report
+## 6. Package and render the report
 
 Packaging reads the run directory and writes a new package. It replaces an existing package only after the new one validates.
 
@@ -125,7 +136,7 @@ Packaging reads the run directory and writes a new package. It replaces an exist
 
 `package_benchmark.py` reads the export and profile locations from the run's lock. If they moved, pass `--export-dir` and `--profile DEVICE=PATH` (repeatable). Without `--out`, it writes the committed `benchmarks/act-transfer/deployment-stress/data`, so always pass `--out` here. Open `outputs/act-transfer/report/index.html`.
 
-## 6. Optional: comparison media
+## 7. Optional: comparison media
 
 Needs the simulator environment, Pillow, matplotlib and `ffmpeg` with libx264 on `PATH` (`brew install ffmpeg` or `sudo apt-get install -y ffmpeg`).
 
