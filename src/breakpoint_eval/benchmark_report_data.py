@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 
 from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     PROTOCOL_LOCK_NAME,
@@ -258,7 +259,11 @@ def required_inputs(data_dir: Path) -> list[str]:
         lock = resolve_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME)
         validation = [
             resolve_artifact(data_dir / "validation", name)
-            for name in (EXPORT_VALIDATION_NAME, EXPORT_VALIDATION_INT8_NAME)
+            for name in (
+                EXPORT_VALIDATION_NAME,
+                EXPORT_VALIDATION_INT8_NAME,
+                EXPORT_VALIDATION_INT4_NAME,
+            )
         ]
     except ValueError as exc:
         raise ReportDataError(str(exc)) from exc
@@ -793,6 +798,25 @@ def validate_identities(lock: dict[str, Any], profiles: list[ProfileView]) -> Ch
     )
 
 
+def validate_int4_episodes(rows: list[dict[str, Any]]) -> Check | None:
+    """Every INT4 episode finished without policy_failed; ORT refuses non-finite chunks."""
+    int4_rows = [r for r in rows if r["condition_id"] == "precision_int4_weight_only"]
+    if not int4_rows:
+        return None
+    complete = frozenset({"success", "terminated_no_success", "time_limit_truncation"})
+    bad = [
+        f"#{r['episode_index']} outcome={r.get('outcome')!r}"
+        for r in int4_rows
+        if r.get("outcome") not in complete or r.get("runtime_error")
+    ]
+    n_calls = sum(int(r.get("n_inference_calls") or 0) for r in int4_rows)
+    return Check(
+        "INT4 episodes complete with no policy_failed (finite closed-loop outputs)",
+        not bad,
+        f"{n_calls} INT4 inference calls" if not bad else f"bad: {bad[:5]}; {n_calls} calls",
+    )
+
+
 def load_report_data(data_dir: Path) -> ReportData:
     data_dir = data_dir.resolve()
     manifest_check, manifest_sha = verify_manifest(data_dir)
@@ -827,8 +851,15 @@ def _load_verified(data_dir: Path, manifest_check: Check, manifest_sha: str) -> 
         *validate_replay(profiles, rows, window_length),
         validate_identities(lock, profiles),
     ]
+    int4_check = validate_int4_episodes(rows)
+    if int4_check is not None:
+        checks.append(int4_check)
     validation_files = {}
-    for name in (EXPORT_VALIDATION_NAME, EXPORT_VALIDATION_INT8_NAME):
+    for name in (
+        EXPORT_VALIDATION_NAME,
+        EXPORT_VALIDATION_INT8_NAME,
+        EXPORT_VALIDATION_INT4_NAME,
+    ):
         path = resolve_artifact(data_dir / "validation", name)
         if path is not None:
             validation_files[name] = load_json(path)

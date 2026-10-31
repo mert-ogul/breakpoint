@@ -56,6 +56,10 @@ class ResolvedArtifacts:
     int8_detail: str | None
     profiles: dict[str, Path]
     profile_identities: dict[str, dict[str, Any]]
+    int4_path: Path | None = None
+    int4_sha256: str | None = None
+    int4_status: str = "missing"
+    int4_detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -157,6 +161,45 @@ def resolve_profile_by_identity(
     return matches[0]
 
 
+def _resolve_optional_quantized_onnx(
+    export: Path,
+    *,
+    onnx_name: str,
+    candidate: str,
+    expected_sha256: str | None,
+    manifest_label: str,
+    display_label: str,
+) -> tuple[Path | None, str | None, str, str | None]:
+    """Resolve an optional INT8/INT4 graph the same way: file → runtime+hash, else manifest."""
+    model_path = (export / onnx_name).resolve()
+    if model_path.is_file():
+        try:
+            runtime = resolve_onnx_runtime(
+                model_path,
+                expected_candidate=candidate,
+                require_export_validation=True,
+            )
+            if expected_sha256 and runtime.model_sha256 != expected_sha256:
+                raise ValueError(
+                    f"{display_label} sha256 mismatch: file={runtime.model_sha256} "
+                    f"expected={expected_sha256}"
+                )
+            return model_path, runtime.model_sha256, "ok", None
+        except (ValueError, FileNotFoundError) as exc:
+            detail = f"{type(exc).__name__}: {exc}"
+            LOGGER.warning("%s present but not runnable: %s", display_label, detail)
+            return None, None, "unsupported", detail
+    status = "missing"
+    detail: str | None = None
+    manifest = load_export_manifest(export / "export_manifest.json")
+    for variant in manifest.get("variants") or []:
+        if variant.get("label") == manifest_label:
+            status = str(variant.get("status") or "missing")
+            detail = variant.get("detail")
+            break
+    return None, None, status, detail
+
+
 def resolve_benchmark_artifacts(
     config: dict[str, Any],
     *,
@@ -185,39 +228,22 @@ def resolve_benchmark_artifacts(
             f"FP32 sha256 mismatch: file={fp32_rt.model_sha256} expected={expected_fp32}"
         )
 
-    int8_name = arts.get("int8_onnx_name") or "act_chunk_int8_qdq.onnx"
-    int8_path = (export / int8_name).resolve()
-    int8_sha: str | None = None
-    int8_status = "missing"
-    int8_detail: str | None = None
-    resolved_int8: Path | None = None
-    if int8_path.is_file():
-        try:
-            int8_rt = resolve_onnx_runtime(
-                int8_path,
-                expected_candidate=config["candidate"],
-                require_export_validation=True,
-            )
-            expected_int8 = arts.get("expected_int8_sha256")
-            if expected_int8 and int8_rt.model_sha256 != expected_int8:
-                raise ValueError(
-                    f"INT8 sha256 mismatch: file={int8_rt.model_sha256} expected={expected_int8}"
-                )
-            resolved_int8 = int8_path
-            int8_sha = int8_rt.model_sha256
-            int8_status = "ok"
-        except (ValueError, FileNotFoundError) as exc:
-            int8_status = "unsupported"
-            int8_detail = f"{type(exc).__name__}: {exc}"
-            LOGGER.warning("INT8 present but not runnable: %s", int8_detail)
-    else:
-        # Check manifest for explicit unsupported status.
-        manifest = load_export_manifest(export / "export_manifest.json")
-        for variant in manifest.get("variants") or []:
-            if variant.get("label") == "int8":
-                int8_status = str(variant.get("status") or "missing")
-                int8_detail = variant.get("detail")
-                break
+    int8_path, int8_sha, int8_status, int8_detail = _resolve_optional_quantized_onnx(
+        export,
+        onnx_name=arts.get("int8_onnx_name") or "act_chunk_int8_qdq.onnx",
+        candidate=config["candidate"],
+        expected_sha256=arts.get("expected_int8_sha256"),
+        manifest_label="int8",
+        display_label="INT8",
+    )
+    int4_path, int4_sha, int4_status, int4_detail = _resolve_optional_quantized_onnx(
+        export,
+        onnx_name=arts.get("int4_onnx_name") or "act_chunk_int4_matmul_nbits.onnx",
+        candidate=config["candidate"],
+        expected_sha256=arts.get("expected_int4_sha256"),
+        manifest_label="int4_weight_only",
+        display_label="INT4",
+    )
 
     profiles: dict[str, Path] = {}
     identities: dict[str, dict[str, Any]] = {}
@@ -259,12 +285,16 @@ def resolve_benchmark_artifacts(
         fp32_path=fp32_path,
         fp32_sha256=fp32_rt.model_sha256,
         fp32_recipe_id=fp32_rt.recipe_id,
-        int8_path=resolved_int8,
+        int8_path=int8_path,
         int8_sha256=int8_sha,
         int8_status=int8_status,
         int8_detail=int8_detail,
         profiles=profiles,
         profile_identities=identities,
+        int4_path=int4_path,
+        int4_sha256=int4_sha,
+        int4_status=int4_status,
+        int4_detail=int4_detail,
     )
 
 
@@ -388,10 +418,12 @@ def build_smoke_plan(
     conditions.extend(latency_conditions(tuple(int(x) for x in smoke["latency_ms"])))
     conditions.extend(_resolution_conditions_from_hw(list(smoke["resolution_hw"])))
     conditions.extend(jpeg_conditions(tuple(smoke["jpeg_qualities"])))
-    # Precision: always list FP32; INT8 only if runnable, else recorded separately.
+    # Precision: always list FP32; INT8/INT4 only if runnable, else recorded separately.
     prec_variants = ["onnx_fp32"]
     if "int8" in smoke.get("precision_variants", []) and artifacts.int8_status == "ok":
         prec_variants.append("int8")
+    if "int4_weight_only" in smoke.get("precision_variants", []) and artifacts.int4_status == "ok":
+        prec_variants.append("int4_weight_only")
     conditions.extend(precision_conditions(tuple(prec_variants)))
     conditions.extend(
         _device_profile_conditions(
@@ -417,6 +449,7 @@ def build_smoke_plan(
         notes=[
             "Smoke plan; not for publication claims.",
             f"INT8 status at plan build: {artifacts.int8_status}",
+            f"INT4 status at plan build: {artifacts.int4_status}",
         ],
     )
 
@@ -481,6 +514,8 @@ def build_full_axis_plans(
     prec_variants = ["onnx_fp32"]
     if "int8" in full.get("precision_variants", []) and artifacts.int8_status == "ok":
         prec_variants.append("int8")
+    if "int4_weight_only" in full.get("precision_variants", []) and artifacts.int4_status == "ok":
+        prec_variants.append("int4_weight_only")
     prec = ExperimentPlan(
         plan_id="v0.1_full_precision",
         candidate=candidate,
@@ -491,7 +526,10 @@ def build_full_axis_plans(
         conditions=precision_conditions(tuple(prec_variants)),
         isolation_notes=["Precision under constant_latency_ms_0."],
         baseline_condition_id="precision_onnx_fp32",
-        notes=[f"INT8 status at plan build: {artifacts.int8_status}"],
+        notes=[
+            f"INT8 status at plan build: {artifacts.int8_status}",
+            f"INT4 status at plan build: {artifacts.int4_status}",
+        ],
     )
     plans.append(prec)
 
@@ -550,6 +588,10 @@ def freeze_protocol_lock(
             "int8_detail": artifacts.int8_detail,
             "profiles": {k: str(v) for k, v in artifacts.profiles.items()},
             "profile_identities": artifacts.profile_identities,
+            "int4_path": str(artifacts.int4_path) if artifacts.int4_path else None,
+            "int4_sha256": artifacts.int4_sha256,
+            "int4_status": artifacts.int4_status,
+            "int4_detail": artifacts.int4_detail,
         },
         "host": {
             "compute_device": host.compute_device,
@@ -788,17 +830,33 @@ def write_unsupported_int8_record(
     out_dir: Path,
     *,
     artifacts: ResolvedArtifacts,
+    stem: str = "int8",
 ) -> Path:
-    path = out_dir / "int8_unsupported.json"
+    """Write int8_unsupported.json or int4_unsupported.json with the same field layout."""
+    if stem == "int4":
+        status, detail, model_path, sha256 = (
+            artifacts.int4_status,
+            artifacts.int4_detail,
+            artifacts.int4_path,
+            artifacts.int4_sha256,
+        )
+    else:
+        status, detail, model_path, sha256 = (
+            artifacts.int8_status,
+            artifacts.int8_detail,
+            artifacts.int8_path,
+            artifacts.int8_sha256,
+        )
+    path = out_dir / f"{stem}_unsupported.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
             {
-                "status": artifacts.int8_status,
-                "detail": artifacts.int8_detail,
+                "status": status,
+                "detail": detail,
                 "measurements_fabricated": False,
-                "path": str(artifacts.int8_path) if artifacts.int8_path else None,
-                "sha256": artifacts.int8_sha256,
+                "path": str(model_path) if model_path else None,
+                "sha256": sha256,
             },
             indent=2,
             sort_keys=True,

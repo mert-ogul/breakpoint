@@ -462,3 +462,67 @@ def test_main_labels_are_readable_and_ids_stay_in_evidence() -> None:
     assert "## Condition IDs" in markdown
     assert "`latency_ms_640`" in markdown.split("## Condition IDs")[1]
     assert "`latency_ms_640`" not in markdown.split("## Condition IDs")[0]
+
+
+def test_short_label_int4_weight_only() -> None:
+    from breakpoint_eval.benchmark_report_plots import short_label
+
+    assert short_label("precision_int4_weight_only") == "INT4 weight-only"
+    assert short_label("precision_int8") == "INT8 QDQ"
+
+
+def test_int4_limitation_line_from_sidecar() -> None:
+    from types import SimpleNamespace
+
+    from breakpoint_eval.artifact_names import EXPORT_VALIDATION_INT4_NAME
+    from breakpoint_eval.benchmark_report import int4_note
+
+    sidecar = {
+        "quantization_coverage": {
+            "matmul_nbits_nodes": 29,
+            "matmul_nodes_total": 41,
+            "weight_params_int4_fraction": 0.6164908834826577,
+            "recipe": {"accuracy_level": 0},
+        },
+        "runtime_checks": {
+            "max_abs_error": 0.1459382176399231,
+            "mean_abs_error": 0.006009796475399936,
+        },
+    }
+    ran = SimpleNamespace(
+        lock={"artifacts": {"int4_status": "ok"}},
+        rows=[{"condition_id": "precision_int4_weight_only"}],
+        validation_files={EXPORT_VALIDATION_INT4_NAME: sidecar},
+    )
+    line = int4_note(ran)
+    assert line is not None
+    assert "29 of 41 MatMul nodes" in line
+    assert "61.6%" in line
+    assert "accuracy_level=0" in line
+    assert "0.1459382176399231" in line
+    assert "0.006009796475399936" in line
+    assert "not a full-model INT4 result" in line
+    assert "no INT4 device timing exists" in line
+
+    missing = SimpleNamespace(
+        lock={
+            "artifacts": {
+                "int4_status": "missing",
+                "int4_detail": "graph absent",
+            }
+        },
+        rows=[],
+        validation_files={},
+    )
+    skipped = int4_note(missing)
+    assert skipped is not None
+    assert "INT4 export status is 'missing'" in skipped
+    assert "graph absent" in skipped
+    assert "no INT4 measurement is reported" in skipped
+
+    old = SimpleNamespace(
+        lock={"artifacts": {"int8_status": "ok"}},
+        rows=[],
+        validation_files={},
+    )
+    assert int4_note(old) is None

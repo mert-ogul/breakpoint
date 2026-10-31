@@ -18,6 +18,7 @@ from typing import Any
 
 from breakpoint_eval import __version__
 from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     PROTOCOL_LOCK_NAME,
@@ -445,6 +446,40 @@ def int8_note(data: ReportData, int8_status: str) -> str:
     )
 
 
+def int4_note(data: ReportData) -> str | None:
+    """One limitations line when the lock records INT4; None for packages without INT4 fields."""
+    art = data.lock["artifacts"]
+    if "int4_status" not in art:
+        return None
+    status = art["int4_status"]
+    ran = any(r["condition_id"] == "precision_int4_weight_only" for r in data.rows)
+    if status == "ok" and ran:
+        sidecar = data.validation_files.get(EXPORT_VALIDATION_INT4_NAME, {})
+        coverage = sidecar.get("quantization_coverage") or {}
+        runtime = sidecar.get("runtime_checks") or {}
+        recipe = coverage.get("recipe") or {}
+        nbits = coverage["matmul_nbits_nodes"]
+        total = coverage["matmul_nodes_total"]
+        fraction = coverage["weight_params_int4_fraction"]
+        accuracy_level = recipe["accuracy_level"]
+        max_abs = runtime["max_abs_error"]
+        mean_abs = runtime["mean_abs_error"]
+        return (
+            f"INT4 weight-only: {nbits} of {total} MatMul nodes are stored as 4-bit blocks "
+            f"({fraction:.1%} of weight parameters); Conv, Gemm, and activation-by-activation "
+            f"MatMul stay FP32. Weights are dequantized and computed in float "
+            f"(accuracy_level={accuracy_level}). Recorded chunk error versus ONNX FP32: "
+            f"max abs {max_abs}, mean abs {mean_abs}. This is not a full-model INT4 result "
+            "and no INT4 device timing exists."
+        )
+    detail = art.get("int4_detail")
+    detail_bit = f" ({detail})" if detail else ""
+    return (
+        f"INT4 export status is '{status}'{detail_bit}; no INT4 condition was run and no INT4 "
+        "measurement is reported."
+    )
+
+
 def report_limitations(data: ReportData) -> list[str]:
     n = len(data.rows)
     outcomes: dict[str, int] = {}
@@ -458,6 +493,11 @@ def report_limitations(data: ReportData) -> list[str]:
         + ", ".join(f"{v} {k}" for k, v in sorted(outcomes.items()))
         + ".",
         int8_note(data, int8),
+    ]
+    int4_line = int4_note(data)
+    if int4_line is not None:
+        notes.append(int4_line)
+    notes += [
         f"Baseline strength: {baseline_view(first).successes}/{baseline_view(first).eligible} "
         f"({pct(first.baseline_rate)}) against the project floor of {first.baseline_floor:g}. "
         + (
@@ -539,8 +579,19 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
     lock = data.lock
     lock_rel = f"protocol/{require_artifact(data.data_dir / 'protocol', PROTOCOL_LOCK_NAME).name}"
     int8_validation = data.validation_files.get(EXPORT_VALIDATION_INT8_NAME, {})
+    int4_validation = data.validation_files.get(EXPORT_VALIDATION_INT4_NAME, {})
     fp32_validation = data.validation_files.get(EXPORT_VALIDATION_NAME, {})
     runtime = int8_validation.get("runtime_checks", {})
+    int4_runtime = int4_validation.get("runtime_checks", {})
+    int4_prov = ""
+    if art.get("int4_sha256") or EXPORT_VALIDATION_INT4_NAME in data.validation_files:
+        int4_prov = (
+            f"<dt>INT4 weight-only graph sha256</dt><dd><code>{esc(art.get('int4_sha256'))}"
+            "</code></dd>"
+            f"<dt>INT4 recorded chunk error vs FP32</dt><dd>max abs "
+            f"{int4_runtime.get('max_abs_error', 0):.3f}, mean abs "
+            f"{int4_runtime.get('mean_abs_error', 0):.4f}</dd>"
+        )
     checks = "".join(
         f'<tr><td class="num">{"pass" if c.passed else "FAIL"}</td><td>{esc(c.name)}</td>'
         f"<td>{esc(c.detail)}</td></tr>"
@@ -557,6 +608,7 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         f"<dt>Policy</dt><dd><code>{esc(lock['candidate'])}</code></dd>"
         f"<dt>FP32 graph sha256</dt><dd><code>{esc(art['fp32_sha256'])}</code></dd>"
         f"<dt>INT8 QDQ graph sha256</dt><dd><code>{esc(art['int8_sha256'])}</code></dd>"
+        f"{int4_prov}"
         f"<dt>FP32 export validation</dt><dd>schema {esc(fp32_validation.get('schema_version'))}, "
         f"passed={esc(fp32_validation.get('passed'))}</dd>"
         f"<dt>INT8 recorded chunk error vs FP32</dt><dd>max abs {runtime.get('max_abs_error', 0):.3f}, "

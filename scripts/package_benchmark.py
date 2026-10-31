@@ -19,6 +19,7 @@ if _SRC.is_dir() and str(_SRC) not in sys.path:
 
 from breakpoint_eval.artifact_names import (  # noqa: E402
     BENCHMARK_CONFIG_NAME,
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     PROTOCOL_LOCK_NAME,
@@ -273,8 +274,7 @@ def package_protocol(full_root: Path, out: Path) -> None:
         source = require_artifact(full_root, name)
         copy_verbatim(source, out / "protocol" / source.name)
     copy_verbatim(full_root / "run_records.json", out / "protocol" / "run_records.json")
-    unsupported = full_root / "int8_unsupported.json"
-    if unsupported.is_file():
+    for unsupported in sorted(full_root.glob("*_unsupported.json")):
         copy_verbatim(unsupported, out / "protocol" / unsupported.name)
     for plan in sorted((full_root / "plans").glob("*.json")):
         copy_verbatim(plan, out / "protocol" / "plans" / plan.name)
@@ -320,6 +320,7 @@ def package_validation(
     export_dir: Path, lock: dict[str, Any], out: Path, large: list[dict[str, Any]]
 ) -> None:
     int8_ok = lock["artifacts"].get("int8_status") == "ok"
+    int4_ok = lock["artifacts"].get("int4_status") == "ok"
     sources = [
         require_artifact(export_dir, EXPORT_VALIDATION_NAME),
         export_dir / "export_manifest.json",
@@ -331,6 +332,8 @@ def package_validation(
         found = resolve_artifact(export_dir, EXPORT_VALIDATION_INT8_NAME)
         if found is not None:
             sources.append(found)
+    if int4_ok:
+        sources.append(require_artifact(export_dir, EXPORT_VALIDATION_INT4_NAME))
     calibration = export_dir / "corpus_calibration.json"
     if int8_ok or calibration.is_file():
         sources.append(calibration)
@@ -341,6 +344,8 @@ def package_validation(
     models = [("fp32", locked_model(export_dir, lock, "fp32"))]
     if int8_ok:
         models.append(("int8", locked_model(export_dir, lock, "int8")))
+    if int4_ok:
+        models.append(("int4", locked_model(export_dir, lock, "int4")))
     for _, model in models:
         large.append(large_entry(model, "model_or_corpus_artifact"))
     large.append(large_entry(export_dir / "corpus_eval.npz", "model_or_corpus_artifact"))
@@ -418,6 +423,12 @@ def package_identities(lock: dict[str, Any], resolutions: list[dict[str, Any]], 
         "profile_identities": artifacts["profile_identities"],
         "lock_keys": sorted(lock),
     }
+    if "int4_status" in artifacts:
+        identities["model_int4_weight_only"] = {
+            "sha256": artifacts.get("int4_sha256"),
+            "status": artifacts["int4_status"],
+            "detail": artifacts.get("int4_detail"),
+        }
     write_json(out / "identities" / "identities.json", identities)
     write_json(out / "identities" / "condition_resolution.json", resolutions)
 

@@ -53,6 +53,8 @@ def short_label(condition_id: str) -> str:
         return "FP32"
     if condition_id == "precision_int8":
         return "INT8 QDQ"
+    if condition_id == "precision_int4_weight_only":
+        return "INT4 weight-only"
     if condition_id.startswith("device_profile_"):
         return condition_id.removeprefix("device_profile_").removesuffix("_fp32") + "\nreplay"
     return condition_id

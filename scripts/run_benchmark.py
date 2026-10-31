@@ -138,19 +138,34 @@ def _execute_condition(
         return {**ref, "report": str(dest)}
 
     onnx_model = artifacts.fp32_path
-    if condition.axis == "precision" and condition.params.get("variant_label") == "int8":
-        if artifacts.int8_status != "ok" or artifacts.int8_path is None:
-            rec = {
-                "condition_id": condition.condition_id,
-                "status": "unsupported",
-                "detail": artifacts.int8_detail,
-                "measurements_fabricated": False,
-            }
-            (condition_dir / "condition_unsupported.json").write_text(
-                json.dumps(rec, indent=2) + "\n", encoding="utf-8"
-            )
-            return rec
-        onnx_model = artifacts.int8_path
+    if condition.axis == "precision":
+        variant = condition.params.get("variant_label")
+        if variant == "int8":
+            if artifacts.int8_status != "ok" or artifacts.int8_path is None:
+                rec = {
+                    "condition_id": condition.condition_id,
+                    "status": "unsupported",
+                    "detail": artifacts.int8_detail,
+                    "measurements_fabricated": False,
+                }
+                (condition_dir / "condition_unsupported.json").write_text(
+                    json.dumps(rec, indent=2) + "\n", encoding="utf-8"
+                )
+                return rec
+            onnx_model = artifacts.int8_path
+        elif variant == "int4_weight_only":
+            if artifacts.int4_status != "ok" or artifacts.int4_path is None:
+                rec = {
+                    "condition_id": condition.condition_id,
+                    "status": "unsupported",
+                    "detail": artifacts.int4_detail,
+                    "measurements_fabricated": False,
+                }
+                (condition_dir / "condition_unsupported.json").write_text(
+                    json.dumps(rec, indent=2) + "\n", encoding="utf-8"
+                )
+                return rec
+            onnx_model = artifacts.int4_path
 
     req = condition_run_request(
         plan=plan,
@@ -322,6 +337,19 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
+        if artifacts.int4_status != "ok":
+            print(
+                json.dumps(
+                    {
+                        "int4": {
+                            "status": artifacts.int4_status,
+                            "detail": artifacts.int4_detail,
+                            "measurements_fabricated": False,
+                        }
+                    },
+                    indent=2,
+                )
+            )
         print("# dry-run complete: no run-result directories created, no episodes evaluated")
         return 0
 
@@ -345,6 +373,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if artifacts.int8_status != "ok":
         write_unsupported_int8_record(out, artifacts=artifacts)
+    phase_cfg = config.get(args.phase) or {}
+    if (
+        "int4_weight_only" in phase_cfg.get("precision_variants", [])
+        and artifacts.int4_status != "ok"
+    ):
+        write_unsupported_int8_record(out, artifacts=artifacts, stem="int4")
 
     plan_paths = write_plan_bundle(plans, out / "plans")
     shared = _shared_baseline_dir(out)

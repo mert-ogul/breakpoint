@@ -118,6 +118,10 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
             "rpi5": tmp_path / "rpi.json",
         },
         profile_identities={},
+        int4_path=tmp_path / "act_chunk_int4_matmul_nbits.onnx",
+        int4_sha256="c" * 64,
+        int4_status="ok",
+        int4_detail=None,
     )
     # Device-profile conditions need loadable profiles — stub via monkeypatch path.
     # Build plans that do not touch device profiles when profiles are unloadable:
@@ -135,6 +139,8 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
     assert "jpeg_q10" in ids
     assert "precision_onnx_fp32" in ids
     assert "precision_int8" in ids
+    assert "precision_int4_weight_only" in ids
+    assert any("INT4 status at plan build: ok" in n for n in smoke.notes)
 
     cfg_full = json.loads(json.dumps(cfg))
     cfg_full["full"]["device_profiles"] = []
@@ -161,8 +167,15 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
     assert condition_is_shared_baseline(lat.conditions[0])
     assert condition_is_shared_baseline(res.conditions[0])
     assert condition_is_shared_baseline(jpeg.conditions[0])
+    prec = plans[3]
+    assert [c.condition_id for c in prec.conditions] == [
+        "precision_onnx_fp32",
+        "precision_int8",
+        "precision_int4_weight_only",
+    ]
+    assert any("INT4 status at plan build: ok" in n for n in prec.notes)
 
-    # INT8 not runnable → omitted from precision conditions, status recorded elsewhere.
+    # INT8/INT4 not runnable → omitted from precision conditions, status recorded elsewhere.
     fake_bad = ResolvedArtifacts(
         export_dir=tmp_path,
         fp32_path=tmp_path / "act_chunk_fp32.onnx",
@@ -174,9 +187,84 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
         int8_detail="ORT QDQ unavailable",
         profiles={},
         profile_identities={},
+        int4_status="unsupported",
+        int4_detail="MatMulNBits unavailable",
     )
     smoke_no_int8 = build_smoke_plan(cfg_smoke, fake_bad)
-    assert "precision_int8" not in [c.condition_id for c in smoke_no_int8.conditions]
+    smoke_ids = [c.condition_id for c in smoke_no_int8.conditions]
+    assert "precision_int8" not in smoke_ids
+    assert "precision_int4_weight_only" not in smoke_ids
+    full_no = build_full_axis_plans(cfg_full, fake_bad)
+    prec_no_ids = [c.condition_id for c in full_no[3].conditions]
+    assert prec_no_ids == ["precision_onnx_fp32"]
+    assert any("INT4 status at plan build: unsupported" in n for n in full_no[3].notes)
+
+
+def test_freeze_protocol_lock_includes_int4_fields(tmp_path: Path) -> None:
+    cfg = load_benchmark_config(CONFIG_PATH)
+    host = host_settings_from_config(cfg)
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
+
+    arts = ResolvedArtifacts(
+        export_dir=tmp_path,
+        fp32_path=tmp_path / "a.onnx",
+        fp32_sha256="aaa",
+        fp32_recipe_id="r",
+        int8_path=None,
+        int8_sha256=None,
+        int8_status="missing",
+        int8_detail=None,
+        profiles={},
+        profile_identities={},
+        int4_path=tmp_path / "int4.onnx",
+        int4_sha256="d" * 64,
+        int4_status="ok",
+        int4_detail=None,
+    )
+    lock = freeze_protocol_lock(
+        config=cfg,
+        artifacts=arts,
+        source_revision={"kind": "git", "revision": "abc"},
+        host=host,
+        phase="smoke",
+    )
+    art = lock["artifacts"]
+    assert art["int4_path"] == str(tmp_path / "int4.onnx")
+    assert art["int4_sha256"] == "d" * 64
+    assert art["int4_status"] == "ok"
+    assert art["int4_detail"] is None
+
+
+def test_resume_refuses_int4_sha256_change() -> None:
+    cfg = load_benchmark_config(CONFIG_PATH)
+    host = host_settings_from_config(cfg)
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
+
+    arts = ResolvedArtifacts(
+        export_dir=Path("/tmp/export"),
+        fp32_path=Path("/tmp/export/a.onnx"),
+        fp32_sha256="aaa",
+        fp32_recipe_id="r",
+        int8_path=None,
+        int8_sha256=None,
+        int8_status="missing",
+        int8_detail=None,
+        profiles={},
+        profile_identities={},
+        int4_sha256="e" * 64,
+        int4_status="ok",
+    )
+    lock = freeze_protocol_lock(
+        config=cfg,
+        artifacts=arts,
+        source_revision={"kind": "git", "revision": "abc"},
+        host=host,
+        phase="smoke",
+    )
+    changed = json.loads(json.dumps(lock))
+    changed["artifacts"]["int4_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="resume refused"):
+        assert_lock_matches(lock, changed)
 
 
 def test_identity_profile_resolution_strict(tmp_path: Path) -> None:
