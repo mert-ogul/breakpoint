@@ -379,7 +379,7 @@ def execute_experiment_plan(
 
     try:
         render_report(output_dir)
-    except Exception as exc:  # noqa: BLE001 — report is best-effort after records exist
+    except Exception as exc:  # noqa: BLE001  report is best-effort after records exist
         LOGGER.warning("render_report failed: %s", exc)
 
     return 2 if incomplete else 0

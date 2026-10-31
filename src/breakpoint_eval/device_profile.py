@@ -76,7 +76,7 @@ def read_temperature_c() -> dict[str, Any]:
     return {
         "available": bool(readings),
         "readings": readings,
-        "throttling": None,  # not fabricated when the OS does not expose it
+        "throttling": None,  # None when the OS does not expose it
         "note": None if readings else "temperature telemetry unavailable on this host",
     }
 

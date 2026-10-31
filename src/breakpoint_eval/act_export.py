@@ -1,13 +1,13 @@
 """Export the verified ACT tensor path to ONNX (queues stay outside the graph).
 
 Export boundary (matches ACTPolicy.select_action inference compute):
-  preprocess_observation  — outside (numpy → float CHW)
-  normalize_inputs        — inside
-  stack cameras           — inside
-  ACT.model (eval, zero latent) — inside
-  slice n_action_steps    — inside
-  unnormalize_outputs     — inside
-  _action_queue / temporal ensembler — outside
+  preprocess_observation  outside (numpy to float CHW)
+  normalize_inputs        inside
+  stack cameras           inside
+  ACT.model (eval, zero latent) inside
+  slice n_action_steps    inside
+  unnormalize_outputs     inside
+  _action_queue / temporal ensembler outside
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ INPUT_STATE = "observation_state"
 OUTPUT_CHUNK = "action_chunk"
 DEFAULT_OPSET = 17
 
-# Pinned recipe ids — never silently replace after failure.
+# Pinned recipe ids; keep the same id after a failed attempt.
 RECIPE_ONNX_FP32 = "torch_onnx_export_fp32_opset17"
 RECIPE_ORT_INT8_STATIC_QDQ = "onnxruntime_static_qdq_uint8_act_qint8_weight_minmax_calibrate"
 RECIPE_ORT_INT4_MATMUL_NBITS = "onnxruntime_matmul_nbits_weight_only_int4_rtn"

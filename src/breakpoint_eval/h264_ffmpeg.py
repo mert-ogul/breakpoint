@@ -18,12 +18,12 @@ class H264UnsupportedError(RuntimeError):
 
 
 # Flags we request for causal streaming. Validated against `ffmpeg -h encoder=libx264`
-# when the CLI is present; never silently dropped.
+# when the CLI is present; missing flags raise.
 REQUESTED_ENCODER = "libx264"
 REQUESTED_PIXEL_FORMAT = "yuv420p"
 REQUESTED_TUNE = "zerolatency"
 REQUESTED_PRESET_DEFAULT = "veryfast"
-# No B-frames / zero lookahead — required to avoid future-frame references.
+# No B-frames / zero lookahead, required to avoid future-frame references.
 REQUESTED_MAX_B_FRAMES = 0
 REQUESTED_RC_LOOKAHEAD = 0
 

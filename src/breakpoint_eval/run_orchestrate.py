@@ -322,7 +322,7 @@ def execute_resolved_run(
         )
         LOGGER.error("Interrupted; wrote %s", path)
         raise
-    except Exception as exc:  # noqa: BLE001 — boundary: persist diagnostics
+    except Exception as exc:  # noqa: BLE001  boundary: persist diagnostics
         path = write_partial_diagnostics(
             plan.output_dir,
             plan=plan.to_dict(),

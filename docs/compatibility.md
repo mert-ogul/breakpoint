@@ -48,14 +48,26 @@ An editable install writes `outputs/`, `artifacts/`, `vendor/` and `.cache/` ins
 
 ## Troubleshooting
 
-**MuJoCo fails on macOS with an OpenGL `dlopen` error.** On macOS 14.6, `mujoco==2.3.7` cannot load its CGL backend. Breakpoint imports MuJoCo with GL disabled and then selects GLFW, which renders the task. Set `export MUJOCO_GL=glfw` when you run other MuJoCo code in the same environment. `osmesa` and `egl` are not valid on the macOS 2.3.7 wheels.
+### MuJoCo fails on macOS with an OpenGL `dlopen` error
 
-**The LeRobot checkout fails or is incomplete.** Breakpoint fetches the pinned commit without git-lfs. A directory `vendor/lerobot` with `.git` but without `lerobot/__init__.py` is removed and fetched again. A checkout with local edits at another commit is not overwritten. Move it away yourself.
+On macOS 14.6, `mujoco==2.3.7` cannot load its CGL backend. Breakpoint imports MuJoCo with GL disabled and then selects GLFW, which renders the task. Set `export MUJOCO_GL=glfw` when you run other MuJoCo code in the same environment. `osmesa` and `egl` are not valid on the macOS 2.3.7 wheels.
 
-**`DecodingError: The fields device, use_amp are not valid for ACTConfig`.** The current Hub `main` configs need a newer LeRobot than the pinned commit. Use the pinned revision `9e935457…` above. Do not substitute `pip install lerobot` or a generic Transformers loader.
+### The LeRobot checkout fails or is incomplete
 
-**Linux: the dev install pulls CUDA wheels.** Install the CPU wheels first: see [CONTRIBUTING.md](../CONTRIBUTING.md).
+Breakpoint fetches the pinned commit without git-lfs. A directory `vendor/lerobot` with `.git` but without `lerobot/__init__.py` is removed and fetched again. A checkout with local edits at another commit is not overwritten. Move it away yourself.
 
-**H.264 tests skip or fail.** They need FFmpeg with libx264 on `PATH` and the `h264` extra. Install them with `brew install ffmpeg` or `sudo apt-get install -y ffmpeg`. Encoding uses the libraries PyAV loads; the `ffmpeg` CLI is only probed for availability and flag support.
+### DecodingError for device and use_amp on ACTConfig
 
-**`profile_device.py` refuses the export.** It needs `export_manifest.json`, `export_validation.json` with `passed: true` for the FP32 graph, `corpus_eval.npz`, `eval_chunks_onnx_fp32.npz` and the graph in one directory. Hashes must match. See [reproduce.md](reproduce.md#4-profile-the-fp32-graph-on-each-device).
+The current Hub `main` configs need a newer LeRobot than the pinned commit. Use the pinned revision `9e935457…` above. Do not substitute `pip install lerobot` or a generic Transformers loader.
+
+### The dev install pulls CUDA wheels on Linux
+
+Install the CPU wheels first: see [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+### H.264 tests skip or fail
+
+They need FFmpeg with libx264 on `PATH` and the `h264` extra. Install them with `brew install ffmpeg` or `sudo apt-get install -y ffmpeg`. Encoding uses the libraries PyAV loads; the `ffmpeg` CLI is only probed for availability and flag support.
+
+### profile_device.py refuses the export
+
+It needs `export_manifest.json`, `export_validation.json` with `passed: true` for the FP32 graph, `corpus_eval.npz`, `eval_chunks_onnx_fp32.npz` and the graph in one directory. Hashes must match. See [reproduce.md](reproduce.md#4-profile-the-fp32-graph-on-each-device).

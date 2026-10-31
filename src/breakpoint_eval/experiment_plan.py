@@ -18,7 +18,7 @@ N_EPISODES_FULL = 100
 
 # Suggested starting grids (methodology.md).
 DEFAULT_LATENCY_MS = (0, 20, 40, 60, 80, 120, 200)
-# Categories — not a continuous bit-depth axis.
+# Precision recipes are categories; they have no order.
 DEFAULT_PRECISION_VARIANTS = ("onnx_fp32", "int8", "int4_weight_only")
 # Linear size fractions of native ALOHA 480x640; actual HxW recorded per level.
 NATIVE_HW = (480, 640)
@@ -420,7 +420,7 @@ def make_combined_plan(
     plan_id: str | None = None,
     confirms_plan_id: str | None = None,
 ) -> ExperimentPlan:
-    """Explicit small combined grid — only after isolated sweeps; not additive."""
+    """Explicit small combined grid, only after isolated sweeps."""
     if len(conditions) < 2:
         raise ValueError("combined plan needs at least two conditions")
     seeds = build_seed_pairs(

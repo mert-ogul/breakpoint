@@ -75,7 +75,7 @@ def test_compact_row_records_success_step_and_simulated_duration() -> None:
 
 
 def test_compact_row_h264_fields_sum_cameras() -> None:
-    from breakpoint_eval.benchmark_report_data import H264_FRAME_RATE_HZ, measured_h264_kbps
+    from breakpoint_eval.benchmark_report_data import measured_h264_kbps
 
     module = load_script()
     row = module.compact_episode_row(
@@ -88,7 +88,7 @@ def test_compact_row_h264_fields_sum_cameras() -> None:
             image_mode="h264",
             n_control_steps=10,
             h264_summary={
-                "requested": {"bitrate_kbps": 500.0},
+                "requested": {"bitrate_kbps": 500.0, "frame_rate_hz": 50.0},
                 "cameras": {
                     "top": {
                         "n_frames_in": 10,
@@ -117,7 +117,7 @@ def test_compact_row_h264_fields_sum_cameras() -> None:
     assert row["h264_keyframes"] == 3
     assert row["h264_first_frame_keyframe"] is True
     assert row["h264_actual_kbps"] == pytest.approx(
-        measured_h264_kbps(1500, 20, frame_rate_hz=H264_FRAME_RATE_HZ)
+        measured_h264_kbps(1500, 20, frame_rate_hz=50.0)
     )
 
     one_false = module.compact_episode_row(
@@ -130,7 +130,7 @@ def test_compact_row_h264_fields_sum_cameras() -> None:
             image_mode="h264",
             n_control_steps=10,
             h264_summary={
-                "requested": {"bitrate_kbps": 500.0},
+                "requested": {"bitrate_kbps": 500.0, "frame_rate_hz": 50.0},
                 "cameras": {
                     "top": {
                         "n_frames_in": 10,

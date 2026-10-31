@@ -103,7 +103,7 @@ def load_benchmark_config(path: Path) -> dict[str, Any]:
 
 
 def resolve_h264_support(config: dict[str, Any]) -> dict[str, Any]:
-    """Probe libx264/PyAV once; never raises for a missing codec."""
+    """Probe libx264/PyAV once; missing codec yields status unsupported."""
     from breakpoint_eval.h264_ffmpeg import (
         REQUESTED_MAX_B_FRAMES,
         REQUESTED_PIXEL_FORMAT,
@@ -112,16 +112,23 @@ def resolve_h264_support(config: dict[str, Any]) -> dict[str, Any]:
         probe_ffmpeg_h264,
     )
 
-    h264_cfg = config.get("h264") if isinstance(config.get("h264"), dict) else {}
+    h264_cfg = config.get("h264")
+    if not isinstance(h264_cfg, dict):
+        raise ValueError(
+            "config.h264 must be an object with gop, preset, latency_mode, frame_rate_hz"
+        )
+    for key in ("gop", "preset", "latency_mode", "frame_rate_hz"):
+        if key not in h264_cfg:
+            raise ValueError(f"config.h264.{key} is required")
     probe = probe_ffmpeg_h264()
     status = "ok" if probe.available else "unsupported"
     return {
         "status": status,
         "detail": probe.unsupported_reason,
-        "gop": int(h264_cfg.get("gop", 30)),
-        "preset": str(h264_cfg.get("preset", "veryfast")),
-        "latency_mode": str(h264_cfg.get("latency_mode", "quality_only")),
-        "frame_rate_hz": 50.0,
+        "gop": int(h264_cfg["gop"]),
+        "preset": str(h264_cfg["preset"]),
+        "latency_mode": str(h264_cfg["latency_mode"]),
+        "frame_rate_hz": float(h264_cfg["frame_rate_hz"]),
         "tune": REQUESTED_TUNE,
         "pixel_format": REQUESTED_PIXEL_FORMAT,
         "max_b_frames": REQUESTED_MAX_B_FRAMES,
@@ -160,7 +167,7 @@ def resolve_profile_by_identity(
     variant_label: str,
     expected_model_sha256: str | None = None,
 ) -> Path:
-    """Strict identity resolution — never pick newest file by mtime."""
+    """Strict identity resolution by declared digests, not newest mtime."""
     profiles_dir = Path(profiles_dir)
     matches: list[Path] = []
     for path in sorted(profiles_dir.glob("*.json")):
@@ -210,7 +217,7 @@ def _resolve_optional_quantized_onnx(
     manifest_label: str,
     display_label: str,
 ) -> tuple[Path | None, str | None, str, str | None]:
-    """Resolve an optional INT8/INT4 graph the same way: file → runtime+hash, else manifest."""
+    """Resolve an optional INT8/INT4 graph the same way: file then runtime+hash, else manifest."""
     model_path = (export / onnx_name).resolve()
     if model_path.is_file():
         try:

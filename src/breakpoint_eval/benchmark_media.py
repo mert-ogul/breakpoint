@@ -20,6 +20,14 @@ from typing import Any
 import numpy as np
 
 from breakpoint_eval.artifact_names import PROTOCOL_LOCK_NAME, require_artifact
+from breakpoint_eval.benchmark_report_style import (
+    ACCENT_RGB,
+    DARK_BG,
+    DARK_FG_RGB,
+    INK_RGB,
+    MUTED_RGB,
+    hex_to_rgb,
+)
 from breakpoint_eval.stack import repo_root_from_package
 
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_media")
@@ -33,9 +41,11 @@ SELECTION_RULE = (
     "latency plan. Among seeds where the baseline succeeded and the stress episode did not, "
     "use the lowest env seed. No other seeds were run or compared."
 )
-CHARCOAL, OFF_WHITE = (17, 24, 39), (248, 250, 252)
-BASELINE_BLUE, STRESS_AMBER = (37, 99, 235), (180, 83, 9)
-MUTED = (156, 163, 175)
+CHARCOAL = hex_to_rgb(DARK_BG)
+OFF_WHITE = DARK_FG_RGB
+BASELINE_BLUE = INK_RGB
+STRESS_AMBER = ACCENT_RGB
+MUTED = MUTED_RGB
 CONTROL_PERIOD_S = 0.02
 
 
@@ -356,8 +366,7 @@ def compose_frames(
             draw.text((x, sy + layout.status_h // 2), clock, font=mono, fill=MUTED, anchor="lm")
             reached = k * CONTROL_PERIOD_S >= panel.event_time_s - 1e-9
             if reached:
-                glyph = "\u2713" if panel.event_label == "Success" else "\u2715"
-                label = f"{glyph} {panel.event_label.upper()} {panel.event_time_s:.2f} s"
+                label = f"{panel.event_label.upper()} {panel.event_time_s:.2f} s"
                 draw.text(
                     (x + layout.panel_w, sy + layout.status_h // 2),
                     label,
@@ -540,9 +549,8 @@ def social_preview(panels: list[PanelSpec], footer_lines: list[str], out_path: P
     for i, panel in enumerate(panels):
         x = 90 + i * (panel_w + 20)
         draw.rectangle([x, top - 34, x + panel_w, top], fill=panel.color)
-        glyph = "\u2713" if panel.event_label == "Success" else "\u2715"
         label = (
-            f"{panel.title}  {panel.detail.replace(' inference', '')}  |  {glyph} "
+            f"{panel.title}  {panel.detail.replace(' inference', '')}  |  "
             f"{panel.event_label} {panel.event_time_s:.2f} s"
         )
         draw.text((x + 10, top - 17), label, font=chip, fill=OFF_WHITE, anchor="lm")
@@ -555,8 +563,8 @@ def social_preview(panels: list[PanelSpec], footer_lines: list[str], out_path: P
 
 def build_panels(recordings: dict[str, Recording]) -> list[PanelSpec]:
     specs = [
-        (BASELINE_CONDITION, "BASELINE", "0 ms delay", BASELINE_BLUE),
-        (STRESS_CONDITION, "STRESS", "+640 ms inference delay", STRESS_AMBER),
+        (BASELINE_CONDITION, "Baseline, 0 ms delay", "", BASELINE_BLUE),
+        (STRESS_CONDITION, "+640 ms delay", "", STRESS_AMBER),
     ]
     panels = []
     for condition, title, detail, color in specs:

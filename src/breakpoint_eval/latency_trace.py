@@ -204,7 +204,7 @@ def contiguous_window_starts(
 ) -> list[int]:
     """Evenly spaced contiguous-window starts: floor(i*(N-W)/(n_episodes-1)).
 
-    Deterministic sampling across the measured run — not continuous full-trace
+    Deterministic sampling across the measured run, not continuous full-trace
     replay. Distinct from block resampling.
     """
     if window_length < 1:

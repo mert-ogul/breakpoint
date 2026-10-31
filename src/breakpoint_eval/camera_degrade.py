@@ -23,7 +23,7 @@ UPSAMPLE_INTERPOLATION = "INTER_LINEAR"
 
 class ImageMode(StrEnum):
     NATIVE = "native"  # uncompressed identity bypass (no codec, no resize)
-    DOWNSAMPLE = "downsample"  # capture res → resize back to policy native
+    DOWNSAMPLE = "downsample"  # capture res, then resize back to policy native
     JPEG = "jpeg"  # encode/decode at native resolution
     H264 = "h264"  # causal libx264 stream (not isolated still-frame encode)
 

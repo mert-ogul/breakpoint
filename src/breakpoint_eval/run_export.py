@@ -354,7 +354,7 @@ def run_export(req: ExportRequest) -> Path:
             ).to_dict()
         elif int8.status != "ok":
             LOGGER.warning(
-                "INT8 variant status=%s detail=%s (no silent recipe fallback)",
+                "INT8 variant status=%s detail=%s",
                 int8.status,
                 int8.detail,
             )
@@ -425,7 +425,7 @@ def run_export(req: ExportRequest) -> Path:
             closed_loop = {
                 "status": "errored",
                 "detail": f"{type(exc).__name__}: {exc}",
-                "note": "closed-loop requires simulator; not fabricated",
+                "note": "closed-loop requires simulator; unknown",
                 "passed": False,
                 "completed": False,
             }

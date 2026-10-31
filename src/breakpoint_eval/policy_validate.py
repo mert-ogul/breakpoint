@@ -95,7 +95,7 @@ def validate_native_baseline_load(
                 f"n_action_steps={adapter.chunk_info.n_action_steps}"
             ),
         )
-    except Exception as exc:  # noqa: BLE001 — gate boundary
+    except Exception as exc:  # noqa: BLE001  gate boundary
         return GateResult(
             gate="native_baseline_load",
             passed=False,

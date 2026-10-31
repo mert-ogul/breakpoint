@@ -345,7 +345,7 @@ def _run_episode_with_scheduler(
                 truncated=truncated,
             )
 
-    except Exception as exc:  # noqa: BLE001 — boundary: classify as runtime_error
+    except Exception as exc:  # noqa: BLE001  boundary: classify as runtime_error
         runtime_error = f"{type(exc).__name__}: {exc}"
         outcome = EpisodeOutcome.RUNTIME_ERROR
         LOGGER.exception("Runtime error in episode seed=%s", seed)

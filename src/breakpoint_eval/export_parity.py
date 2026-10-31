@@ -300,7 +300,7 @@ def compare_action_traces_with_tails(
     atol: float | None = None,
     rtol: float | None = None,
 ) -> dict[str, Any]:
-    """Compare paired action lists; never silently ignore unmatched tails."""
+    """Compare paired action lists; unmatched tails fail the comparison."""
     atol = ONNX_FP32_CLOSED_LOOP_ATOL if atol is None else atol
     rtol = ONNX_FP32_CLOSED_LOOP_RTOL if rtol is None else rtol
     n_pt = len(pytorch_actions)

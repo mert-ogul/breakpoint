@@ -346,134 +346,134 @@
   ],
   "files": [
     {
-      "bytes": 119985,
+      "bytes": 104536,
       "path": "index.html",
-      "sha256": "a415acf3d08696ffa42786b919f5603abf289c15e9a2cfe1790d2ebc2e758c74"
+      "sha256": "a05535b92c256729ba7e543837d932320095c80fa697b7a2e130de4fd7214f47"
     },
     {
-      "bytes": 76927,
+      "bytes": 76921,
       "path": "plots/latency_trace_laptop-m3.dark.svg",
-      "sha256": "276f659c20b8a3210b1ce43c6d77fab8decdd74088751366666d34c6f2d7221b"
+      "sha256": "3d061def9f38a9bc2a00423ffb7d811056c88a92e7c8f7eb58d296b7a88439eb"
     },
     {
-      "bytes": 90338,
+      "bytes": 90085,
       "path": "plots/latency_trace_laptop-m3.png",
-      "sha256": "c4799eb7f7eef90497828bccf97d8fc0cd406bdb727d668b7a8033500a040adf"
+      "sha256": "b754f1934991db5e1821dd0f66226577cd1f9fe96ddbb73dc5f0100bcfb06179"
     },
     {
-      "bytes": 76927,
+      "bytes": 76921,
       "path": "plots/latency_trace_laptop-m3.svg",
-      "sha256": "a3112ac003f3465f54cfc9f3095a8bf4fc47df403a6a28e895b4a8eeedbd3665"
+      "sha256": "b5ca1454cb6f29c221e4f8bdf45bcef1f76f6db673bb515263228ba7a9a3c3a1"
     },
     {
-      "bytes": 81241,
+      "bytes": 81235,
       "path": "plots/latency_trace_rpi5.dark.svg",
-      "sha256": "26b68acbc079b7b113fdbb3a3c47f45f2d88054832c5f84aca93bca15dd929e9"
+      "sha256": "c3d46e1ae78e007edb2f0f3f3b8a13ebda1ed58a819099ca8d7fb0a7c064a135"
     },
     {
-      "bytes": 219062,
+      "bytes": 215499,
       "path": "plots/latency_trace_rpi5.png",
-      "sha256": "9c96d4ae63900585b87d3457aada8d671fbf4efb31de256e8a3271c12dc27545"
+      "sha256": "9654e5212b76d0bdf375c57c999069860111f23edfb2c82d68b1ad87072af70e"
     },
     {
-      "bytes": 81241,
+      "bytes": 81235,
       "path": "plots/latency_trace_rpi5.svg",
-      "sha256": "c69e1bb47f19004f1605f6c6b774849152c76372934e42a67feda9d7a307bea2"
+      "sha256": "9268873f1c0099792606fc0168e7a8160c5f7a38e613aa3aaa0ae401a6c6ba6b"
     },
     {
-      "bytes": 15931,
+      "bytes": 15964,
       "path": "plots/success_device_profile.dark.svg",
-      "sha256": "f905d20c24ae58af2793cb7acae11e072cf9736b280ddaa15ba76f7acf3ecebe"
+      "sha256": "a589a507be6d883e50d6035adc343fcb5f47089cfce7a73a2252f49e331f2002"
     },
     {
-      "bytes": 60143,
+      "bytes": 60548,
       "path": "plots/success_device_profile.png",
-      "sha256": "ba3cdd9f9d1df68653e694459bc801f01334930b3d648f20b3d65715ad24170b"
+      "sha256": "90a1c1e55ef26962991a3705ae3bf2dc0ca6cfc334f55d94c88fb454a479d9cb"
     },
     {
-      "bytes": 15931,
+      "bytes": 15964,
       "path": "plots/success_device_profile.svg",
-      "sha256": "8e21e23cb926b9da39e6ba5bf9859c397df655cb8eb6e3a9730466d674d5ec47"
+      "sha256": "c5126ad7b94e51191f8362d681d018df77c4e198521c64ac5655200459d1531a"
     },
     {
-      "bytes": 20642,
+      "bytes": 20664,
       "path": "plots/success_h264.dark.svg",
-      "sha256": "5eda398d88c5dcca52ff23f39a7f0fce3e51942a83e96a6d2565048d8c72c4c2"
+      "sha256": "02439d3d5bbe203bafac0d7ade4e15017b766fdd5ddf5bbe64c47513d03e4e0c"
     },
     {
-      "bytes": 65830,
+      "bytes": 66210,
       "path": "plots/success_h264.png",
-      "sha256": "6bc8fd090f35ba0a0f30a2a1251173c439eb5b1afe42d6a65f5cbb3ba2f0963a"
+      "sha256": "210586ad3fdd503c8ccc7c733b6696271e60cb69d28ce7c76723cd59474fbb19"
     },
     {
-      "bytes": 20642,
+      "bytes": 20664,
       "path": "plots/success_h264.svg",
-      "sha256": "170af738559b574618a9510e094c30bbd0807c283631aa8e1474ca61bad543f0"
+      "sha256": "8ebd1cc28270c7f9eb7c924ff74c70e3b6df6cfbd05a59c87494ef1c978da70e"
     },
     {
-      "bytes": 20383,
+      "bytes": 20405,
       "path": "plots/success_jpeg.dark.svg",
-      "sha256": "f63ac94748b16b5b62bba45045ae8cb02a9b4abcc74b6388cd50785233ac1454"
+      "sha256": "85cdef18bc228df6da8c5e19833b86448d0699280a927195c930442f8f700b52"
     },
     {
-      "bytes": 56670,
+      "bytes": 57258,
       "path": "plots/success_jpeg.png",
-      "sha256": "c73de3e7e02d37f7930a1989ae646c250e9b1eee8c68bf9738bb633923d2dd8d"
+      "sha256": "d0fcdb97615e2543e58f053d6c5f6f8eb605e2a24cb8bbbd7d437596ed746616"
     },
     {
-      "bytes": 20383,
+      "bytes": 20405,
       "path": "plots/success_jpeg.svg",
-      "sha256": "f45e0c5e52e4e9bc492fddf3e38ef1138afec61043edd071f5fe5f30c656e6db"
+      "sha256": "f1fa774dc18e3d7f278fdac7842710d01b02f5ce6a7706ea615f84b1dfdc18f8"
     },
     {
-      "bytes": 20581,
+      "bytes": 20603,
       "path": "plots/success_latency_ms.dark.svg",
-      "sha256": "4ee95ddbbc04e140439411d5f2e73d4e6166dd9f0b90cae87fa4b67d7d36aa08"
+      "sha256": "d36fabd80af7fd858238e5772537c9aff18589834689dae4a9df0c1525a016a9"
     },
     {
-      "bytes": 59070,
+      "bytes": 59271,
       "path": "plots/success_latency_ms.png",
-      "sha256": "f13a423733feb8ce813fcf9e64c1925d678ac0f1affebf82156d3b2c101c54cd"
+      "sha256": "ad3025bca40bacc4b3a7bff5544b5a8429922918eaea6f15dd158933a3f2ce70"
     },
     {
-      "bytes": 20581,
+      "bytes": 20603,
       "path": "plots/success_latency_ms.svg",
-      "sha256": "4ffd4fb55644583f323b106b75ec7fc60c0eced261c032423f936f3aea481652"
+      "sha256": "5dc77654f95bcc9fbf66d97458a8789d32ccf02294e107bac3115aea1e8da341"
     },
     {
-      "bytes": 15282,
+      "bytes": 15322,
       "path": "plots/success_precision.dark.svg",
-      "sha256": "d110868a4ab2f29b13686d0c4dac7ad42a1594fdfa22faa66256d97ccd42537a"
+      "sha256": "9bc587c7d959ffcea5644c67159c1628122c25804c535682d8373b27908e5647"
     },
     {
-      "bytes": 54217,
+      "bytes": 54584,
       "path": "plots/success_precision.png",
-      "sha256": "a6f6295c81787c9e81a2b1e9c7c8388ec27de2c90dd7e315afa2598609f426b2"
+      "sha256": "4ec7af26a6adb3043a5a8be8574cf5d913eb3328b0b4753116fc3dc126201bda"
     },
     {
-      "bytes": 15282,
+      "bytes": 15322,
       "path": "plots/success_precision.svg",
-      "sha256": "51a4f819c9e6128e059e0b219a3f16d56fc144dfd2f93318f85e71e26bffd7c0"
+      "sha256": "c5d0827ddcb70847539d7eb6239b960b21b4562e6bebf0293cbfcd488b39b6ee"
     },
     {
-      "bytes": 17376,
+      "bytes": 17238,
       "path": "plots/success_resolution.dark.svg",
-      "sha256": "b95b187b041628b56c29353a51ff1de12163cc1b82745fb97f9b4fff6afad11d"
+      "sha256": "8968c458e441d4b27bbee9b120756677456c3eb15ff45ba42ca18c1e9e4d0396"
     },
     {
-      "bytes": 61244,
+      "bytes": 61460,
       "path": "plots/success_resolution.png",
-      "sha256": "13006db2cf4dbf9e067c869c2596125eec2b6c3633382bbe2d6de3c9f36375b6"
+      "sha256": "048e2524e96212b470c5d88b2747179257cf1928305d2989a9ad535c7d429472"
     },
     {
-      "bytes": 17376,
+      "bytes": 17238,
       "path": "plots/success_resolution.svg",
-      "sha256": "691931591bbeada322f8b2553c09c0f6d4f31898d2cc19423c2536b14f41f618"
+      "sha256": "59b16763e1283c69b05dfb7a244b9a020c9b6ee769e72c4584f67488efa6f487"
     },
     {
-      "bytes": 17927,
+      "bytes": 15066,
       "path": "report.md",
-      "sha256": "53c8a2a99a98bc779c9ad6799b4c9be43422e49edec7c30515839b89b13afb59"
+      "sha256": "83698e0160da29a37741ef7e16b7186df49f7cbb7b39db96ae0236c1c0cdbc71"
     }
   ],
   "generator": "scripts/render_benchmark.py",
@@ -486,77 +486,77 @@
   "validation": [
     {
       "detail": "77 files hashed",
-      "name": "packaged files match manifest sha256",
+      "name": "Packaged files match the manifest digests",
       "passed": true
     },
     {
       "detail": "810 rows",
-      "name": "episode rows: planned seeds, policy RNG seeds, success flag vs outcome",
+      "name": "Episode rows match planned seeds and success flags",
       "passed": true
     },
     {
       "detail": "outcomes: success, time_limit_truncation",
-      "name": "no runtime errors or policy failures in any episode",
+      "name": "No runtime errors or policy failures in any episode",
       "passed": true
     },
     {
       "detail": "28 condition rows",
-      "name": "displayed counts: every axis lists each planned condition once",
+      "name": "Every axis lists each planned condition once",
       "passed": true
     },
     {
       "detail": "6 conditions",
-      "name": "v0.1_full_latency: saved summary counts and Wilson intervals equal episode records",
+      "name": "v0.1_full_latency saved summary matches episode records",
       "passed": true
     },
     {
       "detail": "4 conditions",
-      "name": "v0.1_full_resolution: saved summary counts and Wilson intervals equal episode records",
+      "name": "v0.1_full_resolution saved summary matches episode records",
       "passed": true
     },
     {
       "detail": "6 conditions",
-      "name": "v0.1_full_jpeg: saved summary counts and Wilson intervals equal episode records",
+      "name": "v0.1_full_jpeg saved summary matches episode records",
       "passed": true
     },
     {
       "detail": "6 conditions",
-      "name": "v0.1_full_h264: saved summary counts and Wilson intervals equal episode records",
+      "name": "v0.1_full_h264 saved summary matches episode records",
       "passed": true
     },
     {
       "detail": "3 conditions",
-      "name": "v0.1_full_precision: saved summary counts and Wilson intervals equal episode records",
+      "name": "v0.1_full_precision saved summary matches episode records",
       "passed": true
     },
     {
       "detail": "120 referenced rows; differing: []",
-      "name": "shared baseline outcomes equal the latency_ms_0 condition seed by seed",
+      "name": "Shared baseline outcomes match latency_ms_0 seed by seed",
       "passed": true
     },
     {
       "detail": "all episodes",
-      "name": "latency axis: recorded constant delay equals the condition label",
+      "name": "Latency axis recorded delay matches the condition label",
       "passed": true
     },
     {
       "detail": "2 profiles",
-      "name": "device replay: windows follow the locked design and consumed delays equal profile samples",
+      "name": "Device replay windows and consumed delays match the profile samples",
       "passed": true
     },
     {
       "detail": "fp32 sha256 27bf9278030e",
-      "name": "device profiles were measured on the locked FP32 graph",
+      "name": "Device profiles were measured on the locked FP32 graph",
       "passed": true
     },
     {
       "detail": "106 INT4 inference calls",
-      "name": "INT4 episodes complete with no policy_failed (finite closed-loop outputs)",
+      "name": "INT4 episodes all completed",
       "passed": true
     },
     {
       "detail": "150 H.264 episodes",
-      "name": "H.264 rows: measured kbps matches bytes/frames at 50 fps; frames=n_control_steps; zero holds; first-frame keyframe",
+      "name": "H.264 rows match frame counts, holds, and first keyframe",
       "passed": true
     }
   ]

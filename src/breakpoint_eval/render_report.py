@@ -16,6 +16,8 @@ from typing import Any
 
 import numpy as np
 
+from breakpoint_eval.benchmark_report_style import ACCENT, INK, LIGHT_MUTED, LIGHT_RULE
+
 LOGGER = logging.getLogger("breakpoint_eval.render_report")
 
 CONTROLLER_TIMING_ASSUMPTIONS = [
@@ -169,18 +171,18 @@ def _plot_success_bars(
             yerr_low.append(max(0.0, r - lo))
             yerr_high.append(max(0.0, hi - r))
     fig, ax = plt.subplots(figsize=(8, 3.2))
-    ax.bar(xs, [0.0 if np.isnan(y) else y for y in ys], color="#4a5568")
-    # Only draw error bars where rates exist — never invent zeros for missing.
+    ax.bar(xs, [0.0 if np.isnan(y) else y for y in ys], color=INK)
+    # Only draw error bars where rates exist; missing rates stay missing.
     for i, r in enumerate(rates):
         if r is None:
-            ax.text(i, 0.02, "missing", ha="center", va="bottom", fontsize=8, color="#a00")
+            ax.text(i, 0.02, "missing", ha="center", va="bottom", fontsize=8, color=ACCENT)
         else:
             ax.errorbar(
                 i,
                 r,
                 yerr=[[yerr_low[i]], [yerr_high[i]]],
                 fmt="none",
-                ecolor="black",
+                ecolor=INK,
                 capsize=3,
             )
     ax.set_xticks(xs)
@@ -188,7 +190,7 @@ def _plot_success_bars(
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("Success rate (eligible)")
     ax.set_title(title)
-    ax.axhline(0.0, color="#ccc", lw=0.5)
+    ax.axhline(0.0, color=LIGHT_RULE, lw=0.5)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=120)
@@ -202,7 +204,7 @@ def _plot_latency_hist(path: Path, latency_s: list[float], *, title: str) -> Pat
     plt = _require_matplotlib()
     arr = np.asarray(latency_s, dtype=np.float64)
     fig, ax = plt.subplots(figsize=(6, 3))
-    ax.hist(arr * 1000.0, bins=min(40, max(5, len(arr) // 20)), color="#2b6cb0", edgecolor="white")
+    ax.hist(arr * 1000.0, bins=min(40, max(5, len(arr) // 20)), color=INK, edgecolor="white")
     ax.set_xlabel("Inference latency (ms)")
     ax.set_ylabel("Count")
     ax.set_title(title)
@@ -460,7 +462,7 @@ def _render_summary_md(view: dict[str, Any]) -> str:
         if p:
             lines.append(f"- {name}: `{p}`")
         else:
-            lines.append(f"- {name}: missing (not fabricated)")
+            lines.append(f"- {name}: missing")
     if view.get("partial_diagnostics"):
         lines.append("")
         lines.append("## Partial diagnostics (interrupted run)")
@@ -507,7 +509,7 @@ def _html_page(view: dict[str, Any]) -> str:
                 f"<figcaption>{e(name)}</figcaption></figure>"
             )
         else:
-            plot_imgs.append(f"<p><em>{e(name)}: missing (not fabricated)</em></p>")
+            plot_imgs.append(f"<p><em>{e(name)}: missing</em></p>")
 
     links = "".join(
         f'<li><a href="{e(link["name"])}">{e(link["name"])}</a></li>'
@@ -524,14 +526,15 @@ def _html_page(view: dict[str, Any]) -> str:
 <meta charset="utf-8"/>
 <title>Breakpoint report</title>
 <style>
-  body {{ font-family: Georgia, serif; margin: 24px; color: #222; max-width: 960px; }}
+  body {{ font-family: Georgia, serif; margin: 24px; color: {INK}; max-width: 960px; }}
   h1,h2 {{ font-family: Helvetica, Arial, sans-serif; }}
-  .banner {{ background: #f7fafc; border: 1px solid #cbd5e0; padding: 12px; margin-bottom: 16px; }}
+  .banner {{ background: #ffffff; border: 1px solid {LIGHT_RULE}; padding: 12px; margin-bottom: 16px; }}
   table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
-  th, td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; }}
-  th {{ background: #edf2f7; }}
-  .muted {{ color: #555; font-size: 13px; }}
-  @media print {{ body {{ margin: 12px; }} a {{ color: inherit; text-decoration: none; }} }}
+  th, td {{ border: 1px solid {LIGHT_RULE}; padding: 6px 8px; text-align: left; }}
+  th {{ background: #eef0ef; }}
+  .muted {{ color: {LIGHT_MUTED}; font-size: 13px; }}
+  a {{ color: {INK}; text-decoration: underline; }}
+  @media print {{ body {{ margin: 12px; }} a {{ color: inherit; text-decoration: underline; }} }}
 </style>
 </head>
 <body>
@@ -626,7 +629,7 @@ def render_report(run_dir: Path) -> ReportBundle:
         rates = [p.get("success_rate") for p in points]
         lows = [(p.get("wilson_95") or {}).get("low") for p in points]
         highs = [(p.get("wilson_95") or {}).get("high") for p in points]
-        # Do not replace missing rates with 0 — plotting helper marks them.
+        # Missing rates stay missing; the plotting helper marks them.
         try:
             p = _plot_success_bars(
                 plots_dir / "success_by_condition.png",
@@ -689,7 +692,7 @@ def render_report(run_dir: Path) -> ReportBundle:
     root_html.write_text(html_text, encoding="utf-8")
 
     # Copy plot references stay under report/plots; root HTML uses report/plots/ via img src.
-    # Root HTML currently uses plots/ relative — write a root-level html that points to report/plots.
+    # Root HTML currently uses plots/ relative; write a root-level html that points to report/plots.
     root_html.write_text(html_text.replace('src="plots/', 'src="report/plots/'), encoding="utf-8")
 
     index = {

@@ -1,6 +1,6 @@
 # Methodology
 
-This page defines how Breakpoint injects stress, validates the model and turns episodes into numbers. The saved example is described in its [benchmark README](../benchmarks/act-transfer/deployment-stress/README.md). The thresholds below are project conventions. They are not safety criteria.
+This page defines how Breakpoint injects stress, validates the model and turns episodes into numbers. The saved example is described in its [benchmark README](../benchmarks/act-transfer/deployment-stress/README.md). The thresholds below are project conventions, not safety criteria.
 
 ## Control timing
 
@@ -10,16 +10,16 @@ The pinned LeRobot commit (`3c0a209`) runs ALOHA at 50 Hz: one control step is 2
 2. If the action queue is empty, run one inference and queue the chunk.
 3. Pop one action and apply it with `env.step`.
 
-Simulation time advances one control period per step. Host wall time is never part of simulated time. With zero latency, a request and the first use of its chunk happen in the same control step.
+Simulation time advances one control period per step; host wall time is never part of it. With zero latency, a request and the first use of its chunk happen in the same control step.
 
 ### Constant added delay
 
 Delay is injected in simulation time only. For a request at time `t_req` with delay `L`:
 
-- The chunk is computed at once on the host, then becomes available at `t_req + L`. Host compute time is not added to `L`.
-- One inference is in flight at a time. The next request starts when the queue is empty and no request is pending.
+- The chunk is computed at once on the host, then becomes available at `t_req + L` (host compute time is not added to `L`).
+- One inference is in flight at a time; the next request starts when the queue is empty and no request is pending.
 - While a request is in flight, the controller holds the last applied command. Before any chunk exists it holds the reset joint position. ALOHA actions are absolute joint targets, so a zero vector is not a neutral command.
-- At equal timestamps, completion is processed before control application. This makes `L = 0` identical to the no-scheduler baseline.
+- At equal timestamps, completion is processed before control application, so `L = 0` matches the no-scheduler baseline.
 
 The arrival policy is `discard_stale`. Action `i` of a chunk is planned for time `t_req + i * 20 ms`. When the chunk arrives at `t_apply`, actions planned for earlier times are dropped and the first remaining action is applied. If every action is stale, the controller keeps holding and logs an underflow. The policy name is recorded in each run's provenance.
 
@@ -27,13 +27,20 @@ The arrival policy is `discard_stale`. Action `i` of a chunk is planned for time
 
 `scripts/profile_device.py` times only `InferenceSession.run` for batch size 1 on recorded corpus inputs: 50 warm-ups (discarded), then 1000 measured calls, kept in order. The profile records the device label, host and OS, ONNX Runtime provider and threads, model and corpus hashes, timed boundary, summary statistics, the raw sequence and telemetry when the OS exposes it. Output parity on the profiling device must pass first.
 
-Replay uses a recorded profile in place of a constant `L`. The benchmark gives each episode one contiguous window of 32 samples. For episode `i` of `n`, with `N` samples in the profile, the window starts at `floor(i * (N - 32) / (n - 1))`. Order inside the window is preserved, and an episode that needs more samples than its window holds fails. This is neither block resampling nor continuous replay of the whole trace. Window bounds and the consumed indices are saved per episode. The simulation runs on the host while the latency comes from the profile's device.
+Replay uses a recorded profile in place of a constant `L`. The benchmark gives each episode one contiguous window of 32 samples. For episode `i` of `n`, with `N` samples in the profile, the window starts at `floor(i * (N - 32) / (n - 1))`. Order inside the window is preserved, and an episode that needs more samples than its window holds fails. Window bounds and the consumed indices are saved per episode. The simulation runs on the host while the latency comes from the profile's device. This is contiguous window replay of the timed `InferenceSession.run` sequence.
 
-Not latency models: `time.sleep`, adding measured host time on top of `L`, sampling from a fitted distribution, and changing the arrival policy between runs.
+These are not latency models:
+
+- `time.sleep`
+- host-time added to `L`
+- a fitted distribution
+- block resampling
+- continuous whole-trace replay
+- a changed arrival policy
 
 ## Image interventions
 
-Interventions act on the raw rendered pixels (uint8 RGB under `observation["pixels"]`), before preprocessing and normalization. The policy still receives its native tensor shape and camera key order. They are independent of latency and are not a transport simulation.
+Interventions act on the raw rendered pixels (uint8 RGB under `observation["pixels"]`), before preprocessing and normalization. The policy still receives its native tensor shape and camera key order. They are independent of latency and of transport simulation.
 
 | Mode | Behavior |
 | --- | --- |
@@ -56,9 +63,11 @@ The FP32 graph is accepted for profiling and evaluation only through `export_val
 
 A synthetic corpus cannot produce a passed validation. Independent closed-loop trajectories need not match PyTorch step for step. That comparison is a diagnostic.
 
-INT8 is ONNX Runtime static QDQ (`QUInt8` activations, `QInt8` weights, MinMax calibration) on calibration seeds that do not overlap the evaluation seeds. It is validated for identity, finite outputs, shapes and calibration coverage, with its own validation file. Matching FP32 numerically is not required. Task degradation is the measurement. Each variant runs with its own weights, and a failed recipe is recorded, not replaced.
+INT8 is ONNX Runtime static QDQ (`QUInt8` activations, `QInt8` weights, MinMax calibration) on calibration seeds that do not overlap the evaluation seeds. It is validated for identity, finite outputs, shapes and calibration coverage, with its own validation file. Task degradation is the measurement. Each variant runs with its own weights, and a failed recipe is recorded, not replaced.
 
-INT4 is ONNX Runtime MatMulNBits weight-only RTN: 4 bits, block size 128, symmetric, MatMul only. It is added to an existing export with `breakpoint quantize-int4`, so the FP32 graph and its profiles are unchanged. Only weights of constant 2D MatMuls are stored as 4-bit blocks; Conv, Gemm and activation MatMuls stay FP32. Weights are dequantized and computed in float (`accuracy_level=0`). Validation is its own `export_validation_int4.json`: identity, finite outputs, shapes and recorded coverage on the evaluation corpus. FP32 numerical parity is not required. This is not a full-model INT4 result, and there is no INT4 device timing.
+INT4 is ONNX Runtime MatMulNBits weight-only RTN: 4 bits, block size 128, symmetric, MatMul only. It is added to an existing export with `breakpoint quantize-int4`, so the FP32 graph and its profiles are unchanged. Only weights of constant 2D MatMuls are stored as 4-bit blocks; Conv, Gemm and activation MatMuls stay FP32. Weights are dequantized and computed in float (`accuracy_level=0`). Validation is its own `export_validation_int4.json`: identity, finite outputs, shapes and recorded coverage on the evaluation corpus. There is no INT4 device timing.
+
+Neither INT8 nor INT4 is a full-model quantization result, and neither requires FP32 numerical parity.
 
 ## Outcomes and denominators
 
@@ -67,27 +76,27 @@ Success is the environment's own `is_success`. An episode ends as `success`, `te
 - The denominator is the eligible episodes: all outcomes except `runtime_error`.
 - In the benchmark, a condition with a runtime error, a missing or duplicate episode, or a changed seed is incomplete. Its threshold decision is suppressed, and nothing is dropped to improve a rate.
 - A time-limit truncation is a completed non-success.
-- The report shows counts for every condition. It never replaces missing series with zeros or fitted curves.
+- The report shows counts for every condition and does not fill missing series with zeros or fitted curves.
 
 ## Seed pairing
 
-All conditions of a plan use the same environment seeds, so each seed is a pair across conditions. A separate policy RNG seed is recorded per episode, at a documented offset from the environment seed. Condition lists and counts are fixed for a plan. The benchmark uses 30 pairs. `breakpoint plan` defaults to 100 for a full plan and 5 for smoke.
+All conditions of a plan use the same environment seeds, so each seed is a pair across conditions. A separate policy RNG seed is recorded per episode, at a documented offset from the environment seed. Condition lists and counts are fixed for a plan. The benchmark uses 30 pairs; `breakpoint plan` defaults to 100 for a full plan and 5 for smoke.
 
-Export seed pools (calibration `9000` to `9007`, evaluation `2000` to `2007`, diagnosis `2100` and `2101`) do not overlap with benchmark seeds. Confirmation of a candidate boundary needs fresh seeds and a fixed episode count. Keep it separate from the exploratory run, and do not stop early on a favorable result.
+Export seed pools (calibration `9000` to `9007`, evaluation `2000` to `2007`, diagnosis `2100` and `2101`) do not overlap with benchmark seeds. Confirmation of a candidate boundary needs fresh seeds and a fixed episode count, kept separate from the exploratory run, without stopping early on a favorable result.
 
 ## Uncertainty
 
-- Each condition's success rate is shown as successes over eligible episodes with a 95% Wilson interval. The intervals are per condition.
-- The contrast with the baseline is a paired bootstrap of `p_condition - 0.8 * p_baseline` over episode pairs (seed 20261012, 2000 resamples). The interval is descriptive and pointwise. It does not cover the whole sweep at once.
+- Each condition's success rate is shown as successes over eligible episodes with a 95% Wilson interval (per condition).
+- The contrast with the baseline is a paired bootstrap of `p_condition - 0.8 * p_baseline` over episode pairs (seed 20261012, 2000 resamples). The interval is descriptive and pointwise for that contrast, not a simultaneous sweep coverage.
 - Very small samples or degenerate resamples are marked unresolved.
 
 ## Threshold interpretation
 
 A condition is below threshold when `p_c < 0.8 * p_b`, where `p_b` is the baseline rate on the same seeds. A baseline below 50% is too weak: the report shows its counts and intervals and suppresses the threshold decision.
 
-For ordered axes (delay, resolution, JPEG quality), the report lists every tested point and names the first tested point below threshold. It does not interpolate an exact boundary. It flags a later recovery, and says "not reached" if no point falls below. Precision recipes and device profiles are categories. They are compared one by one against the baseline, with no ordering or crossing point.
+For ordered axes (delay, resolution, JPEG quality), the report lists every tested point and names the first tested point below threshold. It flags a later recovery, and says "not reached" if no point falls below; it does not interpolate an exact boundary. Precision recipes and device profiles are categories compared one by one against the baseline, with no ordering or crossing point.
 
-Isolation: constant-delay runs hold precision at FP32 and a native image. Precision runs use zero delay. H.264 runs at FP32, native resolution and 0 ms delay. INT4 runs at a native image and 0 ms delay. Device replay is a separate condition, not a replacement for the delay axis. Effects measured on separate axes are not additive.
+Isolation: constant-delay runs hold precision at FP32 and a native image. Precision runs use zero delay. H.264 runs at FP32, native resolution and 0 ms delay. INT4 runs at a native image and 0 ms delay. Device replay is a separate condition from the delay axis. Effects measured on separate axes are not additive.
 
 ## Experimental, outside the benchmark
 

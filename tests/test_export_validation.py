@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,10 @@ from breakpoint_eval.export_validation import (
     evaluate_independent_trajectory_diagnostic,
     evaluate_numerical_parity,
     find_export_validation_v2,
+    write_int4_validation_from_export,
+    write_int8_validation_from_export,
 )
+from breakpoint_eval.file_digest import sha256_file
 
 RECIPE_ONNX_FP32 = "torch_onnx_export_fp32_opset17"
 
@@ -383,3 +387,148 @@ def test_int8_sidecar_unchanged_by_int4_helpers() -> None:
     assert result["variant_label"] == "int8"
     assert "vs_pytorch_fp32" not in result["numeric_errors"]
     assert result["fp32_validation_sidecar_authorizes_int8"] is False
+
+
+def _write_quant_fixture_export(tmp_path: Path) -> Path:
+    """Minimal export dir with FP32/INT8/INT4 variants for sidecar write tests."""
+    export_dir = tmp_path / "export"
+    export_dir.mkdir()
+    fp32_path = export_dir / "act_chunk_fp32.onnx"
+    int8_path = export_dir / "act_chunk_int8.onnx"
+    int4_path = export_dir / "act_chunk_int4_matmul_nbits.onnx"
+    fp32_path.write_bytes(b"fp32-bytes")
+    int8_path.write_bytes(b"int8-bytes")
+    int4_path.write_bytes(b"int4-bytes")
+    fp32_sha = sha256_file(fp32_path)
+    int8_sha = sha256_file(int8_path)
+    int4_sha = sha256_file(int4_path)
+    parity = {
+        "passed": True,
+        "shapes_ok": True,
+        "finite_ok": True,
+        "max_abs_error": 0.01,
+        "mean_abs_error": 0.001,
+        "action_unit_mean_abs_error": 0.002,
+    }
+    manifest = {
+        "candidate": "act_aloha_transfer",
+        "hub_revision": "rev",
+        "corpus": {
+            "evaluation": {"sha256": "evalhash"},
+            "calibration": {"sha256": "calibhash"},
+        },
+        "comparisons": {
+            "int8_vs_onnx_fp32": parity,
+            "int4_weight_only_vs_onnx_fp32": parity,
+            "int4_weight_only_vs_pytorch_fp32": {**parity, "max_abs_error": 0.02},
+        },
+        "variants": [
+            {
+                "label": "onnx_fp32",
+                "recipe_id": RECIPE_ONNX_FP32,
+                "path": str(fp32_path),
+                "status": "ok",
+                "graph": {"sha256": fp32_sha},
+            },
+            {
+                "label": "int8",
+                "recipe_id": RECIPE_ORT_INT8_STATIC_QDQ,
+                "path": str(int8_path),
+                "status": "ok",
+                "graph": {"sha256": int8_sha},
+                "quantization_coverage": {"has_qdq": True, "calibration_sha256": "calibhash"},
+            },
+            {
+                "label": "int4_weight_only",
+                "recipe_id": RECIPE_ORT_INT4_MATMUL_NBITS,
+                "path": str(int4_path),
+                "status": "ok",
+                "graph": {"sha256": int4_sha},
+                "quantization_coverage": {
+                    "matmul_nbits_nodes": 3,
+                    "has_matmul_nbits": True,
+                    "full_model_int4_claim": False,
+                },
+            },
+        ],
+    }
+    (export_dir / "export_manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    return export_dir
+
+
+def test_write_int8_and_int4_sidecars_stable_from_fixture(tmp_path: Path) -> None:
+    """Sidecar JSON from a fixture manifest must match key-for-key across refactors."""
+    export_dir = _write_quant_fixture_export(tmp_path)
+    first_int8 = json.loads(
+        write_int8_validation_from_export(export_dir).read_text(encoding="utf-8")
+    )
+    first_int4 = json.loads(
+        write_int4_validation_from_export(export_dir).read_text(encoding="utf-8")
+    )
+    second_int8 = json.loads(
+        write_int8_validation_from_export(export_dir).read_text(encoding="utf-8")
+    )
+    second_int4 = json.loads(
+        write_int4_validation_from_export(export_dir).read_text(encoding="utf-8")
+    )
+    assert second_int8 == first_int8
+    assert second_int4 == first_int4
+    assert set(first_int8) == set(second_int8)
+    assert set(first_int4) == set(second_int4)
+
+    fp32_sha = sha256_file(export_dir / "act_chunk_fp32.onnx")
+    int8_sha = sha256_file(export_dir / "act_chunk_int8.onnx")
+    int4_sha = sha256_file(export_dir / "act_chunk_int4_matmul_nbits.onnx")
+    parity = {
+        "passed": True,
+        "shapes_ok": True,
+        "finite_ok": True,
+        "max_abs_error": 0.01,
+        "mean_abs_error": 0.001,
+        "action_unit_mean_abs_error": 0.002,
+    }
+    expected_int8 = build_int8_validation_v2(
+        binding={
+            "model_sha256": int8_sha,
+            "corpus_eval_sha256": "evalhash",
+            "hub_revision": "rev",
+            "candidate": "act_aloha_transfer",
+            "recipe_id": RECIPE_ORT_INT8_STATIC_QDQ,
+            "variant_label": "int8",
+            "parent_fp32_sha256": fp32_sha,
+            "calibration_sha256": "calibhash",
+        },
+        parity_vs_fp32=parity,
+        quantization_coverage={"has_qdq": True, "calibration_sha256": "calibhash"},
+        parent_fp32_sha256=fp32_sha,
+        calibration_sha256="calibhash",
+        variant_status="ok",
+        source_export_manifest_path=str(export_dir / "export_manifest.json"),
+    )
+    expected_int4 = build_int4_validation_v2(
+        binding={
+            "model_sha256": int4_sha,
+            "corpus_eval_sha256": "evalhash",
+            "hub_revision": "rev",
+            "candidate": "act_aloha_transfer",
+            "recipe_id": RECIPE_ORT_INT4_MATMUL_NBITS,
+            "variant_label": "int4_weight_only",
+            "parent_fp32_sha256": fp32_sha,
+        },
+        parity_vs_onnx_fp32=parity,
+        parity_vs_pytorch_fp32={**parity, "max_abs_error": 0.02},
+        quantization_coverage={
+            "matmul_nbits_nodes": 3,
+            "has_matmul_nbits": True,
+            "full_model_int4_claim": False,
+        },
+        parent_fp32_sha256=fp32_sha,
+        variant_status="ok",
+        source_export_manifest_path=str(export_dir / "export_manifest.json"),
+    )
+    assert set(first_int8) == set(expected_int8)
+    assert set(first_int4) == set(expected_int4)
+    assert first_int8 == expected_int8
+    assert first_int4 == expected_int4

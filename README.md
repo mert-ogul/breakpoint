@@ -5,11 +5,11 @@
   </picture>
 </h1>
 
-Breakpoint measures how inference delay, camera quality, and quantization affect a robot policy's success in simulation. It runs a pretrained ACT policy on the ALOHA TransferCube task with paired seeds and reports uncertainty for each condition.
+Breakpoint measures how inference delay, camera resolution, JPEG and H.264 compression, numeric precision, and device latency replay affect a robot policy's success in simulation. It runs a pretrained ACT policy on the ALOHA TransferCube task with paired seeds and reports uncertainty for each condition.
 
 ![Baseline and +640 ms delay, same seed, side by side](benchmarks/act-transfer/deployment-stress/media/comparison.gif)
 
-*Selected example (env seed 5000), not a typical episode. The same ACT policy and seed with no added delay (left, success at 5.68 s) and with +640 ms inference delay (right, timeout at 8.00 s). Across all 30 seeds the baseline succeeded 25 times and the +640 ms condition 14 times. Simulation footage, no physical robot. [MP4](benchmarks/act-transfer/deployment-stress/media/comparison.mp4) (0.4 MB, an alternative to this 3.3 MB GIF) · [selection and frame details](benchmarks/act-transfer/deployment-stress/README.md#comparison-media)*
+*Selected example (env seed 5000), not a typical episode: same ACT policy with 0 ms delay (left, success at 5.68 s) and +640 ms (right, timeout at 8.00 s). Across 30 seeds: 25/30 baseline, 14/30 at +640 ms. Simulation only. [MP4](benchmarks/act-transfer/deployment-stress/media/comparison.mp4) (0.4 MB; GIF is 3.3 MB) · [selection details](benchmarks/act-transfer/deployment-stress/README.md#comparison-media)*
 
 ## Render the saved report
 
@@ -41,10 +41,10 @@ Pretrained policy `lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on C
 | Device latency replay | laptop-m3 replay: 24, rpi5 replay: 9 |
 
 - Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
-- Constant added delay: first grid point below 0.8 x baseline is 320 ms at 18/30 (interval includes threshold).
-- Camera resolution: first grid point below 0.8 x baseline is 60x80 at 10/30.
-- JPEG quality: no condition fell below 0.8 x baseline.
-- H.264 bitrate: first grid point below 0.8 x baseline is 250 kbps at 19/30 (interval includes threshold).
+- Constant added delay: first tested point below threshold is 320 ms at 18/30 (interval includes threshold).
+- Camera resolution: first tested point below threshold is 60x80 at 10/30.
+- JPEG quality: no tested point is below the threshold.
+- H.264 bitrate: first tested point below threshold is 250 kbps at 19/30 (interval includes threshold).
 - Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below; INT4 weight-only 23/30 not below.
 - Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
 <!-- results:end -->
@@ -53,21 +53,20 @@ These are observed grid points, not exact boundaries. The [full report](benchmar
 
 ## Supported scope
 
-- One task and policy, a validated ONNX FP32 export, one static QDQ INT8 comparison, and INT4 weight-only.
-- Constant added delay, camera resolution and JPEG quality. Latency replay uses recorded FP32 CPU profiles from a laptop (Apple M3) and a Raspberry Pi 5.
-- H.264 quality-only bitrate axis (encode and decode in the same control step; no codec or transport delay).
-- Evidence comes from macOS 14.6 arm64 with Python 3.11 on CPU. The Pi profile was recorded on Linux aarch64. Other platforms are untested ([compatibility](docs/compatibility.md)).
-- Experimental code for FP16, H.264 deployment mode and Diffusion PushT remains in the package. It is not part of the validated scope.
+- One task and policy (`lerobot/act_aloha_sim_transfer_cube_human`), ONNX FP32 with static QDQ INT8 and INT4 weight-only.
+- Isolated axes: constant delay, resolution, JPEG, H.264 bitrate, precision, and laptop-m3 / rpi5 latency replay. H.264 encode and decode happen in the same control step, with no codec or transport delay.
+- Evidence from macOS 14.6 arm64 (Python 3.11, CPU) and a Linux aarch64 Pi profile; other platforms are untested ([compatibility](docs/compatibility.md)).
+- FP16, H.264 deployment mode and Diffusion PushT remain in the package outside the validated scope.
 
 ## Limitations
 
 - Simulation only. The results say nothing about a physical robot.
 - Thirty episodes per condition give wide intervals. The run is exploratory and has not been confirmed with fresh seeds.
-- The rpi5 replay describes one throttled Pi state. The firmware reported throttling or a temperature limit in almost every telemetry sample.
-- INT8 is a static QDQ graph. It is not a full-model INT8 result and was not required to match FP32 numerically.
-- INT4 stores 29 of 41 MatMul nodes as 4-bit blocks (61.6% of weight parameters); Conv, Gemm and activation-by-activation MatMul stay FP32, and weights are dequantized and computed in float. This is not a full-model INT4 result.
-- H.264 is quality only: no codec, transport or jitter-buffer delay is simulated, and the ABR stream can overshoot the request (largest overshoot in these rows: +118.2 kbps).
-- About 829 MB of raw run logs, ONNX graphs and corpora are not in the repository. Sizes and hashes are in [`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json).
+- The rpi5 replay is one throttled Pi state. The firmware reported throttling or a temperature limit in almost every telemetry sample.
+- INT8 is a static QDQ graph. It is not a full-model INT8 result and was not required to match FP32 numerically ([methodology](docs/methodology.md#export-and-validation)).
+- INT4 stores 29 of 41 MatMul nodes as 4-bit blocks (61.6% of weight parameters); Conv, Gemm and activation MatMuls stay FP32, and weights are dequantized and computed in float. This is not a full-model INT4 result.
+- H.264 is encoded and decoded in the same control step with no codec or transport delay, and the stream overshot the requested bitrate by up to 118.2 kbps.
+- About 829 MB of raw evidence is not in the repository ([`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json)).
 
 ## Documentation
 

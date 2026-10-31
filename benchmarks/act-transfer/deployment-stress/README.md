@@ -1,4 +1,4 @@
-# ACT deployment stress benchmark: saved results
+# Saved results of the ACT deployment stress benchmark
 
 Saved results of the exploratory run: ACT on ALOHA TransferCube, simulation only. The report is at [`report/report.md`](report/report.md). `report/index.html` is the interactive version; open it from a local copy. To rebuild it from this data, follow the [README quickstart](../../../README.md#render-the-saved-report). To repeat the run, see [docs/reproduce.md](../../../docs/reproduce.md). The rules behind the numbers are in [docs/methodology.md](../../../docs/methodology.md).
 
@@ -21,38 +21,38 @@ Episode records keep outcome, seeds, step and inference counts, reward sums, the
 
 ## Design of this run
 
-- **Task and policy:** `AlohaTransferCube-v0` (gym-aloha 0.1.1, MuJoCo 2.3.7). Hub `lerobot/act_aloha_sim_transfer_cube_human` at `9e93545744656e57d20f8b2d631d5d72544002ce`, LeRobot `3c0a209f9fac4d2a57617e686a7f2a2309144ba2`.
-- **Runtime:** ONNX Runtime on CPU (`CPUExecutionProvider`, 4 intra-op and 1 inter-op threads) for every condition. The FP32 graph sha256 starts `27bf9278030e`, the static QDQ INT8 graph starts `792e9adc992405`, and the INT4 weight-only graph starts `c0cee50e137d` (`data/identities/identities.json`).
-- **H.264 encoder:** PyAV 18.1.0, libavcodec [62, 28, 102], preset=veryfast, gop=30, tune=zerolatency (from `data/protocol/protocol_lock.json`).
-- **Seeds:** 30 paired episodes per condition: env seeds 5000 to 5029 and policy RNG seeds 15000 to 15029.
-- **Axes:** constant added delay (0, 40, 80, 160, 320, 640 ms), resolution (480x640 native, 240x320, 120x160, 60x80), JPEG quality (bypass, 95, 75, 50, 25, 10), H.264 bitrate (bypass, 2000, 1000, 500, 250, 100 kbps), precision (FP32, INT8 QDQ, INT4 weight-only), and device latency replay (laptop M3, Raspberry Pi 5).
-- **Baseline:** ONNX FP32, native image, 0 ms. It ran once in the delay plan and the resolution, JPEG, H.264 and precision plans reuse it by explicit reference. The device replay axis has no baseline of its own and is compared with the same 0 ms condition. The report checks that the shared baseline and the delay plan's 0 ms condition agree seed by seed.
-- **Replay windows:** each episode replays one contiguous 32-sample window of its device profile ([methodology](../../../docs/methodology.md#device-latency-replay)). The report shows full-profile, window and consumed statistics separately.
+| Item | Value |
+| --- | --- |
+| Task and policy | `AlohaTransferCube-v0` (gym-aloha 0.1.1, MuJoCo 2.3.7). Hub `lerobot/act_aloha_sim_transfer_cube_human` at `9e93545744656e57d20f8b2d631d5d72544002ce`, LeRobot `3c0a209f9fac4d2a57617e686a7f2a2309144ba2` |
+| Runtime | ONNX Runtime on CPU (`CPUExecutionProvider`, 4 intra-op and 1 inter-op threads). FP32 sha256 starts `27bf9278030e`, INT8 `792e9adc992405`, INT4 `c0cee50e137d` (`data/identities/identities.json`) |
+| H.264 encoder | PyAV 18.1.0, libavcodec 62.28.102, preset=veryfast, gop=30, tune=zerolatency (`data/protocol/protocol_lock.json`) |
+| Seeds | 30 paired episodes per condition: env seeds 5000 to 5029, policy RNG seeds 15000 to 15029 |
+| Axes | Constant delay (0, 40, 80, 160, 320, 640 ms); resolution (480x640 native, 240x320, 120x160, 60x80); JPEG (bypass, 95, 75, 50, 25, 10); H.264 bitrate (bypass, 2000, 1000, 500, 250, 100 kbps); precision (FP32, INT8 QDQ, INT4 weight-only); device latency replay (laptop M3, Raspberry Pi 5) |
+| Baseline | ONNX FP32, native image, 0 ms. Ran once in the delay plan; resolution, JPEG, H.264 and precision reuse it by reference. Device replay has no baseline of its own and is compared with the same 0 ms condition. The report checks seed-by-seed agreement with the delay plan's 0 ms condition |
+| Replay windows | Each episode replays one contiguous 32-sample window of its device profile ([methodology](../../../docs/methodology.md#device-latency-replay)). The report shows full-profile, window and consumed statistics separately |
 
 ## Comparison media
 
-`media/comparison.gif` (3.3 MB) and `media/comparison.mp4` (0.4 MB, H.264) show the same 9.28 s, 1280x640 comparison. The left panel is the 0 ms baseline and the right panel is the +640 ms condition, with the same env seed 5000 and policy RNG seed 15000.
+`media/comparison.gif` (3.3 MB) and `media/comparison.mp4` (0.4 MB, H.264) show the same 9.28 s, 1280x640 comparison: 0 ms baseline on the left and +640 ms on the right, both with env seed 5000 and policy RNG seed 15000. Selection took the most severe tested delay against the same-plan baseline, then the lowest env seed among the 13 where the baseline succeeded and the stress episode did not. Aggregate counts are 25/30 at baseline and 14/30 at 640 ms. No other seeds were run or compared.
 
-- **Selection:** the most severe tested delay (640 ms) against the 0 ms baseline of the same delay plan. Among the 13 seeds where the baseline succeeded and the stress episode did not, the lowest env seed was used. No other seeds were run or compared. The aggregate counts are 25 of 30 successes at baseline and 14 of 30 at 640 ms.
-- **Frames:** every fourth 20 ms control step, so frames are 80 ms of simulation time apart. The panels are aligned by simulation time. A panel holds its final frame after its episode ends (the baseline from its success until the 640 ms episode ends), and 15 more frames repeat the end. The output runs at 12.5 frames per second.
-- **Verification:** both episodes were re-recorded with the saved settings, and the outcome, step count, inference count, rewards and per-step timeline matched the saved result. `media/verification.json` holds the comparison, and `media/selection.json` holds the selection record.
+Frames are every fourth 20 ms control step (80 ms of simulation time), aligned by simulation time. A panel holds its final frame after its episode ends (the baseline from success until the 640 ms episode ends), then 15 more frames repeat the end, at 12.5 frames per second. Both episodes were re-recorded with the saved settings; outcome, step count, inference count, rewards and per-step timeline matched. See `media/verification.json` and `media/selection.json`.
 
 ## Result-specific limitations
 
-- The run is exploratory and was not confirmed with fresh seeds. Thirty episodes cannot locate an exact boundary, and an interval that spans the threshold is unresolved.
-- No runtime errors or policy failures occurred. Every non-success is a 400-step timeout.
-- The INT8 graph ran in every episode. Its validation does not require FP32 parity. Its same-input chunk error is in `data/validation/export_validation_v2_int8.json`. It is a static QDQ model, not a full-model INT8 result.
-- INT4 weight-only stores 29 of 41 MatMul nodes as 4-bit blocks (61.6% of weight parameters); Conv, Gemm and activation-by-activation MatMul stay FP32. Weights are dequantized and computed in float (`accuracy_level=0`). Recorded chunk error versus ONNX FP32: max abs 0.1459382176399231, mean abs 0.006009796475399936. This is not a full-model INT4 result and no INT4 device timing exists.
-- H.264 bitrate axis: frames are encoded and decoded inside the same control step; no codec, transport or jitter-buffer delay is simulated. The delay axis measures latency separately and the effects are not additive. The stream is ABR, so measured kbps can differ from the request (largest overshoot in these rows: +118.2 kbps).
-- The device replay axis has no saved experiment summary. `scripts/render_benchmark.py` derives its counts, intervals and paired tables from the episode records and labels them as derived.
-- The saved resolution summary stored the same `ordered_value` (1.0) for every resolution. The report orders them by plan order (native, 240x320, 120x160, 60x80), which runs from mild to severe. The saved file is unchanged.
-- The `rpi5` profile was recorded on Linux aarch64 (kernel `6.18.50+rpt-rpi-2712`). The firmware reported throttling in 304 of 393 telemetry samples and a soft temperature limit in 87 more (up to 88.9 °C). Cooling and power were not recorded and the board model string was not saved. The replay describes that throttled state, not Pi 5 performance in general. The `laptop-m3` profile has no throttling telemetry (macOS). `requirements-pi-profile.txt` was checked on macOS arm64 only. The package list of the Pi run is in `data/profiles/rpi5/profile_run_meta.json`.
-- The run started from code revision `f6bb61a` with a dirty working tree (` M src/breakpoint_eval/experiment_plan.py`). The Pi profile ran from a source archive (revision `badf894`, no git).
-- Not covered: other tasks or policies, physical hardware, and any transfer of these thresholds to another setup.
+- Exploratory run, 30 episodes per condition; not confirmed with fresh seeds. An interval that spans the threshold is unresolved.
+- No runtime errors or policy failures; every non-success is a 400-step timeout.
+- INT8 QDQ ran in every episode; validation does not require FP32 parity (chunk error in `data/validation/export_validation_v2_int8.json`).
+- INT4 weight-only: 29 of 41 MatMul nodes as 4-bit (61.6% of weights, accuracy_level=0); max abs error 0.146, mean abs 0.00601. No INT4 device timing.
+- H.264 is same-step encode/decode, quality only; ABR largest overshoot +118.2 kbps. Delay is measured on a separate axis.
+- The device replay axis has no saved experiment summary; the report derives its tables from episode records.
+- The saved resolution summary used the same `ordered_value` (1.0) for every point; the report orders by plan (native, 240x320, 120x160, 60x80).
+- The `rpi5` profile (Linux aarch64, kernel `6.18.50+rpt-rpi-2712`) reported throttling in 304 of 393 samples and a soft temperature limit in 87 more (up to 88.9 °C). Cooling, power and board model were not recorded. The `laptop-m3` profile has no throttling telemetry. `requirements-pi-profile.txt` was checked on macOS arm64 only; the Pi package list is in `data/profiles/rpi5/profile_run_meta.json`.
+- Code revision `f6bb61a` with a dirty tree (` M src/breakpoint_eval/experiment_plan.py`); that uncommitted H.264 default list was later committed in `a2c800d` and did not affect the run (bitrates come from `benchmark_config.json`). The Pi profile ran from a source archive (revision `badf894`, no git).
+- Other tasks, policies, physical hardware, and transfer of these thresholds to another setup are not covered.
 
 ## Evidence that is not in the repository
 
-The control-step logs are in the original run directory, which git ignores: `outputs/act-transfer/full-v2/axes/*/conditions/*/run_report.json` and `outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json` (about 364 MB). The `episodes.jsonl` files beside them duplicate the same episodes and add 217 MB. The exported graphs and corpora are in `artifacts/export/act-v1`. Sizes and hashes are in `data/large_evidence.json`.
+The control-step logs are in the original run directory, which git ignores: `outputs/act-transfer/full-v2/axes/*/conditions/*/run_report.json` and `outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json` (about 364 MB). The `episodes.jsonl` files beside them duplicate the same episodes and add 217 MB. The exported graphs and corpora are in `artifacts/export/act-v1`. Sizes and hashes are in `data/large_evidence.json`. The verbatim protocol, summary and provenance files keep absolute paths from the machine that produced them; they identify the source and are not links. Every link in the report and in this directory is relative.
 
 To package these logs again, pass the locations explicitly. The package is written outside the repository evidence:
 
@@ -62,7 +62,3 @@ To package these logs again, pass the locations explicitly. The package is writt
 ```
 
 Re-recording the media from this data needs `--export-dir artifacts/export/act-v1` on `scripts/render_benchmark_media.py`.
-
-## Historical paths
-
-The verbatim protocol, summary and provenance files contain absolute paths from the machine that produced them. They identify where the evidence came from. They are not links. Every link in the report and in this directory is relative.
