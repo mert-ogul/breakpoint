@@ -6,7 +6,7 @@ This page lists the versions and platforms the benchmark was run on, the install
 
 | Role | Platform | Evidence |
 | --- | --- | --- |
-| Simulation, export, evaluation, laptop profile | macOS 14.6 arm64 (Apple M3), Python 3.11.17, CPU | The saved benchmark: 600 episode records, no runtime errors |
+| Simulation, export, evaluation, laptop profile | macOS 14.6 arm64 (Apple M3), Python 3.11.17, CPU | The saved benchmark: 810 episode records, no runtime errors |
 | Pi profile | Raspberry Pi on Linux aarch64 (kernel `6.18.50+rpt-rpi-2712`) | One saved profile, recorded while the firmware reported throttling. The board model string was not saved |
 | Offline tests | Ubuntu with Python 3.11 | CI ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 
@@ -23,7 +23,9 @@ Other platforms, Python 3.12 and GPU hosts are untested. `requires-python` allow
 | mujoco / dm-control | 2.3.7 / 1.0.14 | |
 | onnx / onnxruntime | 1.18.0 / 1.22.1 | |
 | numpy / opencv-python | 2.4.6 / 5.0.0.93 | |
-| FFmpeg with libx264 | host binary on `PATH` | Only for H.264 tests and the comparison media |
+| PyAV | 18.1.0 | From `av.__version__` on the tested host; installed with `.[h264]` |
+| libavcodec | 62.28.102 | From `av.library_versions` on the tested host; encoding uses the libraries PyAV loads |
+| FFmpeg with libx264 | host binary on `PATH` | Probed for H.264 support and used for comparison media |
 
 The simulator pins are in [`requirements-simulation.txt`](../requirements-simulation.txt). [`constraints-macos-arm64.txt`](../constraints-macos-arm64.txt) is the full freeze of the macOS environment that passed `pip check`. Neither file is a lockfile for other platforms.
 
@@ -36,7 +38,7 @@ Use a Python 3.11 virtual environment (`python3.11 -m venv .venv`). Installation
 | Goal | Command |
 | --- | --- |
 | Render a saved report | `.venv/bin/python -m pip install -e '.[report]'` |
-| Simulation, export, evaluation (macOS) | `.venv/bin/python -m pip install -r requirements-simulation.txt -r requirements-onnx.txt -e '.[dev,report]'` then `.venv/bin/python -m pip check` |
+| Simulation, export, evaluation (macOS) | `.venv/bin/python -m pip install -r requirements-simulation.txt -r requirements-onnx.txt -e '.[dev,report,h264]'` then `.venv/bin/python -m pip check` |
 | Profile an exported graph on a Pi | `.venv/bin/python -m pip install -r requirements-pi-profile.txt -e '.[onnx]'` then `.venv/bin/python -m pip check` |
 | Development and offline tests | See [CONTRIBUTING.md](../CONTRIBUTING.md) |
 
@@ -54,6 +56,6 @@ An editable install writes `outputs/`, `artifacts/`, `vendor/` and `.cache/` ins
 
 **Linux: the dev install pulls CUDA wheels.** Install the CPU wheels first: see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**H.264 tests skip or fail.** They need FFmpeg with libx264 on `PATH` and the `h264` extra. Install them with `brew install ffmpeg` or `sudo apt-get install -y ffmpeg`.
+**H.264 tests skip or fail.** They need FFmpeg with libx264 on `PATH` and the `h264` extra. Install them with `brew install ffmpeg` or `sudo apt-get install -y ffmpeg`. Encoding uses the libraries PyAV loads; the `ffmpeg` CLI is only probed for availability and flag support.
 
-**`profile_device.py` refuses the export.** It needs `export_manifest.json`, `export_validation.json` with `passed: true` for the FP32 graph, `corpus_eval.npz`, `eval_chunks_onnx_fp32.npz` and the graph in one directory. Hashes must match. See [reproduce.md](reproduce.md#3-profile-the-fp32-graph-on-each-device).
+**`profile_device.py` refuses the export.** It needs `export_manifest.json`, `export_validation.json` with `passed: true` for the FP32 graph, `corpus_eval.npz`, `eval_chunks_onnx_fp32.npz` and the graph in one directory. Hashes must match. See [reproduce.md](reproduce.md#4-profile-the-fp32-graph-on-each-device).

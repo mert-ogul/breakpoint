@@ -53,6 +53,29 @@
           "successes": 24,
           "unresolved": false
         }
+      },
+      {
+        "below_threshold": false,
+        "categorical": true,
+        "condition_id": "precision_int4_weight_only",
+        "eligible": 30,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "precision recipe int4_weight_only (timing fixed: constant_latency_ms_0)",
+        "planned": 30,
+        "success_rate": 0.7666666666666667,
+        "successes": 23,
+        "variant_label": "int4_weight_only",
+        "wilson_95": {
+          "high": 0.8820761185551049,
+          "level": 0.95,
+          "low": 0.5907167384187784,
+          "method": "wilson",
+          "n": 30,
+          "point": 0.7666666666666667,
+          "successes": 23,
+          "unresolved": false
+        }
       }
     ]
   },
@@ -74,7 +97,7 @@
         "variant_label": "onnx_fp32"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_precision/conditions/precision_onnx_fp32/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_onnx_fp32/run_report.json",
       "success_rate": 0.8333333333333334,
       "successes": 25,
       "wilson_95": {
@@ -102,7 +125,7 @@
         "variant_label": "int8"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_precision/conditions/precision_int8/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int8/run_report.json",
       "success_rate": 0.8,
       "successes": 24,
       "wilson_95": {
@@ -113,6 +136,34 @@
         "n": 30,
         "point": 0.8,
         "successes": 24,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "precision_int4_weight_only",
+      "eligible": 30,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "precision recipe int4_weight_only (timing fixed: constant_latency_ms_0)",
+      "n_runtime_error": 0,
+      "params": {
+        "categorical": true,
+        "not_continuous_bit_depth": true,
+        "timing_schedule": "constant_latency_ms_0",
+        "variant_label": "int4_weight_only"
+      },
+      "planned": 30,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int4_weight_only/run_report.json",
+      "success_rate": 0.7666666666666667,
+      "successes": 23,
+      "wilson_95": {
+        "high": 0.8820761185551049,
+        "level": 0.95,
+        "low": 0.5907167384187784,
+        "method": "wilson",
+        "n": 30,
+        "point": 0.7666666666666667,
+        "successes": 23,
         "unresolved": false
       }
     }
@@ -174,6 +225,22 @@
       "n_bootstrap": 2000,
       "n_pairs": 30,
       "point": 0.1333333333333333,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "precision_int4_weight_only",
+      "coverage": "pointwise",
+      "high": 0.21999999999999997,
+      "level": 0.95,
+      "low": -0.03333333333333344,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 30,
+      "point": 0.09999999999999998,
       "ratio": 0.8,
       "simultaneous_across_sweep": false,
       "statistic": "p_condition - ratio * p_baseline",

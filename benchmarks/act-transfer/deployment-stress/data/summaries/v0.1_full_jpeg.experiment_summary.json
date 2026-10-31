@@ -174,7 +174,7 @@
         "mode": "native"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_bypass/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_bypass/run_report.json",
       "success_rate": 0.8333333333333334,
       "successes": 25,
       "wilson_95": {
@@ -201,7 +201,7 @@
         "mode": "jpeg"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json",
       "success_rate": 0.8333333333333334,
       "successes": 25,
       "wilson_95": {
@@ -228,7 +228,7 @@
         "mode": "jpeg"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json",
       "success_rate": 0.8666666666666667,
       "successes": 26,
       "wilson_95": {
@@ -255,7 +255,7 @@
         "mode": "jpeg"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json",
       "success_rate": 0.8666666666666667,
       "successes": 26,
       "wilson_95": {
@@ -282,7 +282,7 @@
         "mode": "jpeg"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json",
       "success_rate": 0.8333333333333334,
       "successes": 25,
       "wilson_95": {
@@ -309,7 +309,7 @@
         "mode": "jpeg"
       },
       "planned": 30,
-      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json",
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json",
       "success_rate": 0.7666666666666667,
       "successes": 23,
       "wilson_95": {

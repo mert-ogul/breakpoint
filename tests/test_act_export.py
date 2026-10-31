@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -13,10 +14,12 @@ from breakpoint_eval.act_export import (
     INPUT_IMAGES,
     INPUT_STATE,
     OUTPUT_CHUNK,
+    RECIPE_ONNX_FP32,
     RECIPE_ORT_INT4_MATMUL_NBITS,
     RECIPE_ORT_INT8_STATIC_QDQ,
     OrtActChunkSession,
     VariantArtifact,
+    create_ort_session,
     inspect_onnx_graph,
     sha256_file,
 )
@@ -35,6 +38,7 @@ from breakpoint_eval.export_parity import (
     evaluate_corpus_parity,
 )
 from breakpoint_eval.export_quantize import (
+    add_int4_variant,
     quantize_int4_weight_only,
     quantize_int8_static_qdq,
     try_fp16_convert,
@@ -270,6 +274,84 @@ def test_int8_recipe_pinned_and_runs(tmp_path: Path) -> None:
     assert np.isfinite(y).all()
 
 
+def _write_int4_coverage_graph(path: Path) -> tuple[int, int]:
+    """FP32 graph: const MatMul (K>=128), activation MatMul, and Gemm."""
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    k, n = 128, 8
+    weight = np.random.default_rng(0).standard_normal((k, n), dtype=np.float32)
+    gemm_w = np.random.default_rng(1).standard_normal((n, n), dtype=np.float32)
+    gemm_b = np.zeros(n, dtype=np.float32)
+    graph = helper.make_graph(
+        [
+            helper.make_node("MatMul", ["X", "W"], ["Y1"], name="mm_const"),
+            helper.make_node("MatMul", ["Y1", "Act"], ["Y2"], name="mm_act"),
+            helper.make_node("Gemm", ["Y2", "Wg", "Bg"], ["Y"], name="gemm1"),
+        ],
+        "int4_coverage",
+        [
+            helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, k]),
+            helper.make_tensor_value_info("Act", TensorProto.FLOAT, [n, n]),
+        ],
+        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, n])],
+        [
+            numpy_helper.from_array(weight, "W"),
+            numpy_helper.from_array(gemm_w, "Wg"),
+            numpy_helper.from_array(gemm_b, "Bg"),
+        ],
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=10)
+    onnx.checker.check_model(model)
+    onnx.save(model, str(path))
+    return k, n
+
+
+def _write_act_matmul_export(tmp_path: Path) -> tuple[Path, list, list]:
+    """ACT-shaped FP32 export with a const MatMul (K>=128) for add_int4_variant."""
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    k, hidden, out_dim = 192, 128, 8
+    w1 = np.random.default_rng(2).standard_normal((k, hidden), dtype=np.float32)
+    w2 = np.random.default_rng(3).standard_normal((hidden, out_dim), dtype=np.float32)
+    b2 = np.zeros(out_dim, dtype=np.float32)
+    graph = helper.make_graph(
+        [
+            helper.make_node("Flatten", [INPUT_IMAGES], ["flat"], name="flatten", axis=1),
+            helper.make_node("MatMul", ["flat", "W1"], ["h"], name="mm_const"),
+            helper.make_node("Gemm", ["h", "W2", "B2"], ["flat_out"], name="gemm_out"),
+            helper.make_node(
+                "Reshape",
+                ["flat_out", "shape"],
+                [OUTPUT_CHUNK],
+                name="reshape_out",
+            ),
+        ],
+        "act_int4",
+        [
+            helper.make_tensor_value_info(INPUT_IMAGES, TensorProto.FLOAT, [1, 3, 8, 8]),
+            helper.make_tensor_value_info(INPUT_STATE, TensorProto.FLOAT, [1, 2]),
+        ],
+        [helper.make_tensor_value_info(OUTPUT_CHUNK, TensorProto.FLOAT, [1, 4, 2])],
+        [
+            numpy_helper.from_array(w1, "W1"),
+            numpy_helper.from_array(w2, "W2"),
+            numpy_helper.from_array(b2, "B2"),
+            numpy_helper.from_array(np.asarray([1, 4, 2], dtype=np.int64), "shape"),
+        ],
+    )
+    # Keep state as a graph input even if unused so OrtActChunkSession binds both feeds.
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=10)
+    onnx.checker.check_model(model)
+    model_path = tmp_path / "act_chunk_fp32.onnx"
+    onnx.save(model, str(model_path))
+    samples = build_synthetic_corpus([2000, 2001], image_shape=(1, 3, 8, 8), state_dim=2)
+    sess = OrtActChunkSession(model_path, providers=["CPUExecutionProvider"])
+    chunks = [sess.run(s.images_top, s.state).action_chunk for s in samples]
+    return model_path, samples, chunks
+
+
 @pytest.mark.requires_onnx
 def test_int4_capability_explicit(tmp_path: Path) -> None:
     path, _mod = _export_tiny(tmp_path)
@@ -288,6 +370,134 @@ def test_int4_capability_explicit(tmp_path: Path) -> None:
     if out.status == "ok":
         assert out.runtime.get("native_int4_execution_claim") is False
         assert out.effective_activation_precision == "float32"
+
+
+@pytest.mark.requires_onnx
+def test_int4_weight_only_quantizes_const_matmul_only(tmp_path: Path) -> None:
+    fp32 = tmp_path / "coverage_fp32.onnx"
+    k, n = _write_int4_coverage_graph(fp32)
+    out = quantize_int4_weight_only(
+        fp32,
+        tmp_path / "coverage_int4.onnx",
+        providers=["CPUExecutionProvider"],
+        probe_sample=None,
+    )
+    assert out.status == "ok"
+    assert out.path is not None
+    cov = out.quantization_coverage
+    assert cov["recipe"]["algorithm"] == "RTN"
+    assert cov["recipe"]["bits"] == 4
+    assert cov["recipe"]["block_size"] == 128
+    assert cov["recipe"]["symmetric"] is True
+    assert cov["recipe"]["op_types_to_quantize"] == ["MatMul"]
+    assert cov["recipe"]["quant_format"] == "QOperator"
+    assert cov["recipe"]["accuracy_level"] == 0
+    assert cov["matmul_nodes_total"] == 2
+    assert cov["matmul_nodes_const_weight"] == 1
+    assert cov["matmul_nbits_nodes"] == 1
+    assert cov["quantized_nodes"] == ["mm_const"]
+    assert cov["float_gemm_nodes"] == ["gemm1"]
+    assert cov["full_model_int4_claim"] is False
+    reasons = {entry["name"]: entry["reason"] for entry in cov["float_matmul_nodes"]}
+    assert reasons["mm_act"] == "weight is not a constant initializer"
+    assert out.runtime.get("native_int4_execution_claim") is False
+    assert out.runtime.get("session_providers")
+    session = create_ort_session(Path(out.path), providers=["CPUExecutionProvider"])
+    y = session.run(
+        None,
+        {
+            "X": np.zeros((1, k), dtype=np.float32),
+            "Act": np.eye(n, dtype=np.float32),
+        },
+    )[0]
+    assert np.isfinite(y).all()
+
+
+@pytest.mark.requires_onnx
+def test_int4_import_error_unsupported_other_errored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fp32 = tmp_path / "coverage_fp32.onnx"
+    _write_int4_coverage_graph(fp32)
+
+    monkeypatch.setattr(
+        "breakpoint_eval.export_quantize.require_onnx",
+        lambda: (_ for _ in ()).throw(ImportError("onnxruntime missing")),
+    )
+    missing = quantize_int4_weight_only(fp32, tmp_path / "a.onnx")
+    assert missing.status == "unsupported"
+    assert "ImportError" in (missing.detail or "")
+
+    monkeypatch.setattr("breakpoint_eval.export_quantize.require_onnx", lambda: None)
+
+    import onnxruntime.quantization.matmul_nbits_quantizer as nbits_mod
+
+    class _Boom:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise RuntimeError("quantizer exploded")
+
+    monkeypatch.setattr(nbits_mod, "MatMulNBitsQuantizer", _Boom)
+    errored = quantize_int4_weight_only(fp32, tmp_path / "b.onnx")
+    assert errored.status == "errored"
+    assert "RuntimeError" in (errored.detail or "")
+
+
+@pytest.mark.requires_onnx
+def test_add_int4_variant_appends_and_refuses_second(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model_path, samples, chunks = _write_act_matmul_export(tmp_path)
+    digest = sha256_file(model_path)
+    corpus_path = tmp_path / "corpus_eval.npz"
+    corpus_manifest = save_corpus(corpus_path, samples, role="evaluation")
+    np.savez_compressed(
+        tmp_path / "eval_chunks_onnx_fp32.npz",
+        **{s.sample_id: c for s, c in zip(samples, chunks, strict=True)},
+    )
+    manifest = {
+        "candidate": "act_aloha_transfer",
+        "hub_revision": "deadbeef",
+        "io_spec": {
+            "image_shape": [1, 3, 8, 8],
+            "state_shape": [1, 2],
+            "action_chunk_shape": [1, 4, 2],
+        },
+        "chunk_info": {"n_action_steps": 4},
+        "corpus": {
+            "evaluation": corpus_manifest.to_dict(),
+        },
+        "export_validation": {
+            "passed": True,
+            "corpus_suitable_as_deployment_evidence": True,
+        },
+        "comparisons": {},
+        "variants": [
+            {
+                "label": "onnx_fp32",
+                "recipe_id": RECIPE_ONNX_FP32,
+                "path": str(model_path),
+                "status": "ok",
+                "graph": {"sha256": digest},
+            }
+        ],
+    }
+    (tmp_path / "export_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        "breakpoint_eval.export_runtime.resolve_onnx_runtime",
+        lambda *args, **kwargs: None,
+    )
+    sidecar = add_int4_variant(tmp_path, providers=("CPUExecutionProvider",))
+    assert sidecar.name == "export_validation_int4.json"
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert payload["passed"] is True
+    assert payload["variant_label"] == "int4_weight_only"
+    updated = json.loads((tmp_path / "export_manifest.json").read_text(encoding="utf-8"))
+    assert any(v.get("label") == "int4_weight_only" for v in updated["variants"])
+    assert "int4_weight_only_vs_onnx_fp32" in updated["comparisons"]
+    with pytest.raises(ValueError, match="refuse overwrite"):
+        add_int4_variant(tmp_path, providers=("CPUExecutionProvider",))
 
 
 @pytest.mark.requires_onnx

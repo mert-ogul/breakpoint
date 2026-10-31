@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 
 from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     PROTOCOL_LOCK_NAME,
@@ -33,6 +34,7 @@ AXIS_TITLES = {
     "latency_ms": "Constant added delay",
     "resolution": "Camera resolution",
     "jpeg": "JPEG quality",
+    "h264": "H.264 bitrate",
     "precision": "Numeric precision",
     "device_profile": "Device latency replay",
 }
@@ -40,14 +42,19 @@ AXIS_UNITS = {
     "latency_ms": "ms added to every fresh action chunk",
     "resolution": "pixels, height x width (resampled back to model input)",
     "jpeg": "OpenCV JPEG quality parameter (not a bitrate)",
+    "h264": "requested libx264 bitrate in kbps; causal stream at 50 fps, visual quality only",
     "precision": "ONNX graph variant",
     "device_profile": "measured ONNX Runtime chunk latency replayed from a device profile",
 }
-AXIS_ORDER = ("latency_ms", "resolution", "jpeg", "precision", "device_profile")
+# Required axes always present; h264 is optional and inserts after jpeg when present.
+REQUIRED_AXES = ("latency_ms", "resolution", "jpeg", "precision", "device_profile")
+AXIS_ORDER = ("latency_ms", "resolution", "jpeg", "h264", "precision", "device_profile")
 RATE_TOLERANCE = 1e-9
 # Axes whose conditions are ordered from mild to severe; the others compare categories.
-ORDERED_AXES = frozenset({"latency_ms", "resolution", "jpeg"})
+ORDERED_AXES = frozenset({"latency_ms", "resolution", "jpeg", "h264"})
 REQUIRED_PROFILES = ("laptop-m3", "rpi5")
+H264_FRAME_RATE_HZ = 50.0
+H264_KBPS_TOLERANCE = 1e-6
 MANIFEST_SCHEMA_VERSION = 1
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 ROW_KEYS = (
@@ -258,7 +265,11 @@ def required_inputs(data_dir: Path) -> list[str]:
         lock = resolve_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME)
         validation = [
             resolve_artifact(data_dir / "validation", name)
-            for name in (EXPORT_VALIDATION_NAME, EXPORT_VALIDATION_INT8_NAME)
+            for name in (
+                EXPORT_VALIDATION_NAME,
+                EXPORT_VALIDATION_INT8_NAME,
+                EXPORT_VALIDATION_INT4_NAME,
+            )
         ]
     except ValueError as exc:
         raise ReportDataError(str(exc)) from exc
@@ -410,8 +421,18 @@ def validate_structure(
                     f"{condition['condition_id']} window_length {recorded!r} differs from "
                     f"the locked trace window {window_length}"
                 )
-    if len(set(axes)) != len(axes) or set(axes) != set(AXIS_ORDER):
-        raise ReportDataError(f"plans must cover each of {list(AXIS_ORDER)} once; found {axes}")
+    if len(set(axes)) != len(axes):
+        raise ReportDataError(f"duplicate axis in plans: {axes}")
+    missing_required = [a for a in REQUIRED_AXES if a not in axes]
+    if missing_required:
+        raise ReportDataError(
+            f"plans must cover each of {list(REQUIRED_AXES)} once; missing {missing_required}"
+        )
+    unexpected = [a for a in axes if a not in AXIS_TITLES]
+    if unexpected:
+        raise ReportDataError(f"plans contain unsupported axes: {unexpected}")
+    if axes.count("h264") > 1:
+        raise ReportDataError("h264 axis may appear at most once")
     if len({plan["plan_id"] for plan in plans}) != len(plans):
         raise ReportDataError("duplicate plan_id in protocol/plans")
     planned = {plan["plan_id"]: {c["condition_id"] for c in plan["conditions"]} for plan in plans}
@@ -793,6 +814,73 @@ def validate_identities(lock: dict[str, Any], profiles: list[ProfileView]) -> Ch
     )
 
 
+def validate_int4_episodes(rows: list[dict[str, Any]]) -> Check | None:
+    """Every INT4 episode completed with no policy_failed or runtime_error.
+
+    OrtActChunkSession raises on a non-finite chunk, which the episode records as
+    policy_failed, so this covers finite closed-loop outputs.
+    """
+    int4_rows = [r for r in rows if r["condition_id"] == "precision_int4_weight_only"]
+    if not int4_rows:
+        return None
+    complete = frozenset({"success", "terminated_no_success", "time_limit_truncation"})
+    bad = [
+        f"#{r['episode_index']} outcome={r.get('outcome')!r}"
+        for r in int4_rows
+        if r.get("outcome") not in complete or r.get("runtime_error")
+    ]
+    n_calls = sum(int(r.get("n_inference_calls") or 0) for r in int4_rows)
+    return Check(
+        "INT4 episodes complete with no policy_failed (finite closed-loop outputs)",
+        not bad,
+        f"{n_calls} INT4 inference calls" if not bad else f"bad: {bad[:5]}; {n_calls} calls",
+    )
+
+
+def measured_h264_kbps(
+    encoded_bytes: int, frames: int, *, frame_rate_hz: float = H264_FRAME_RATE_HZ
+) -> float:
+    """Recompute measured ABR kbps from total encoded bytes and frame count."""
+    if frames < 1 or frame_rate_hz <= 0:
+        raise ValueError("h264 measured kbps requires frames >= 1 and frame_rate_hz > 0")
+    return float(encoded_bytes) * 8.0 * float(frame_rate_hz) / float(frames) / 1000.0
+
+
+def validate_h264_rows(rows: list[dict[str, Any]]) -> Check | None:
+    """Check packaged H.264 rows: measured kbps, frame count, zero holds, first keyframe."""
+    h264_rows = [
+        r for r in rows if r.get("axis") == "h264" and r.get("h264_encoded_bytes") is not None
+    ]
+    if not h264_rows:
+        return None
+    problems: list[str] = []
+    for row in h264_rows:
+        label = f"{row['condition_id']}#{row['episode_index']}"
+        frames = row.get("h264_frames")
+        encoded = row.get("h264_encoded_bytes")
+        if frames != row.get("n_control_steps"):
+            problems.append(f"{label}: h264_frames != n_control_steps")
+            continue
+        if int(row.get("h264_holds") or 0) != 0:
+            problems.append(f"{label}: h264_holds is not 0")
+        if row.get("h264_first_frame_keyframe") is not True:
+            problems.append(f"{label}: first_frame_keyframe is not true")
+        try:
+            recomputed = measured_h264_kbps(int(encoded), int(frames))
+        except (TypeError, ValueError):
+            problems.append(f"{label}: cannot recompute measured kbps")
+            continue
+        saved = row.get("h264_actual_kbps")
+        if saved is None or abs(float(saved) - recomputed) > H264_KBPS_TOLERANCE:
+            problems.append(f"{label}: saved h264_actual_kbps differs from recomputed")
+    return Check(
+        "H.264 rows: measured kbps matches bytes/frames at 50 fps; frames=n_control_steps; "
+        "zero holds; first-frame keyframe",
+        not problems,
+        "; ".join(problems[:5]) or f"{len(h264_rows)} H.264 episodes",
+    )
+
+
 def load_report_data(data_dir: Path) -> ReportData:
     data_dir = data_dir.resolve()
     manifest_check, manifest_sha = verify_manifest(data_dir)
@@ -827,8 +915,18 @@ def _load_verified(data_dir: Path, manifest_check: Check, manifest_sha: str) -> 
         *validate_replay(profiles, rows, window_length),
         validate_identities(lock, profiles),
     ]
+    int4_check = validate_int4_episodes(rows)
+    if int4_check is not None:
+        checks.append(int4_check)
+    h264_check = validate_h264_rows(rows)
+    if h264_check is not None:
+        checks.append(h264_check)
     validation_files = {}
-    for name in (EXPORT_VALIDATION_NAME, EXPORT_VALIDATION_INT8_NAME):
+    for name in (
+        EXPORT_VALIDATION_NAME,
+        EXPORT_VALIDATION_INT8_NAME,
+        EXPORT_VALIDATION_INT4_NAME,
+    ):
         path = resolve_artifact(data_dir / "validation", name)
         if path is not None:
             validation_files[name] = load_json(path)

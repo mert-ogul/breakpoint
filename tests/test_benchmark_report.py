@@ -13,7 +13,10 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from breakpoint_eval.benchmark_report import ReportValidationError, render_benchmark_report  # noqa: E402
+from breakpoint_eval.benchmark_report import (  # noqa: E402
+    ReportValidationError,
+    render_benchmark_report,
+)
 from breakpoint_eval.benchmark_report_data import ReportDataError, load_report_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,7 +52,7 @@ def test_saved_example_passes_every_check() -> None:
     assert failed == []
     baseline = data.axes[0].conditions[0]
     assert (baseline.successes, baseline.eligible) == (25, 30)
-    assert len(data.rows) == 600
+    assert len(data.rows) == 810
 
 
 def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> None:
@@ -386,10 +389,10 @@ def test_categorical_axes_are_not_described_as_crossings() -> None:
     data = report.load_validated_data(DATA)
     by_axis = {axis.axis: axis for axis in data.axes}
     assert not by_axis["precision"].ordered and not by_axis["device_profile"].ordered
-    assert by_axis["latency_ms"].ordered
+    assert by_axis["latency_ms"].ordered and by_axis["h264"].ordered
     lines = report.observations(data)
     ordered = [line for line in lines if "first grid point" in line]
-    assert len(ordered) == 2 and all("categorical" not in line for line in ordered)
+    assert len(ordered) == 3 and all("categorical" not in line for line in ordered)
     for title in ("Numeric precision", "Device latency replay"):
         line = next(x for x in lines if x.startswith(title))
         assert "categorical comparison" in line and "first" not in line
@@ -442,10 +445,11 @@ def test_saved_example_counts_are_unchanged() -> None:
         "latency_ms": [25, 25, 25, 23, 18, 14],
         "resolution": [25, 26, 22, 10],
         "jpeg": [25, 25, 26, 26, 25, 23],
-        "precision": [25, 24],
+        "h264": [25, 25, 26, 28, 19, 10],
+        "precision": [25, 24, 23],
         "device_profile": [25, 24, 9],
     }
-    assert len(data.rows) == 600 and data.n_runs == 18
+    assert len(data.rows) == 810 and data.n_runs == 24
     assert data.trace_window_length == 32
 
 
@@ -462,3 +466,163 @@ def test_main_labels_are_readable_and_ids_stay_in_evidence() -> None:
     assert "## Condition IDs" in markdown
     assert "`latency_ms_640`" in markdown.split("## Condition IDs")[1]
     assert "`latency_ms_640`" not in markdown.split("## Condition IDs")[0]
+
+
+def test_short_label_int4_weight_only() -> None:
+    from breakpoint_eval.benchmark_report_plots import short_label
+
+    assert short_label("precision_int4_weight_only") == "INT4 weight-only"
+    assert short_label("precision_int8") == "INT8 QDQ"
+
+
+def test_short_label_h264() -> None:
+    from breakpoint_eval.benchmark_report_plots import short_label
+
+    assert short_label("h264_bypass") == "bypass"
+    assert short_label("h264_500kbps") == "500 kbps"
+    assert short_label("h264_2000kbps") == "2000 kbps"
+
+
+def test_h264_bytes_table_and_validate_rows() -> None:
+    from breakpoint_eval.benchmark_report import h264_bytes_table_html, h264_bytes_table_markdown
+    from breakpoint_eval.benchmark_report_data import (
+        AxisView,
+        ConditionView,
+        measured_h264_kbps,
+        validate_h264_rows,
+    )
+
+    rows = [
+        {
+            "axis": "h264",
+            "condition_id": "h264_500kbps",
+            "episode_index": 0,
+            "n_control_steps": 10,
+            "h264_requested_kbps": 500.0,
+            "h264_encoded_bytes": 1250,
+            "h264_frames": 10,
+            "h264_actual_kbps": measured_h264_kbps(1250, 10),
+            "h264_holds": 0,
+            "h264_first_frame_keyframe": True,
+        },
+        {
+            "axis": "h264",
+            "condition_id": "h264_500kbps",
+            "episode_index": 1,
+            "n_control_steps": 10,
+            "h264_requested_kbps": 500.0,
+            "h264_encoded_bytes": 1000,
+            "h264_frames": 10,
+            "h264_actual_kbps": measured_h264_kbps(1000, 10),
+            "h264_holds": 0,
+            "h264_first_frame_keyframe": True,
+        },
+    ]
+    view = ConditionView(
+        condition_id="h264_500kbps",
+        label="H.264 500 kbps",
+        referenced_baseline=False,
+        is_baseline=False,
+        rows=rows,
+        successes=2,
+        eligible=2,
+        n_runtime_error=0,
+        wilson={"low": 0.3, "high": 0.9},
+    )
+    axis = AxisView(
+        axis="h264",
+        plan_id="v0.1_full_h264",
+        title="H.264 bitrate",
+        unit="kbps",
+        phase="exploratory",
+        baseline_condition_id="h264_bypass",
+        ratio=0.8,
+        baseline_floor=0.5,
+        baseline_rate=1.0,
+        threshold_rate=0.8,
+        conditions=[view],
+        derived=True,
+        saved_breakpoint=None,
+        saved_note=None,
+        isolation_notes=[],
+        ordered=True,
+    )
+    html = h264_bytes_table_html(axis)
+    assert "500" in html
+    assert "Mean encoded bytes" in html
+    md = "\n".join(h264_bytes_table_markdown(axis))
+    assert "Requested kbps" in md
+    check = validate_h264_rows(rows)
+    assert check is not None and check.passed
+
+    bad = dict(rows[0])
+    bad["h264_actual_kbps"] = 1.0
+    bad_check = validate_h264_rows([bad])
+    assert bad_check is not None and not bad_check.passed
+
+
+def test_int4_limitation_line_from_sidecar() -> None:
+    from types import SimpleNamespace
+
+    from breakpoint_eval.artifact_names import EXPORT_VALIDATION_INT4_NAME
+    from breakpoint_eval.benchmark_report import int4_note
+
+    sidecar = {
+        "quantization_coverage": {
+            "matmul_nbits_nodes": 29,
+            "matmul_nodes_total": 41,
+            "weight_params_int4_fraction": 0.6164908834826577,
+            "recipe": {"accuracy_level": 0},
+        },
+        "runtime_checks": {
+            "max_abs_error": 0.1459382176399231,
+            "mean_abs_error": 0.006009796475399936,
+        },
+    }
+    ran = SimpleNamespace(
+        lock={"artifacts": {"int4_status": "ok"}},
+        rows=[{"condition_id": "precision_int4_weight_only"}],
+        validation_files={EXPORT_VALIDATION_INT4_NAME: sidecar},
+    )
+    line = int4_note(ran)
+    assert line is not None
+    assert "29 of 41 MatMul nodes" in line
+    assert "61.6%" in line
+    assert "accuracy_level=0" in line
+    assert "0.1459382176399231" in line
+    assert "0.006009796475399936" in line
+    assert "not a full-model INT4 result" in line
+    assert "no INT4 device timing exists" in line
+
+    missing = SimpleNamespace(
+        lock={
+            "artifacts": {
+                "int4_status": "missing",
+                "int4_detail": "graph absent",
+            }
+        },
+        rows=[],
+        validation_files={},
+    )
+    skipped = int4_note(missing)
+    assert skipped is not None
+    assert "INT4 export status is 'missing'" in skipped
+    assert "graph absent" in skipped
+    assert "no INT4 measurement is reported" in skipped
+
+    old = SimpleNamespace(
+        lock={"artifacts": {"int8_status": "ok"}},
+        rows=[],
+        validation_files={},
+    )
+    assert int4_note(old) is None
+
+
+def test_working_tree_porcelain_note() -> None:
+    from breakpoint_eval.benchmark_report import working_tree_porcelain_note
+
+    assert working_tree_porcelain_note("") == "clean"
+    assert working_tree_porcelain_note(None) == "clean"
+    assert working_tree_porcelain_note("\n") == "clean"
+    note = working_tree_porcelain_note(" M src/breakpoint_eval/experiment_plan.py\n")
+    assert note == "<code> M src/breakpoint_eval/experiment_plan.py</code>"

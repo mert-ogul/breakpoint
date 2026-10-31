@@ -35,9 +35,10 @@ from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     host_settings_from_config,
     load_benchmark_config,
     resolve_benchmark_artifacts,
+    resolve_h264_support,
     shared_baseline_problem,
     write_plan_bundle,
-    write_unsupported_int8_record,
+    write_unsupported_record,
 )
 from breakpoint_eval.experiment_summary import (  # noqa: E402
     summarize_from_plan_file,
@@ -138,19 +139,34 @@ def _execute_condition(
         return {**ref, "report": str(dest)}
 
     onnx_model = artifacts.fp32_path
-    if condition.axis == "precision" and condition.params.get("variant_label") == "int8":
-        if artifacts.int8_status != "ok" or artifacts.int8_path is None:
-            rec = {
-                "condition_id": condition.condition_id,
-                "status": "unsupported",
-                "detail": artifacts.int8_detail,
-                "measurements_fabricated": False,
-            }
-            (condition_dir / "condition_unsupported.json").write_text(
-                json.dumps(rec, indent=2) + "\n", encoding="utf-8"
-            )
-            return rec
-        onnx_model = artifacts.int8_path
+    if condition.axis == "precision":
+        variant = condition.params.get("variant_label")
+        if variant == "int8":
+            if artifacts.int8_status != "ok" or artifacts.int8_path is None:
+                rec = {
+                    "condition_id": condition.condition_id,
+                    "status": "unsupported",
+                    "detail": artifacts.int8_detail,
+                    "measurements_fabricated": False,
+                }
+                (condition_dir / "condition_unsupported.json").write_text(
+                    json.dumps(rec, indent=2) + "\n", encoding="utf-8"
+                )
+                return rec
+            onnx_model = artifacts.int8_path
+        elif variant == "int4_weight_only":
+            if artifacts.int4_status != "ok" or artifacts.int4_path is None:
+                rec = {
+                    "condition_id": condition.condition_id,
+                    "status": "unsupported",
+                    "detail": artifacts.int4_detail,
+                    "measurements_fabricated": False,
+                }
+                (condition_dir / "condition_unsupported.json").write_text(
+                    json.dumps(rec, indent=2) + "\n", encoding="utf-8"
+                )
+                return rec
+            onnx_model = artifacts.int4_path
 
     req = condition_run_request(
         plan=plan,
@@ -272,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
             export_dir=args.export_dir.resolve() if args.export_dir else None,
             profile_overrides=overrides or None,
         )
+        h264_support = resolve_h264_support(config)
         source_revision = read_source_revision(repo_root)
         lock = freeze_protocol_lock(
             config=config,
@@ -279,12 +296,13 @@ def main(argv: list[str] | None = None) -> int:
             source_revision=source_revision,
             host=host,
             phase=args.phase,
+            h264_support=h264_support,
         )
 
         if args.phase == "smoke":
-            plans = [build_smoke_plan(config, artifacts)]
+            plans = [build_smoke_plan(config, artifacts, h264_support=h264_support)]
         else:
-            plans = build_full_axis_plans(config, artifacts)
+            plans = build_full_axis_plans(config, artifacts, h264_support=h264_support)
     except (ValueError, FileNotFoundError, OSError, json.JSONDecodeError) as exc:
         LOGGER.error("%s", exc)
         return 2
@@ -322,6 +340,20 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
+        if artifacts.int4_status != "ok":
+            print(
+                json.dumps(
+                    {
+                        "int4": {
+                            "status": artifacts.int4_status,
+                            "detail": artifacts.int4_detail,
+                            "measurements_fabricated": False,
+                        }
+                    },
+                    indent=2,
+                )
+            )
+        print(json.dumps({"h264": h264_support}, indent=2))
         print("# dry-run complete: no run-result directories created, no episodes evaluated")
         return 0
 
@@ -344,7 +376,34 @@ def main(argv: list[str] | None = None) -> int:
         shutil.copy2(args.config.resolve(), out / BENCHMARK_CONFIG_NAME)
 
     if artifacts.int8_status != "ok":
-        write_unsupported_int8_record(out, artifacts=artifacts)
+        write_unsupported_record(
+            out,
+            stem="int8",
+            status=artifacts.int8_status,
+            detail=artifacts.int8_detail,
+            path=artifacts.int8_path,
+            sha256=artifacts.int8_sha256,
+        )
+    phase_cfg = config.get(args.phase) or {}
+    if (
+        "int4_weight_only" in phase_cfg.get("precision_variants", [])
+        and artifacts.int4_status != "ok"
+    ):
+        write_unsupported_record(
+            out,
+            stem="int4",
+            status=artifacts.int4_status,
+            detail=artifacts.int4_detail,
+            path=artifacts.int4_path,
+            sha256=artifacts.int4_sha256,
+        )
+    if config.get("h264") is not None and h264_support.get("status") != "ok":
+        write_unsupported_record(
+            out,
+            stem="h264",
+            status=h264_support.get("status"),
+            detail=h264_support.get("detail"),
+        )
 
     plan_paths = write_plan_bundle(plans, out / "plans")
     shared = _shared_baseline_dir(out)

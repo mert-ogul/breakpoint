@@ -19,6 +19,7 @@ if _SRC.is_dir() and str(_SRC) not in sys.path:
 
 from breakpoint_eval.artifact_names import (  # noqa: E402
     BENCHMARK_CONFIG_NAME,
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     PROTOCOL_LOCK_NAME,
@@ -28,6 +29,10 @@ from breakpoint_eval.artifact_names import (  # noqa: E402
 from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     condition_incomplete_reason,
     resolve_profile_by_identity,
+)
+from breakpoint_eval.benchmark_report_data import (  # noqa: E402
+    H264_FRAME_RATE_HZ,
+    measured_h264_kbps,
 )
 from breakpoint_eval.experiment_plan import ExperimentPlan, load_experiment_plan  # noqa: E402
 from breakpoint_eval.file_digest import sha256_file  # noqa: E402
@@ -116,6 +121,51 @@ def first_success_step(steps: list[dict[str, Any]]) -> int | None:
     return None
 
 
+def _h264_compact_fields(episode: dict[str, Any]) -> dict[str, Any]:
+    """Sum H.264 camera stats into compact row fields; None when the episode is not H.264."""
+    empty = {
+        "h264_requested_kbps": None,
+        "h264_encoded_bytes": None,
+        "h264_frames": None,
+        "h264_actual_kbps": None,
+        "h264_holds": None,
+        "h264_keyframes": None,
+        "h264_first_frame_keyframe": None,
+    }
+    summary = episode.get("h264_summary")
+    if not isinstance(summary, dict):
+        return empty
+    cameras = summary.get("cameras")
+    if not isinstance(cameras, dict) or not cameras:
+        return empty
+    cams = [c for c in cameras.values() if isinstance(c, dict)]
+    if not cams:
+        return empty
+    encoded = sum(int(c.get("encoded_bytes_total") or 0) for c in cams)
+    frames = sum(int(c.get("n_frames_in") or 0) for c in cams)
+    holds = sum(
+        int(c.get("n_startup_holds") or 0) + int(c.get("n_last_frame_holds") or 0) for c in cams
+    )
+    keyframes = sum(int(c.get("n_keyframes") or 0) for c in cams)
+    requested = (summary.get("requested") or {}).get("bitrate_kbps")
+    if requested is None:
+        requested = cams[0].get("requested_bitrate_kbps")
+    actual = (
+        measured_h264_kbps(encoded, frames, frame_rate_hz=H264_FRAME_RATE_HZ)
+        if frames > 0
+        else None
+    )
+    return {
+        "h264_requested_kbps": float(requested) if requested is not None else None,
+        "h264_encoded_bytes": encoded,
+        "h264_frames": frames,
+        "h264_actual_kbps": actual,
+        "h264_holds": holds,
+        "h264_keyframes": keyframes,
+        "h264_first_frame_keyframe": all(c.get("first_frame_keyframe") is True for c in cams),
+    }
+
+
 def compact_episode_row(
     *,
     axis: str,
@@ -160,6 +210,7 @@ def compact_episode_row(
         "consumed_trace_indices": trace.get("consumed_trace_indices"),
         "consumed_delays_s": trace.get("consumed_delays_s"),
         "source_report": source,
+        **_h264_compact_fields(episode),
     }
 
 
@@ -273,8 +324,7 @@ def package_protocol(full_root: Path, out: Path) -> None:
         source = require_artifact(full_root, name)
         copy_verbatim(source, out / "protocol" / source.name)
     copy_verbatim(full_root / "run_records.json", out / "protocol" / "run_records.json")
-    unsupported = full_root / "int8_unsupported.json"
-    if unsupported.is_file():
+    for unsupported in sorted(full_root.glob("*_unsupported.json")):
         copy_verbatim(unsupported, out / "protocol" / unsupported.name)
     for plan in sorted((full_root / "plans").glob("*.json")):
         copy_verbatim(plan, out / "protocol" / "plans" / plan.name)
@@ -320,6 +370,7 @@ def package_validation(
     export_dir: Path, lock: dict[str, Any], out: Path, large: list[dict[str, Any]]
 ) -> None:
     int8_ok = lock["artifacts"].get("int8_status") == "ok"
+    int4_ok = lock["artifacts"].get("int4_status") == "ok"
     sources = [
         require_artifact(export_dir, EXPORT_VALIDATION_NAME),
         export_dir / "export_manifest.json",
@@ -331,6 +382,8 @@ def package_validation(
         found = resolve_artifact(export_dir, EXPORT_VALIDATION_INT8_NAME)
         if found is not None:
             sources.append(found)
+    if int4_ok:
+        sources.append(require_artifact(export_dir, EXPORT_VALIDATION_INT4_NAME))
     calibration = export_dir / "corpus_calibration.json"
     if int8_ok or calibration.is_file():
         sources.append(calibration)
@@ -341,6 +394,8 @@ def package_validation(
     models = [("fp32", locked_model(export_dir, lock, "fp32"))]
     if int8_ok:
         models.append(("int8", locked_model(export_dir, lock, "int8")))
+    if int4_ok:
+        models.append(("int4", locked_model(export_dir, lock, "int4")))
     for _, model in models:
         large.append(large_entry(model, "model_or_corpus_artifact"))
     large.append(large_entry(export_dir / "corpus_eval.npz", "model_or_corpus_artifact"))
@@ -418,6 +473,12 @@ def package_identities(lock: dict[str, Any], resolutions: list[dict[str, Any]], 
         "profile_identities": artifacts["profile_identities"],
         "lock_keys": sorted(lock),
     }
+    if "int4_status" in artifacts:
+        identities["model_int4_weight_only"] = {
+            "sha256": artifacts.get("int4_sha256"),
+            "status": artifacts["int4_status"],
+            "detail": artifacts.get("int4_detail"),
+        }
     write_json(out / "identities" / "identities.json", identities)
     write_json(out / "identities" / "condition_resolution.json", resolutions)
 

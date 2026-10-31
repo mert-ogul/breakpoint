@@ -25,6 +25,6 @@
   ],
   "baseline_successes": 25,
   "stress_successes": 14,
-  "baseline_record": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
-  "stress_record": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_640/run_report.json"
+  "baseline_record": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+  "stress_record": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_640/run_report.json"
 }

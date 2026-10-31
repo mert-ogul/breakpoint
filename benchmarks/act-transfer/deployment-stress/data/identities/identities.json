@@ -3,10 +3,12 @@
     "artifacts",
     "baseline_reuse",
     "candidate",
+    "h264",
     "host",
     "phase",
     "phase_config",
-    "protocol",
+    "protocol_name",
+    "protocol_version",
     "scheduler",
     "schema_version",
     "source_revision",
@@ -17,7 +19,13 @@
     "recipe_id": "torch_onnx_export_fp32_opset17",
     "sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba"
   },
+  "model_int4_weight_only": {
+    "detail": null,
+    "sha256": "c0cee50e137d0aa36ccb568cec2feea793ed328905adccefd2bc4010440f8d37",
+    "status": "ok"
+  },
   "model_int8_qdq": {
+    "detail": null,
     "sha256": "792e9adc992405676317200cfa199176280be1eff152800604af4af7dac3b035",
     "status": "ok"
   },

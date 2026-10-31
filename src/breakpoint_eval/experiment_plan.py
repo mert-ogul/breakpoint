@@ -26,7 +26,14 @@ DEFAULT_RESOLUTION_LINEAR = (1.0, 0.5, 0.25)  # native, 1/2, 1/4
 # bypass = native uncompressed; qualities are experimental choices.
 DEFAULT_JPEG_QUALITIES: tuple[str | int, ...] = ("bypass", 95, 75, 50, 30, 10)
 # Quality-only H.264 bitrate ladder (kbps); bypass = native uncompressed.
-DEFAULT_H264_BITRATES_KBPS: tuple[str | float, ...] = ("bypass", 4000.0, 2000.0, 1000.0, 500.0)
+DEFAULT_H264_BITRATES_KBPS: tuple[str | float, ...] = (
+    "bypass",
+    2000.0,
+    1000.0,
+    500.0,
+    250.0,
+    100.0,
+)
 
 DEFAULT_ENV_SEED_START = 1000
 DEFAULT_POLICY_SEED_OFFSET = 1_000_000

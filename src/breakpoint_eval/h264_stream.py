@@ -2,8 +2,9 @@
 
 Frames are fed in render order through a live encoder→decoder pair. This is not
 per-frame JPEG-style still compression. Codec state resets between episodes.
-Future-frame leakage is prevented via zerolatency + no B-frames; if a decoded
-frame is not yet available, an explicit causal last-frame / startup hold is used.
+Future-frame leakage is prevented via zerolatency + no B-frames. In quality_only
+mode, a frame that is not decoded in its own push is an error. Startup and
+last-frame holds exist only in deployment mode.
 """
 
 from __future__ import annotations
@@ -29,6 +30,11 @@ from breakpoint_eval.h264_ffmpeg import (
 # (and document 16-alignment preference for macroblocks).
 H264_DIMENSION_MULTIPLE = 2
 H264_MACROBLOCK_HINT = 16
+# Single-threaded encode + slice/low-delay decode so each control step is
+# deterministic and returns its own decoded frame under quality_only.
+ENCODER_THREAD_COUNT = 1
+DECODER_THREAD_COUNT = 1
+DECODER_THREAD_TYPE = "SLICE"
 
 
 class H264LatencyMode(StrEnum):
@@ -103,6 +109,8 @@ class H264StreamStats:
     n_frames_decoded: int = 0
     n_startup_holds: int = 0
     n_last_frame_holds: int = 0
+    n_keyframes: int = 0
+    first_frame_keyframe: bool | None = None
     encoded_bytes_total: int = 0
     requested_bitrate_kbps: float = 0.0
     frame_rate_hz: float = 0.0
@@ -110,6 +118,7 @@ class H264StreamStats:
     actual_bitrate_kbps: float | None = None
     bitrate_error_kbps: float | None = None
     short_episode_note: str | None = None
+    codec_hw: tuple[int, int] | None = None
     frame_records: list[H264FrameRecord] = field(default_factory=list)
 
     def finalize(self) -> None:
@@ -156,6 +165,15 @@ def pad_to_codec_dimensions(
     return codec_h, codec_w, codec_h - height, codec_w - width
 
 
+def x264_encoder_options(config: H264StreamConfig) -> dict[str, str]:
+    """libx264 option dict applied to the encoder (preset, tune, x264-params)."""
+    return {
+        "preset": config.preset,
+        "tune": config.tune,
+        "x264-params": f"rc-lookahead={config.rc_lookahead}:bframes=0:sliced_threads=1",
+    }
+
+
 def _pad_frame(frame: np.ndarray, codec_h: int, codec_w: int) -> np.ndarray:
     h, w, _ = frame.shape
     if h == codec_h and w == codec_w:
@@ -195,9 +213,22 @@ class CausalH264CameraStream:
             camera_key=camera_key,
             requested_bitrate_kbps=float(config.bitrate_kbps),
             frame_rate_hz=float(config.frame_rate_hz),
+            codec_hw=(self.codec_h, self.codec_w),
         )
         self._frame_index = 0
+        self._encoder_options = x264_encoder_options(config)
         self._open_codecs()
+
+    @property
+    def runtime_settings(self) -> dict[str, Any]:
+        """Applied encoder/decoder settings after open (read-only snapshot)."""
+        return {
+            "options": dict(self._encoder_options),
+            "encoder_thread_count": int(self._encoder_thread_count),
+            "decoder_thread_count": int(self._decoder_thread_count),
+            "decoder_thread_type": str(self._decoder_thread_type),
+            "decoder_low_delay": bool(self._decoder_low_delay),
+        }
 
     def _open_codecs(self) -> None:
         from fractions import Fraction
@@ -214,20 +245,25 @@ class CausalH264CameraStream:
         enc.gop_size = int(self.config.gop)
         enc.max_b_frames = int(self.config.max_b_frames)
         enc.bit_rate = int(self.config.bitrate_kbps * 1000)
-        enc.options = {
-            "preset": self.config.preset,
-            "tune": self.config.tune,
-            "x264-params": f"rc-lookahead={self.config.rc_lookahead}:bframes=0:sliced_threads=1",
-        }
+        enc.thread_count = ENCODER_THREAD_COUNT
+        self._encoder_options = x264_encoder_options(self.config)
+        enc.options = dict(self._encoder_options)
         # Force open so misconfiguration fails at episode start, not mid-rollout.
         enc.open()
 
         dec = av.CodecContext.create("h264", "r")
+        dec.thread_type = av.codec.context.ThreadType.SLICE
+        dec.thread_count = DECODER_THREAD_COUNT
+        dec.flags |= av.codec.context.Flags.low_delay
         dec.open()
 
         self._encoder = enc
         self._decoder = dec
         self._rate = rate
+        self._encoder_thread_count = int(enc.thread_count)
+        self._decoder_thread_count = int(dec.thread_count)
+        self._decoder_thread_type = DECODER_THREAD_TYPE
+        self._decoder_low_delay = bool(dec.flags & av.codec.context.Flags.low_delay)
 
     def reset(self) -> None:
         """Reset codec state between episodes (new encoder/decoder pair)."""
@@ -239,6 +275,7 @@ class CausalH264CameraStream:
             camera_key=self.camera_key,
             requested_bitrate_kbps=float(self.config.bitrate_kbps),
             frame_rate_hz=float(self.config.frame_rate_hz),
+            codec_hw=(self.codec_h, self.codec_w),
         )
         self._open_codecs()
 
@@ -282,6 +319,10 @@ class CausalH264CameraStream:
         packets = list(self._encoder.encode(video_frame))
         packet_bytes = int(sum(int(p.size) for p in packets))
         self.stats.encoded_bytes_total += packet_bytes
+        frame_has_keyframe = any(bool(p.is_keyframe) for p in packets)
+        self.stats.n_keyframes += sum(1 for p in packets if p.is_keyframe)
+        if self._frame_index == 0:
+            self.stats.first_frame_keyframe = frame_has_keyframe
 
         decoded_rgb: np.ndarray | None = None
         decode_t: float | None = None
@@ -310,17 +351,11 @@ class CausalH264CameraStream:
             out = decoded_rgb
             availability = DecodeAvailability.DECODED
             self._last_decoded = out.copy()
-        elif self._last_decoded is not None:
-            out = self._last_decoded.copy()
-            availability = DecodeAvailability.LAST_FRAME_HOLD
-            used_hold = True
-            self.stats.n_last_frame_holds += 1
         else:
-            # Startup: no future frame exists; hold zeros (explicit startup rule).
-            out = np.zeros((self.native_height, self.native_width, 3), dtype=np.uint8)
-            availability = DecodeAvailability.STARTUP_HOLD
-            used_hold = True
-            self.stats.n_startup_holds += 1
+            raise RuntimeError(
+                f"{self.camera_key}: frame {self._frame_index} was not decoded "
+                "in its own control step"
+            )
 
         if out.shape != (self.native_height, self.native_width, 3) or out.dtype != np.uint8:
             raise RuntimeError(
@@ -446,10 +481,33 @@ class EpisodeH264Session:
     def advance_time(self, dt_s: float) -> None:
         self.sim_time_s += float(dt_s)
 
+    def _encoder_evidence(self) -> dict[str, Any]:
+        evidence: dict[str, Any] = {
+            "options": x264_encoder_options(self.config),
+            "encoder_thread_count": ENCODER_THREAD_COUNT,
+            "decoder_thread_count": DECODER_THREAD_COUNT,
+            "decoder_thread_type": DECODER_THREAD_TYPE,
+            "decoder_low_delay": True,
+            "pixel_format": self.config.pixel_format,
+            "gop": self.config.gop,
+        }
+        if self._streams:
+            evidence["codec_hw"] = {
+                key: [stream.codec_h, stream.codec_w] for key, stream in self._streams.items()
+            }
+            live = next(iter(self._streams.values())).runtime_settings
+            evidence["options"] = live["options"]
+            evidence["encoder_thread_count"] = live["encoder_thread_count"]
+            evidence["decoder_thread_count"] = live["decoder_thread_count"]
+            evidence["decoder_thread_type"] = live["decoder_thread_type"]
+            evidence["decoder_low_delay"] = live["decoder_low_delay"]
+        return evidence
+
     def summary(self) -> dict[str, Any]:
         cameras = {}
         for key, stream in self._streams.items():
             cameras[key] = stream.stats.to_dict()
+        encoder = self._encoder_evidence()
         return {
             "h264": True,
             "latency_mode": self.config.latency_mode.value,
@@ -465,7 +523,13 @@ class EpisodeH264Session:
                 "deployment_buffer_frames": self.config.deployment_buffer_frames,
                 "dimension_multiple": H264_DIMENSION_MULTIPLE,
                 "macroblock_hint": H264_MACROBLOCK_HINT,
+                "encoder_options": encoder["options"],
+                "encoder_thread_count": encoder["encoder_thread_count"],
+                "decoder_thread_count": encoder["decoder_thread_count"],
+                "decoder_thread_type": encoder["decoder_thread_type"],
+                "decoder_low_delay": encoder["decoder_low_delay"],
             },
+            "encoder": encoder,
             "ffmpeg": self.probe.to_dict(),
             "cameras": cameras,
             "exclusions_quality_only": (

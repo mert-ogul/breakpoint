@@ -15,6 +15,7 @@ from breakpoint_eval.experiment_plan import (
     ExperimentPlan,
     PlanPhase,
     build_seed_pairs,
+    h264_conditions,
     jpeg_conditions,
     latency_conditions,
     precision_conditions,
@@ -56,6 +57,10 @@ class ResolvedArtifacts:
     int8_detail: str | None
     profiles: dict[str, Path]
     profile_identities: dict[str, dict[str, Any]]
+    int4_path: Path | None = None
+    int4_sha256: str | None = None
+    int4_status: str = "missing"
+    int4_detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,7 +91,46 @@ def load_benchmark_config(path: Path) -> dict[str, Any]:
         raise ValueError(
             f"expected protocol {PROTOCOL_NAME} {PROTOCOL_VERSION}, got {identity[0]} {identity[1]}"
         )
+    h264 = payload.get("h264")
+    if isinstance(h264, dict):
+        latency_mode = h264.get("latency_mode")
+        if latency_mode != "quality_only":
+            raise ValueError(
+                f"h264.latency_mode {latency_mode!r} refused; only quality_only is allowed "
+                "for this benchmark (deployment mode is not part of the protocol)"
+            )
     return payload
+
+
+def resolve_h264_support(config: dict[str, Any]) -> dict[str, Any]:
+    """Probe libx264/PyAV once; never raises for a missing codec."""
+    from breakpoint_eval.h264_ffmpeg import (
+        REQUESTED_MAX_B_FRAMES,
+        REQUESTED_PIXEL_FORMAT,
+        REQUESTED_RC_LOOKAHEAD,
+        REQUESTED_TUNE,
+        probe_ffmpeg_h264,
+    )
+
+    h264_cfg = config.get("h264") if isinstance(config.get("h264"), dict) else {}
+    probe = probe_ffmpeg_h264()
+    status = "ok" if probe.available else "unsupported"
+    return {
+        "status": status,
+        "detail": probe.unsupported_reason,
+        "gop": int(h264_cfg.get("gop", 30)),
+        "preset": str(h264_cfg.get("preset", "veryfast")),
+        "latency_mode": str(h264_cfg.get("latency_mode", "quality_only")),
+        "frame_rate_hz": 50.0,
+        "tune": REQUESTED_TUNE,
+        "pixel_format": REQUESTED_PIXEL_FORMAT,
+        "max_b_frames": REQUESTED_MAX_B_FRAMES,
+        "rc_lookahead": REQUESTED_RC_LOOKAHEAD,
+        "pyav_version": probe.pyav_version,
+        "libav_versions": dict(probe.libav_versions),
+        "ffmpeg_version_line": probe.version_line,
+        "measurements_fabricated": False,
+    }
 
 
 def _external_weight_files(model_path: Path) -> list[dict[str, str]]:
@@ -157,6 +201,45 @@ def resolve_profile_by_identity(
     return matches[0]
 
 
+def _resolve_optional_quantized_onnx(
+    export: Path,
+    *,
+    onnx_name: str,
+    candidate: str,
+    expected_sha256: str | None,
+    manifest_label: str,
+    display_label: str,
+) -> tuple[Path | None, str | None, str, str | None]:
+    """Resolve an optional INT8/INT4 graph the same way: file → runtime+hash, else manifest."""
+    model_path = (export / onnx_name).resolve()
+    if model_path.is_file():
+        try:
+            runtime = resolve_onnx_runtime(
+                model_path,
+                expected_candidate=candidate,
+                require_export_validation=True,
+            )
+            if expected_sha256 and runtime.model_sha256 != expected_sha256:
+                raise ValueError(
+                    f"{display_label} sha256 mismatch: file={runtime.model_sha256} "
+                    f"expected={expected_sha256}"
+                )
+            return model_path, runtime.model_sha256, "ok", None
+        except (ValueError, FileNotFoundError) as exc:
+            detail = f"{type(exc).__name__}: {exc}"
+            LOGGER.warning("%s present but not runnable: %s", display_label, detail)
+            return None, None, "unsupported", detail
+    status = "missing"
+    detail: str | None = None
+    manifest = load_export_manifest(export / "export_manifest.json")
+    for variant in manifest.get("variants") or []:
+        if variant.get("label") == manifest_label:
+            status = str(variant.get("status") or "missing")
+            detail = variant.get("detail")
+            break
+    return None, None, status, detail
+
+
 def resolve_benchmark_artifacts(
     config: dict[str, Any],
     *,
@@ -185,39 +268,22 @@ def resolve_benchmark_artifacts(
             f"FP32 sha256 mismatch: file={fp32_rt.model_sha256} expected={expected_fp32}"
         )
 
-    int8_name = arts.get("int8_onnx_name") or "act_chunk_int8_qdq.onnx"
-    int8_path = (export / int8_name).resolve()
-    int8_sha: str | None = None
-    int8_status = "missing"
-    int8_detail: str | None = None
-    resolved_int8: Path | None = None
-    if int8_path.is_file():
-        try:
-            int8_rt = resolve_onnx_runtime(
-                int8_path,
-                expected_candidate=config["candidate"],
-                require_export_validation=True,
-            )
-            expected_int8 = arts.get("expected_int8_sha256")
-            if expected_int8 and int8_rt.model_sha256 != expected_int8:
-                raise ValueError(
-                    f"INT8 sha256 mismatch: file={int8_rt.model_sha256} expected={expected_int8}"
-                )
-            resolved_int8 = int8_path
-            int8_sha = int8_rt.model_sha256
-            int8_status = "ok"
-        except (ValueError, FileNotFoundError) as exc:
-            int8_status = "unsupported"
-            int8_detail = f"{type(exc).__name__}: {exc}"
-            LOGGER.warning("INT8 present but not runnable: %s", int8_detail)
-    else:
-        # Check manifest for explicit unsupported status.
-        manifest = load_export_manifest(export / "export_manifest.json")
-        for variant in manifest.get("variants") or []:
-            if variant.get("label") == "int8":
-                int8_status = str(variant.get("status") or "missing")
-                int8_detail = variant.get("detail")
-                break
+    int8_path, int8_sha, int8_status, int8_detail = _resolve_optional_quantized_onnx(
+        export,
+        onnx_name=arts.get("int8_onnx_name") or "act_chunk_int8_qdq.onnx",
+        candidate=config["candidate"],
+        expected_sha256=arts.get("expected_int8_sha256"),
+        manifest_label="int8",
+        display_label="INT8",
+    )
+    int4_path, int4_sha, int4_status, int4_detail = _resolve_optional_quantized_onnx(
+        export,
+        onnx_name=arts.get("int4_onnx_name") or "act_chunk_int4_matmul_nbits.onnx",
+        candidate=config["candidate"],
+        expected_sha256=arts.get("expected_int4_sha256"),
+        manifest_label="int4_weight_only",
+        display_label="INT4",
+    )
 
     profiles: dict[str, Path] = {}
     identities: dict[str, dict[str, Any]] = {}
@@ -259,12 +325,16 @@ def resolve_benchmark_artifacts(
         fp32_path=fp32_path,
         fp32_sha256=fp32_rt.model_sha256,
         fp32_recipe_id=fp32_rt.recipe_id,
-        int8_path=resolved_int8,
+        int8_path=int8_path,
         int8_sha256=int8_sha,
         int8_status=int8_status,
         int8_detail=int8_detail,
         profiles=profiles,
         profile_identities=identities,
+        int4_path=int4_path,
+        int4_sha256=int4_sha,
+        int4_status=int4_status,
+        int4_detail=int4_detail,
     )
 
 
@@ -368,6 +438,8 @@ def condition_is_shared_baseline(condition: ConditionSpec) -> bool:
         return params.get("mode") == "native"
     if condition.axis == ExperimentAxis.JPEG.value:
         return bool(params.get("bypass"))
+    if condition.axis == ExperimentAxis.H264.value:
+        return bool(params.get("bypass"))
     if condition.axis == ExperimentAxis.PRECISION.value:
         return params.get("variant_label") == "onnx_fp32"
     return False
@@ -376,6 +448,8 @@ def condition_is_shared_baseline(condition: ConditionSpec) -> bool:
 def build_smoke_plan(
     config: dict[str, Any],
     artifacts: ResolvedArtifacts,
+    *,
+    h264_support: dict[str, Any] | None = None,
 ) -> ExperimentPlan:
     smoke = config["smoke"]
     seeds = build_seed_pairs(
@@ -384,14 +458,27 @@ def build_smoke_plan(
         policy_seed_offset=int(smoke["policy_seed_offset"]),
     )
     window_length = int(config["trace_window"]["length"])
+    support = h264_support if h264_support is not None else resolve_h264_support(config)
     conditions: list[ConditionSpec] = []
     conditions.extend(latency_conditions(tuple(int(x) for x in smoke["latency_ms"])))
     conditions.extend(_resolution_conditions_from_hw(list(smoke["resolution_hw"])))
     conditions.extend(jpeg_conditions(tuple(smoke["jpeg_qualities"])))
-    # Precision: always list FP32; INT8 only if runnable, else recorded separately.
+    if support.get("status") == "ok" and smoke.get("h264_bitrates_kbps"):
+        conditions.extend(
+            h264_conditions(
+                tuple(smoke["h264_bitrates_kbps"]),
+                frame_rate_hz=float(support["frame_rate_hz"]),
+                gop=int(support["gop"]),
+                preset=str(support["preset"]),
+                latency_mode="quality_only",
+            )
+        )
+    # Precision: always list FP32; INT8/INT4 only if runnable, else recorded separately.
     prec_variants = ["onnx_fp32"]
     if "int8" in smoke.get("precision_variants", []) and artifacts.int8_status == "ok":
         prec_variants.append("int8")
+    if "int4_weight_only" in smoke.get("precision_variants", []) and artifacts.int4_status == "ok":
+        prec_variants.append("int4_weight_only")
     conditions.extend(precision_conditions(tuple(prec_variants)))
     conditions.extend(
         _device_profile_conditions(
@@ -417,6 +504,8 @@ def build_smoke_plan(
         notes=[
             "Smoke plan; not for publication claims.",
             f"INT8 status at plan build: {artifacts.int8_status}",
+            f"INT4 status at plan build: {artifacts.int4_status}",
+            f"H.264 status at plan build: {support.get('status')}",
         ],
     )
 
@@ -424,6 +513,8 @@ def build_smoke_plan(
 def build_full_axis_plans(
     config: dict[str, Any],
     artifacts: ResolvedArtifacts,
+    *,
+    h264_support: dict[str, Any] | None = None,
 ) -> list[ExperimentPlan]:
     full = config["full"]
     n = int(full["n_episodes"])
@@ -434,6 +525,7 @@ def build_full_axis_plans(
     )
     window_length = int(config["trace_window"]["length"])
     candidate = config["candidate"]
+    support = h264_support if h264_support is not None else resolve_h264_support(config)
     plans: list[ExperimentPlan] = []
 
     lat = ExperimentPlan(
@@ -478,9 +570,36 @@ def build_full_axis_plans(
     )
     plans.append(jpeg)
 
+    if support.get("status") == "ok" and full.get("h264_bitrates_kbps"):
+        plans.append(
+            ExperimentPlan(
+                plan_id="v0.1_full_h264",
+                candidate=candidate,
+                phase=PlanPhase.EXPLORATORY.value,
+                n_episodes=n,
+                axis=ExperimentAxis.H264.value,
+                seed_pairs=seeds,
+                conditions=h264_conditions(
+                    tuple(full["h264_bitrates_kbps"]),
+                    frame_rate_hz=float(support["frame_rate_hz"]),
+                    gop=int(support["gop"]),
+                    preset=str(support["preset"]),
+                    latency_mode="quality_only",
+                ),
+                isolation_notes=[
+                    "H.264 causal stream quality-only at native resolution; FP32 and 0 ms delay.",
+                    "No codec, transport, or decoding delay is simulated on this axis.",
+                ],
+                baseline_condition_id="h264_bypass",
+                notes=["Isolated H.264 bitrate axis; visual quality only."],
+            )
+        )
+
     prec_variants = ["onnx_fp32"]
     if "int8" in full.get("precision_variants", []) and artifacts.int8_status == "ok":
         prec_variants.append("int8")
+    if "int4_weight_only" in full.get("precision_variants", []) and artifacts.int4_status == "ok":
+        prec_variants.append("int4_weight_only")
     prec = ExperimentPlan(
         plan_id="v0.1_full_precision",
         candidate=candidate,
@@ -491,7 +610,10 @@ def build_full_axis_plans(
         conditions=precision_conditions(tuple(prec_variants)),
         isolation_notes=["Precision under constant_latency_ms_0."],
         baseline_condition_id="precision_onnx_fp32",
-        notes=[f"INT8 status at plan build: {artifacts.int8_status}"],
+        notes=[
+            f"INT8 status at plan build: {artifacts.int8_status}",
+            f"INT4 status at plan build: {artifacts.int4_status}",
+        ],
     )
     plans.append(prec)
 
@@ -529,9 +651,10 @@ def freeze_protocol_lock(
     source_revision: dict[str, Any],
     host: BenchmarkHostSettings,
     phase: str,
+    h264_support: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     stats = config["statistics"]
-    return {
+    lock: dict[str, Any] = {
         "schema_version": 1,
         "protocol_name": protocol_identity(config)[0],
         "protocol_version": protocol_identity(config)[1],
@@ -550,6 +673,10 @@ def freeze_protocol_lock(
             "int8_detail": artifacts.int8_detail,
             "profiles": {k: str(v) for k, v in artifacts.profiles.items()},
             "profile_identities": artifacts.profile_identities,
+            "int4_path": str(artifacts.int4_path) if artifacts.int4_path else None,
+            "int4_sha256": artifacts.int4_sha256,
+            "int4_status": artifacts.int4_status,
+            "int4_detail": artifacts.int4_detail,
         },
         "host": {
             "compute_device": host.compute_device,
@@ -572,6 +699,9 @@ def freeze_protocol_lock(
         "baseline_reuse": config.get("baseline_reuse") or {"enabled": True},
         "phase_config": config[phase] if phase in config else config.get("smoke"),
     }
+    if h264_support is not None:
+        lock["h264"] = dict(h264_support)
+    return lock
 
 
 # Lock fields that may differ on resume: they record where and when a run happened,
@@ -618,11 +748,58 @@ def _expected_runtime(condition: ConditionSpec) -> dict[str, Any]:
         "image_mode": "native",
         "variant_label": "onnx_fp32",
     }
-    if axis in {ExperimentAxis.RESOLUTION.value, ExperimentAxis.JPEG.value}:
+    if axis in {
+        ExperimentAxis.RESOLUTION.value,
+        ExperimentAxis.JPEG.value,
+        ExperimentAxis.H264.value,
+    }:
         expected["image_mode"] = "native" if params.get("bypass") else params["mode"]
     if axis in {ExperimentAxis.PRECISION.value, ExperimentAxis.DEVICE_PROFILE.value}:
         expected["variant_label"] = params["variant_label"]
     return expected
+
+
+def _h264_summary_problem(episode: dict[str, Any], condition: ConditionSpec) -> str | None:
+    """Return why one H.264 episode summary fails the quality-only evidence checks."""
+    index = episode["episode_index"]
+    summary = episode.get("h264_summary")
+    if not isinstance(summary, dict):
+        return f"episode {index} missing h264_summary"
+    if summary.get("latency_mode") != "quality_only":
+        return f"episode {index} h264_summary.latency_mode is not quality_only"
+    requested = summary.get("requested") or {}
+    params = condition.params
+    if float(requested.get("bitrate_kbps", -1)) != float(params["h264_bitrate_kbps"]):
+        return f"episode {index} h264 requested bitrate differs from the condition"
+    if int(requested.get("gop", -1)) != int(params["h264_gop"]):
+        return f"episode {index} h264 requested gop differs from the condition"
+    if str(requested.get("preset")) != str(params["h264_preset"]):
+        return f"episode {index} h264 requested preset differs from the condition"
+    if float(requested.get("frame_rate_hz", -1)) != float(params["frame_rate_hz"]):
+        return f"episode {index} h264 requested frame_rate_hz differs from the condition"
+    cameras = summary.get("cameras")
+    if not isinstance(cameras, dict) or not cameras:
+        return f"episode {index} h264_summary has no cameras"
+    n_steps = int(episode["n_control_steps"])
+    for cam_key, cam in cameras.items():
+        if not isinstance(cam, dict):
+            return f"episode {index} camera {cam_key!r} h264 stats missing"
+        if int(cam.get("n_frames_in", -1)) != n_steps:
+            return (
+                f"episode {index} camera {cam_key!r} n_frames_in "
+                f"{cam.get('n_frames_in')!r} != n_control_steps {n_steps}"
+            )
+        if int(cam.get("n_frames_decoded", -1)) != int(cam.get("n_frames_in", -1)):
+            return f"episode {index} camera {cam_key!r} n_frames_decoded != n_frames_in"
+        if int(cam.get("n_startup_holds", -1)) != 0:
+            return f"episode {index} camera {cam_key!r} n_startup_holds is not 0"
+        if int(cam.get("n_last_frame_holds", -1)) != 0:
+            return f"episode {index} camera {cam_key!r} n_last_frame_holds is not 0"
+        if cam.get("first_frame_keyframe") is not True:
+            return f"episode {index} camera {cam_key!r} first_frame_keyframe is not true"
+        if int(cam.get("encoded_bytes_total", 0)) <= 0:
+            return f"episode {index} camera {cam_key!r} encoded_bytes_total is not > 0"
+    return None
 
 
 def _shared_baseline_runtime() -> dict[str, Any]:
@@ -714,14 +891,24 @@ def condition_report_problem(
     problem = run_report_problem(
         report_path, plan=plan, expected_runtime=_expected_runtime(condition)
     )
-    if problem is not None or condition.axis != ExperimentAxis.DEVICE_PROFILE.value:
+    if problem is not None:
         return problem
-    starts = condition.params.get("window_starts")
-    episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
-    for ep in episodes:
-        window = (ep.get("latency_trace_provenance") or {}).get("window_start")
-        if starts is not None and window != starts[ep["episode_index"]]:
-            return f"episode {ep['episode_index']} replay window_start differs from the condition"
+    if condition.axis == ExperimentAxis.DEVICE_PROFILE.value:
+        starts = condition.params.get("window_starts")
+        episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
+        for ep in episodes:
+            window = (ep.get("latency_trace_provenance") or {}).get("window_start")
+            if starts is not None and window != starts[ep["episode_index"]]:
+                return (
+                    f"episode {ep['episode_index']} replay window_start differs from the condition"
+                )
+        return None
+    if condition.axis == ExperimentAxis.H264.value and not condition.params.get("bypass"):
+        episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
+        for ep in episodes:
+            h264_problem = _h264_summary_problem(ep, condition)
+            if h264_problem is not None:
+                return h264_problem
     return None
 
 
@@ -784,21 +971,26 @@ def condition_completed(
     return reason is None
 
 
-def write_unsupported_int8_record(
+def write_unsupported_record(
     out_dir: Path,
     *,
-    artifacts: ResolvedArtifacts,
+    stem: str,
+    status: str | None,
+    detail: str | None,
+    path: Path | str | None = None,
+    sha256: str | None = None,
 ) -> Path:
-    path = out_dir / "int8_unsupported.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    """Write {stem}_unsupported.json with status, detail, and optional path/sha256."""
+    out = out_dir / f"{stem}_unsupported.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
         json.dumps(
             {
-                "status": artifacts.int8_status,
-                "detail": artifacts.int8_detail,
+                "status": status,
+                "detail": detail,
                 "measurements_fabricated": False,
-                "path": str(artifacts.int8_path) if artifacts.int8_path else None,
-                "sha256": artifacts.int8_sha256,
+                "path": str(path) if path else None,
+                "sha256": sha256,
             },
             indent=2,
             sort_keys=True,
@@ -806,7 +998,7 @@ def write_unsupported_int8_record(
         + "\n",
         encoding="utf-8",
     )
-    return path
+    return out
 
 
 def describe_plan_commands(plan: ExperimentPlan, *, axis_out: Path) -> list[str]:

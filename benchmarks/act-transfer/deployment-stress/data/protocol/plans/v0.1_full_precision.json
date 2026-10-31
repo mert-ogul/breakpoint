@@ -24,6 +24,17 @@
         "timing_schedule": "constant_latency_ms_0",
         "variant_label": "int8"
       }
+    },
+    {
+      "axis": "precision",
+      "condition_id": "precision_int4_weight_only",
+      "label": "precision recipe int4_weight_only (timing fixed: constant_latency_ms_0)",
+      "params": {
+        "categorical": true,
+        "not_continuous_bit_depth": true,
+        "timing_schedule": "constant_latency_ms_0",
+        "variant_label": "int4_weight_only"
+      }
     }
   ],
   "confirms_plan_id": null,
@@ -73,7 +84,8 @@
   ],
   "n_episodes": 30,
   "notes": [
-    "INT8 status at plan build: ok"
+    "INT8 status at plan build: ok",
+    "INT4 status at plan build: ok"
   ],
   "phase": "exploratory",
   "plan_id": "v0.1_full_precision",

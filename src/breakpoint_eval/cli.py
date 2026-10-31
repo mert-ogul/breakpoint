@@ -295,6 +295,25 @@ def _add_write_export_validation_parser(
     parser.add_argument("--repo-root", type=Path, default=None)
 
 
+def _add_quantize_int4_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    parser = subparsers.add_parser(
+        "quantize-int4",
+        help=(
+            "Add ORT MatMulNBits INT4 weight-only variant to an existing validated "
+            "ACT export directory without modifying the FP32 graph"
+        ),
+    )
+    parser.add_argument("--export-dir", type=Path, required=True)
+    parser.add_argument(
+        "--providers",
+        type=str,
+        default="CPUExecutionProvider",
+        help="Comma-separated ORT execution providers",
+    )
+
+
 def _add_diagnose_closed_loop_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
@@ -535,6 +554,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_export_parser(sub)
     _add_diagnose_closed_loop_parser(sub)
     _add_write_export_validation_parser(sub)
+    _add_quantize_int4_parser(sub)
     _add_profile_parser(sub)
     _add_plan_parser(sub)
     _add_summarize_parser(sub)
@@ -614,6 +634,35 @@ def _cmd_write_export_validation(args: argparse.Namespace) -> int:
     payload = json.loads(path.read_text(encoding="utf-8"))
     print(path)
     print(json.dumps(export_validation_summary(path, payload)))
+    return 0 if payload.get("passed") is True else 1
+
+
+def _cmd_quantize_int4(args: argparse.Namespace) -> int:
+    from breakpoint_eval.export_quantize import add_int4_variant
+
+    providers = tuple(p.strip() for p in args.providers.split(",") if p.strip())
+    if not providers:
+        logging.error("--providers is empty")
+        return 2
+    try:
+        path = add_int4_variant(Path(args.export_dir).resolve(), providers=providers)
+    except (FileNotFoundError, ValueError, OSError, RuntimeError, ImportError) as exc:
+        logging.error("%s", exc)
+        return 2
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    print(path)
+    print(
+        json.dumps(
+            {
+                "validation": str(path),
+                "schema_version": payload.get("schema_version"),
+                "passed": payload.get("passed"),
+                "variant_label": payload.get("variant_label"),
+                "not_passed_reasons": payload.get("not_passed_reasons"),
+                "model_sha256": (payload.get("binding") or {}).get("model_sha256"),
+            }
+        )
+    )
     return 0 if payload.get("passed") is True else 1
 
 
@@ -1261,6 +1310,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_diagnose_closed_loop(args)
     if args.command == "write-export-validation":
         return _cmd_write_export_validation(args)
+    if args.command == "quantize-int4":
+        return _cmd_quantize_int4(args)
     if args.command == "profile":
         return _cmd_profile(args)
     if args.command == "plan":

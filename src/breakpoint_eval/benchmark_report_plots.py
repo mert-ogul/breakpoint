@@ -49,10 +49,16 @@ def short_label(condition_id: str) -> str:
         return "bypass"
     if condition_id.startswith("jpeg_q"):
         return f"q{condition_id[6:]}"
+    if condition_id == "h264_bypass":
+        return "bypass"
+    if condition_id.startswith("h264_") and condition_id.endswith("kbps"):
+        return f"{condition_id.removeprefix('h264_').removesuffix('kbps')} kbps"
     if condition_id == "precision_onnx_fp32":
         return "FP32"
     if condition_id == "precision_int8":
         return "INT8 QDQ"
+    if condition_id == "precision_int4_weight_only":
+        return "INT4 weight-only"
     if condition_id.startswith("device_profile_"):
         return condition_id.removeprefix("device_profile_").removesuffix("_fp32") + "\nreplay"
     return condition_id

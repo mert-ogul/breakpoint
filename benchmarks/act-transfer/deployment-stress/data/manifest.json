@@ -1,14 +1,14 @@
 {
   "files": [
     {
-      "bytes": 497750,
+      "bytes": 828007,
       "path": "episodes/episodes.jsonl",
-      "sha256": "effcffea665b4fb58ab4a37eb55bccd419cfb6e51049abd6bc741a0cce0e7cc3"
+      "sha256": "cbf04fbb2a4c959c5bd7317799f02d67b688fe4f062cbbf4f43b3f6433cc5268"
     },
     {
-      "bytes": 199,
+      "bytes": 212,
       "path": "historical/shared_baselines/baseline_fingerprint.json",
-      "sha256": "848fe4d3ad763a106efdee719b5d6ec1f73746c55105d4658bc9fede0127c279"
+      "sha256": "a601a4ce11f10fe23ad94d4e9b68edd34f1ee0920ded176afa181d7f12eb735f"
     },
     {
       "bytes": 2082,
@@ -29,6 +29,56 @@
       "bytes": 11676,
       "path": "historical/v0.1_full_device_profile/device_profile_rpi5_fp32/provenance.json",
       "sha256": "5121b73f7a2fc333b16bb6c0ad0e3755a3e9a22bacf017aab0aa0599d9063ace"
+    },
+    {
+      "bytes": 1334,
+      "path": "historical/v0.1_full_h264/h264_1000kbps/planned_settings.json",
+      "sha256": "09bdacb28e1d1ccfdb34f205f82df91c61e99a85ffe672d017750f968ff85b45"
+    },
+    {
+      "bytes": 11624,
+      "path": "historical/v0.1_full_h264/h264_1000kbps/provenance.json",
+      "sha256": "6bc9b49c8a59d7e7707c0cc7417456121a36230418fe73350333ff8ab18b5fae"
+    },
+    {
+      "bytes": 1332,
+      "path": "historical/v0.1_full_h264/h264_100kbps/planned_settings.json",
+      "sha256": "4e9be6c8876bf7689c114ebcae56621bd4f71bdc76818418b3a74c80b2a072ad"
+    },
+    {
+      "bytes": 11623,
+      "path": "historical/v0.1_full_h264/h264_100kbps/provenance.json",
+      "sha256": "b375bbb465289fbd942dd6e734a2c24b6104a6227ab395e6085b6cf9cc217dd0"
+    },
+    {
+      "bytes": 1334,
+      "path": "historical/v0.1_full_h264/h264_2000kbps/planned_settings.json",
+      "sha256": "0958c5ec1ac24aaf23322322e99c4688a6a83d3281103c98259d1ed6b2b3df44"
+    },
+    {
+      "bytes": 11624,
+      "path": "historical/v0.1_full_h264/h264_2000kbps/provenance.json",
+      "sha256": "7e9f04fa4a51e5ad000924f1ffe75cd0a8eead23a71da443632166ca62ff53ec"
+    },
+    {
+      "bytes": 1332,
+      "path": "historical/v0.1_full_h264/h264_250kbps/planned_settings.json",
+      "sha256": "f609f105add7c25a62359a9f58021e3ed9b3a94bc823250073b8481f72755c91"
+    },
+    {
+      "bytes": 11623,
+      "path": "historical/v0.1_full_h264/h264_250kbps/provenance.json",
+      "sha256": "6dacf775bc735320aef012fbd734e946dbb66a09b07f35e96051926120fc11ac"
+    },
+    {
+      "bytes": 1332,
+      "path": "historical/v0.1_full_h264/h264_500kbps/planned_settings.json",
+      "sha256": "41ac1268e13c3df573a2c9a9efeed762615344090736d121db10bb555f1bb012"
+    },
+    {
+      "bytes": 11623,
+      "path": "historical/v0.1_full_h264/h264_500kbps/provenance.json",
+      "sha256": "bc436d1b3abb5115ef052939dad149de407ab025eaf1e3423347d3bf8de54a20"
     },
     {
       "bytes": 1117,
@@ -141,6 +191,16 @@
       "sha256": "185684623da02ca3ab055a2f9d1135375a5331b98ca3ecb8c0eed92c2c1c300d"
     },
     {
+      "bytes": 1240,
+      "path": "historical/v0.1_full_precision/precision_int4_weight_only/planned_settings.json",
+      "sha256": "ef2697881573ff39c76e278ffeebb2e7813e9c4174d24bcff541537bd3c00078"
+    },
+    {
+      "bytes": 13866,
+      "path": "historical/v0.1_full_precision/precision_int4_weight_only/provenance.json",
+      "sha256": "d3f8b7bbbc49007e2e24f1e4854659e16e2556c86bc0993bb2fe84ca942518e1"
+    },
+    {
       "bytes": 1207,
       "path": "historical/v0.1_full_precision/precision_int8/planned_settings.json",
       "sha256": "0e76ade34428ce31ecbcea14cb907e3e52137659548f85319a4d9e652e5ed873"
@@ -181,14 +241,19 @@
       "sha256": "77fe8d73217d9fb989c03dcc6efd7029506b7794cd9a626734969e82684736b5"
     },
     {
-      "bytes": 2190,
-      "path": "identities/identities.json",
-      "sha256": "2ab887b54921d7ff2ef37e5e2cf95a3dc21dc0d0c093a27a5a372e01a23c7407"
+      "bytes": 7209,
+      "path": "identities/condition_resolution.json",
+      "sha256": "d0f488b526c83c83e23285b84408687cf961b45a5895a4f51ee3e1cd2c4a0a7f"
     },
     {
-      "bytes": 12890,
+      "bytes": 2407,
+      "path": "identities/identities.json",
+      "sha256": "62e22d917779b9b38824930c704798ebc73d30a27ff2263950eeb18876c82eb3"
+    },
+    {
+      "bytes": 17295,
       "path": "large_evidence.json",
-      "sha256": "434a84555d60238ccc9d77519e5b8152fb2d4ea5d07d614bb23e6933fb2a7693"
+      "sha256": "0c5278e17cc9ed93a0f8012bfe85f8b1a4d0773ecbc4334c0232c3b33a92d5b5"
     },
     {
       "bytes": 38727,
@@ -221,9 +286,19 @@
       "sha256": "71b627cd677249c2270575af90d104c517b7ccf131eb170fe8c06e213ff50051"
     },
     {
+      "bytes": 3231,
+      "path": "protocol/benchmark_config.json",
+      "sha256": "30fb1466d8b9b6f42d99aa013e3c0fa533fe90169020fa832793a1658c6e92fa"
+    },
+    {
       "bytes": 6490,
       "path": "protocol/plans/v0.1_full_device_profile.json",
       "sha256": "c66303c5177d450a657353a55cb9e394eeb19c067846de88a334ada5c1577e35"
+    },
+    {
+      "bytes": 6934,
+      "path": "protocol/plans/v0.1_full_h264.json",
+      "sha256": "f7a61622787569165d0537a686dbeb4ddf89b8407449e4f3c03b6a320b944031"
     },
     {
       "bytes": 5510,
@@ -236,9 +311,9 @@
       "sha256": "74290c0104bc493a1b903b70197e10c673268712c80dfd4a6c1bc6aa9c658000"
     },
     {
-      "bytes": 4939,
+      "bytes": 5351,
       "path": "protocol/plans/v0.1_full_precision.json",
-      "sha256": "dac106c1cd6c371c443dc370ba8e8fdfcce4938e537cc8a5b956a2723b7a954a"
+      "sha256": "f32a2ae2bebe941dc666b81337b3405bd1cad2d2d18b2e865e6d485ad6989392"
     },
     {
       "bytes": 5880,
@@ -246,39 +321,39 @@
       "sha256": "a9faa88bbda6d1f7df8026f3c40ff71a1d74c1e7a0f26fa44705fc2016641066"
     },
     {
-      "bytes": 40654,
+      "bytes": 6208,
+      "path": "protocol/protocol_lock.json",
+      "sha256": "1259ce5efb42c4e04c9f2ee8228c6538fc839a8d7d7681ce9f807a65480fc932"
+    },
+    {
+      "bytes": 55266,
       "path": "protocol/run_records.json",
-      "sha256": "c20370e6662c63b7eacc4a8e4acfbb63170ee8f61177505f65cae596b7c43e9a"
+      "sha256": "2549e3fd4c4afc05cad9b42427c97a0c0f6d79bb0c31f6962cf38d507b9725eb"
     },
     {
-      "bytes": 2851,
-      "path": "protocol/v1_config.json",
-      "sha256": "094d21fb8434c9dbd18cb3bc630206454ae83a155f08c259f43ce36df7e5a5c9"
+      "bytes": 14619,
+      "path": "summaries/v0.1_full_h264.experiment_summary.json",
+      "sha256": "4028655efce06ada4b2e216fb1363aa2d3ceb4d604bd1aae47fb40c4b1e07447"
     },
     {
-      "bytes": 4858,
-      "path": "protocol/v1_protocol_lock.json",
-      "sha256": "e9bff3e6e7aa1668b73a23cda86723f0482ee0080c4761df94387cf45fc75238"
-    },
-    {
-      "bytes": 12768,
+      "bytes": 12846,
       "path": "summaries/v0.1_full_jpeg.experiment_summary.json",
-      "sha256": "876500d60a34e4d155c12097ae7fbf5e02e66ac73ec858cef312a9030c1dbb3a"
+      "sha256": "38ba352fb17f0b585b674510e55c562a1ed6abda8fd6350d1d0aa4b273445c4a"
     },
     {
-      "bytes": 13670,
+      "bytes": 13748,
       "path": "summaries/v0.1_full_latency.experiment_summary.json",
-      "sha256": "2fdf171ebbc7947e6679edd6ca3f86720c26d45cbaa849b301e364992007e5e1"
+      "sha256": "5327b29d81fd21a94d00889d228827642b402f9ec86ed1dfb342f74e54125a69"
     },
     {
-      "bytes": 5334,
+      "bytes": 7543,
       "path": "summaries/v0.1_full_precision.experiment_summary.json",
-      "sha256": "fb52146103944a37231a1ae2414e36c9c882651b7c6476b4c539c29bd0ca28d2"
+      "sha256": "14f910f563ccf968c422e2a7ecd90f15b467c3dfe6f2ba75232316ec1173a51d"
     },
     {
-      "bytes": 10218,
+      "bytes": 10270,
       "path": "summaries/v0.1_full_resolution.experiment_summary.json",
-      "sha256": "b57aa795be07ddadb7e32c3dace37305d43276a147a34df773f78fb0c81706e5"
+      "sha256": "28846d185421749fb3de24bcf3db990d959054c66ee94ab99a5c445ebbac5336"
     },
     {
       "bytes": 2109,
@@ -291,9 +366,14 @@
       "sha256": "07186ccff844b16c6f74b1d6cb9af76d6177ffc8bc0e8c0eafe4add6747d16c9"
     },
     {
-      "bytes": 86045,
+      "bytes": 130741,
       "path": "validation/export_manifest.json",
-      "sha256": "5e24ca922557e07220b516b02d327bf31a0528840018929195f02ff7c10b7c68"
+      "sha256": "50df41c2f383a009159bbaeedd67ba7c0c45ba2d2edd585ab0869cf8caa6efeb"
+    },
+    {
+      "bytes": 8143,
+      "path": "validation/export_validation_int4.json",
+      "sha256": "f098efdefd42ff47eb3e4d4d29665d271d93ca5a8daf4001d44dbae3dfda58b6"
     },
     {
       "bytes": 5014,

@@ -374,6 +374,7 @@ def run_export(req: ExportRequest) -> Path:
                 reference_chunks=ort_fp32_chunks,
                 candidate_chunks=int4_chunks,
                 seeds=[s.seed for s in eval_samples],
+                sample_ids=[s.sample_id for s in eval_samples],
                 reference_label="onnx_fp32",
                 candidate_label="int4_weight_only",
                 enforce_fp32_gates=False,
@@ -382,6 +383,7 @@ def run_export(req: ExportRequest) -> Path:
                 reference_chunks=pytorch_chunks,
                 candidate_chunks=int4_chunks,
                 seeds=[s.seed for s in eval_samples],
+                sample_ids=[s.sample_id for s in eval_samples],
                 reference_label="pytorch_fp32",
                 candidate_label="int4_weight_only",
                 enforce_fp32_gates=False,
@@ -543,5 +545,10 @@ def run_export(req: ExportRequest) -> Path:
 
         int8_val = write_int8_validation_from_export(output_dir)
         LOGGER.info("Wrote INT8 validation sidecar %s", int8_val)
+    if req.attempt_int4:
+        from breakpoint_eval.export_validation import write_int4_validation_from_export
+
+        int4_val = write_int4_validation_from_export(output_dir)
+        LOGGER.info("Wrote INT4 validation sidecar %s", int4_val)
     LOGGER.info("Wrote export manifest %s", manifest_path)
     return manifest_path

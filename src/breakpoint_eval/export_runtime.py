@@ -141,6 +141,7 @@ def resolve_onnx_runtime(
     hub_revision = str(manifest.get("hub_revision") or "")
 
     from breakpoint_eval.export_validation import (
+        assert_int4_validation_acceptable,
         assert_int8_validation_acceptable,
         assert_validation_v2_acceptable,
         find_export_validation_v2,
@@ -175,6 +176,21 @@ def resolve_onnx_runtime(
                     parent_fp32_sha256=parent_sha,
                     calibration_sha256=calib_sha,
                 )
+            elif variant_label == "int4_weight_only":
+                parent = next(
+                    (
+                        v
+                        for v in (manifest.get("variants") or [])
+                        if isinstance(v, dict) and v.get("label") == "onnx_fp32"
+                    ),
+                    None,
+                )
+                parent_sha = str(((parent or {}).get("graph") or {}).get("sha256") or "") or None
+                assert_int4_validation_acceptable(
+                    validation,
+                    model_sha256=model_sha256,
+                    parent_fp32_sha256=parent_sha,
+                )
             else:
                 assert_validation_v2_acceptable(
                     validation,
@@ -185,9 +201,15 @@ def resolve_onnx_runtime(
                     recipe_id=str(variant.get("recipe_id") or "") or None,
                     variant_label=variant_label or None,
                 )
+        if variant_label == "int8":
+            validation_schema = "v2_int8"
+        elif variant_label == "int4_weight_only":
+            validation_schema = "v2_int4"
+        else:
+            validation_schema = "v2"
         validation = {
             **validation,
-            "validation_schema": "v2_int8" if variant_label == "int8" else "v2",
+            "validation_schema": validation_schema,
             "validation_path": str(v2_path),
         }
     else:
@@ -195,6 +217,11 @@ def resolve_onnx_runtime(
             raise ValueError(
                 "INT8 deployment requires export_validation_int8.json next to the "
                 f"graph (missing beside {model_path}); refuse FP32 sidecar authorization"
+            )
+        if require_export_validation and variant_label == "int4_weight_only":
+            raise ValueError(
+                "INT4 needs its own sidecar export_validation_int4.json next to the "
+                f"graph (missing beside {model_path}); FP32 sidecar is refused"
             )
         validation = dict(manifest.get("export_validation") or {})
         if require_export_validation:

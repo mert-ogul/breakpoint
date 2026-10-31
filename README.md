@@ -36,14 +36,16 @@ Pretrained policy `lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on C
 | Constant added delay | 0 ms: 25, 40 ms: 25, 80 ms: 25, 160 ms: 23, 320 ms: 18, 640 ms: 14 |
 | Camera resolution | 480x640 native: 25, 240x320: 26, 120x160: 22, 60x80: 10 |
 | JPEG quality | bypass: 25, q95: 25, q75: 26, q50: 26, q25: 25, q10: 23 |
-| Numeric precision | FP32: 25, INT8 QDQ: 24 |
+| H.264 bitrate | bypass: 25, 2000 kbps: 25, 1000 kbps: 26, 500 kbps: 28, 250 kbps: 19, 100 kbps: 10 |
+| Numeric precision | FP32: 25, INT8 QDQ: 24, INT4 weight-only: 23 |
 | Device latency replay | laptop-m3 replay: 24, rpi5 replay: 9 |
 
 - Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
 - Constant added delay: first grid point below 0.8 x baseline is 320 ms at 18/30 (interval includes threshold).
 - Camera resolution: first grid point below 0.8 x baseline is 60x80 at 10/30.
 - JPEG quality: no condition fell below 0.8 x baseline.
-- Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below.
+- H.264 bitrate: first grid point below 0.8 x baseline is 250 kbps at 19/30 (interval includes threshold).
+- Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below; INT4 weight-only 23/30 not below.
 - Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
 <!-- results:end -->
 
@@ -51,10 +53,11 @@ These are observed grid points, not exact boundaries. The [full report](benchmar
 
 ## Supported scope
 
-- One task and policy, a validated ONNX FP32 export, and one static QDQ INT8 comparison.
+- One task and policy, a validated ONNX FP32 export, one static QDQ INT8 comparison, and INT4 weight-only.
 - Constant added delay, camera resolution and JPEG quality. Latency replay uses recorded FP32 CPU profiles from a laptop (Apple M3) and a Raspberry Pi 5.
+- H.264 quality-only bitrate axis (encode and decode in the same control step; no codec or transport delay).
 - Evidence comes from macOS 14.6 arm64 with Python 3.11 on CPU. The Pi profile was recorded on Linux aarch64. Other platforms are untested ([compatibility](docs/compatibility.md)).
-- Experimental code for H.264, Diffusion PushT and INT4 remains in the package. It is not part of the validated scope.
+- Experimental code for FP16, H.264 deployment mode and Diffusion PushT remains in the package. It is not part of the validated scope.
 
 ## Limitations
 
@@ -62,7 +65,9 @@ These are observed grid points, not exact boundaries. The [full report](benchmar
 - Thirty episodes per condition give wide intervals. The run is exploratory and has not been confirmed with fresh seeds.
 - The rpi5 replay describes one throttled Pi state. The firmware reported throttling or a temperature limit in almost every telemetry sample.
 - INT8 is a static QDQ graph. It is not a full-model INT8 result and was not required to match FP32 numerically.
-- About 570 MB of raw run logs, ONNX graphs and corpora are not in the repository. Sizes and hashes are in [`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json).
+- INT4 stores 29 of 41 MatMul nodes as 4-bit blocks (61.6% of weight parameters); Conv, Gemm and activation-by-activation MatMul stay FP32, and weights are dequantized and computed in float. This is not a full-model INT4 result.
+- H.264 is quality only: no codec, transport or jitter-buffer delay is simulated, and the ABR stream can overshoot the request (largest overshoot in these rows: +118.2 kbps).
+- About 829 MB of raw run logs, ONNX graphs and corpora are not in the repository. Sizes and hashes are in [`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json).
 
 ## Documentation
 

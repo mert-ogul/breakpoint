@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -12,15 +15,19 @@ from breakpoint_eval.act_export import (
     RECIPE_ORT_FP16,
     RECIPE_ORT_INT4_MATMUL_NBITS,
     RECIPE_ORT_INT8_STATIC_QDQ,
+    OrtActChunkSession,
     VariantArtifact,
     create_ort_session,
     inspect_onnx_graph,
     require_onnx,
     sha256_file,
+    write_json,
 )
-from breakpoint_eval.export_corpus import CorpusSample
+from breakpoint_eval.export_corpus import CorpusSample, load_corpus
 
 LOGGER = logging.getLogger("breakpoint_eval.export_quantize")
+
+_INT4_GRAPH_NAME = "act_chunk_int4_matmul_nbits.onnx"
 
 
 class _CorpusCalibrationReader:
@@ -93,6 +100,120 @@ def _coverage_from_graph(graph: dict[str, Any]) -> dict[str, Any]:
         "remaining_float_matmul": int(ops.get("MatMul", 0)),
         "remaining_float_conv": int(ops.get("Conv", 0)),
         "remaining_float_gemm": int(ops.get("Gemm", 0)),
+    }
+
+
+def _node_attr_int(node: Any, name: str, default: int | None = None) -> int | None:
+    for attr in node.attribute:
+        if attr.name == name:
+            return int(attr.i)
+    return default
+
+
+def _float_initializer_element_count(model: Any) -> int:
+    from onnx import numpy_helper
+
+    total = 0
+    for init in model.graph.initializer:
+        arr = numpy_helper.to_array(init)
+        if arr.dtype.kind == "f":
+            total += int(arr.size)
+    return total
+
+
+def _matmul_nbits_original_name(node_name: str) -> str:
+    suffix = "_Q4"
+    if node_name.endswith(suffix):
+        return node_name[: -len(suffix)]
+    return node_name
+
+
+def _build_int4_quantization_coverage(
+    fp32_path: Path,
+    quant_path: Path,
+    *,
+    block_size: int,
+    bits: int,
+    symmetric: bool,
+    op_types_to_quantize: tuple[str, ...],
+    quant_format_name: str,
+) -> dict[str, Any]:
+    import onnx
+
+    fp32_model = onnx.load(str(fp32_path))
+    quant_model = onnx.load(str(quant_path))
+    graph = inspect_onnx_graph(quant_path)
+    coverage = _coverage_from_graph(graph)
+
+    init_shapes = {init.name: tuple(init.dims) for init in fp32_model.graph.initializer}
+    const_weight_names: list[str] = []
+    float_matmul_nodes: list[dict[str, str]] = []
+    matmul_nodes_total = 0
+    for node in fp32_model.graph.node:
+        if node.op_type != "MatMul":
+            continue
+        matmul_nodes_total += 1
+        weight_name = node.input[1] if len(node.input) > 1 else ""
+        if weight_name not in init_shapes:
+            float_matmul_nodes.append(
+                {"name": node.name, "reason": "weight is not a constant initializer"}
+            )
+        elif len(init_shapes[weight_name]) != 2:
+            float_matmul_nodes.append({"name": node.name, "reason": "weight is not 2D"})
+        else:
+            const_weight_names.append(node.name)
+
+    nbits_nodes = [node for node in quant_model.graph.node if node.op_type == "MatMulNBits"]
+    quantized_from_nbits = {_matmul_nbits_original_name(node.name) for node in nbits_nodes}
+    quantized_nodes = [name for name in const_weight_names if name in quantized_from_nbits]
+    for name in const_weight_names:
+        if name not in quantized_from_nbits:
+            float_matmul_nodes.append({"name": name, "reason": "not converted by quantizer"})
+
+    accuracy_levels: list[int] = []
+    weight_params_int4 = 0
+    for node in nbits_nodes:
+        k = int(_node_attr_int(node, "K", 0) or 0)
+        n = int(_node_attr_int(node, "N", 0) or 0)
+        weight_params_int4 += k * n
+        level = _node_attr_int(node, "accuracy_level", None)
+        accuracy_levels.append(0 if level is None else int(level))
+    if accuracy_levels and len(set(accuracy_levels)) == 1:
+        accuracy_level: int | list[int] = accuracy_levels[0]
+    elif accuracy_levels:
+        accuracy_level = accuracy_levels
+    else:
+        accuracy_level = 0
+
+    weight_params_total = _float_initializer_element_count(fp32_model)
+    fraction = (
+        float(weight_params_int4) / float(weight_params_total) if weight_params_total > 0 else 0.0
+    )
+    float_gemm_nodes = [node.name for node in fp32_model.graph.node if node.op_type == "Gemm"]
+    float_conv_nodes = [node.name for node in fp32_model.graph.node if node.op_type == "Conv"]
+
+    return {
+        **coverage,
+        "recipe": {
+            "algorithm": "RTN",
+            "bits": bits,
+            "block_size": block_size,
+            "symmetric": symmetric,
+            "op_types_to_quantize": list(op_types_to_quantize),
+            "quant_format": quant_format_name,
+            "accuracy_level": accuracy_level,
+        },
+        "matmul_nodes_total": matmul_nodes_total,
+        "matmul_nodes_const_weight": len(const_weight_names),
+        "matmul_nbits_nodes": len(nbits_nodes),
+        "quantized_nodes": quantized_nodes,
+        "float_matmul_nodes": float_matmul_nodes,
+        "float_gemm_nodes": float_gemm_nodes,
+        "float_conv_nodes": float_conv_nodes,
+        "weight_params_total": weight_params_total,
+        "weight_params_int4": weight_params_int4,
+        "weight_params_int4_fraction": fraction,
+        "full_model_int4_claim": False,
     }
 
 
@@ -191,21 +312,29 @@ def quantize_int4_weight_only(
     providers: list[str] | None = None,
     probe_sample: CorpusSample | None = None,
 ) -> VariantArtifact:
-    """ORT MatMulNBits weight-only INT4. Unsupported/run failure is explicit."""
-    require_onnx()
+    """ORT MatMulNBits weight-only INT4 (RTN). No silent recipe fallback."""
     providers = providers or ["CPUExecutionProvider"]
     recipe = RECIPE_ORT_INT4_MATMUL_NBITS
+    block_size = 128
+    bits = 4
+    symmetric = True
+    op_types_to_quantize = ("MatMul",)
     try:
+        require_onnx()
         import onnx
+        from onnxruntime.quantization import QuantFormat
         from onnxruntime.quantization.matmul_nbits_quantizer import (
             DefaultWeightOnlyQuantConfig,
             MatMulNBitsQuantizer,
         )
 
         cfg = DefaultWeightOnlyQuantConfig(
-            block_size=128,
-            is_symmetric=True,
-            bits=4,
+            block_size=block_size,
+            is_symmetric=symmetric,
+            accuracy_level=None,
+            quant_format=QuantFormat.QOperator,
+            op_types_to_quantize=op_types_to_quantize,
+            bits=bits,
         )
         quantizer = MatMulNBitsQuantizer(str(fp32_path), algo_config=cfg)
         quantizer.process()
@@ -213,7 +342,19 @@ def quantize_int4_weight_only(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         onnx.save_model(quantizer.model.model, str(output_path))
         graph = inspect_onnx_graph(output_path)
-        coverage = _coverage_from_graph(graph)
+        coverage = _build_int4_quantization_coverage(
+            Path(fp32_path),
+            output_path,
+            block_size=block_size,
+            bits=bits,
+            symmetric=symmetric,
+            op_types_to_quantize=op_types_to_quantize,
+            quant_format_name=QuantFormat.QOperator.name,
+        )
+        runtime_base = {
+            **_runtime_meta(providers),
+            "native_int4_execution_claim": False,
+        }
         if not coverage["has_matmul_nbits"]:
             return VariantArtifact(
                 label="int4_weight_only",
@@ -225,7 +366,7 @@ def quantize_int4_weight_only(
                 effective_weight_precision=None,
                 effective_activation_precision="float32",
                 quantization_coverage=coverage,
-                runtime=_runtime_meta(providers),
+                runtime=runtime_base,
             )
         try:
             session = create_ort_session(output_path, providers=providers)
@@ -243,7 +384,7 @@ def quantize_int4_weight_only(
                 effective_weight_precision="int4_weights_stored",
                 effective_activation_precision="float32",
                 quantization_coverage=coverage,
-                runtime=_runtime_meta(providers),
+                runtime=runtime_base,
             )
         if probe_sample is not None:
             _ = session.run(
@@ -265,30 +406,38 @@ def quantize_int4_weight_only(
             graph=graph,
             effective_weight_precision="int4 (MatMulNBits block_size=128, symmetric)",
             effective_activation_precision="float32",
-            quantization_coverage={
-                **coverage,
-                "matmul_nbits_nodes": int(graph["op_counts"].get("MatMulNBits", 0)),
-                "excluded_const_matmul_note": (
-                    "MatMuls without const weights and Gemm/Conv remain float"
-                ),
-                "full_model_int4_claim": False,
-            },
+            quantization_coverage=coverage,
             runtime={
-                **_runtime_meta(providers),
+                **runtime_base,
                 "session_providers": session.get_providers(),
                 "graph_sha256": graph["sha256"],
-                "native_int4_execution_claim": False,
             },
         )
-    except Exception as exc:  # noqa: BLE001
-        LOGGER.exception("INT4 weight-only quantization failed")
+    except ImportError as exc:
+        LOGGER.exception("INT4 weight-only quantization unavailable")
         return VariantArtifact(
             label="int4_weight_only",
             recipe_id=recipe,
             path=None,
             status="unsupported",
             detail=f"{type(exc).__name__}: {exc}",
-            runtime=_runtime_meta(providers),
+            runtime={
+                **_runtime_meta(providers),
+                "native_int4_execution_claim": False,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — capability boundary
+        LOGGER.exception("INT4 weight-only quantization failed")
+        return VariantArtifact(
+            label="int4_weight_only",
+            recipe_id=recipe,
+            path=None,
+            status="errored",
+            detail=f"{type(exc).__name__}: {exc}",
+            runtime={
+                **_runtime_meta(providers),
+                "native_int4_execution_claim": False,
+            },
         )
 
 
@@ -362,3 +511,152 @@ def try_fp16_convert(
             detail=f"{type(exc).__name__}: {exc}",
             runtime=_runtime_meta(providers),
         )
+
+
+def add_int4_variant(
+    export_dir: Path,
+    *,
+    providers: tuple[str, ...] | list[str] = ("CPUExecutionProvider",),
+) -> Path:
+    """Add MatMulNBits INT4 beside an existing validated FP32 export; no overwrite."""
+    from breakpoint_eval.export_parity import evaluate_corpus_parity, run_ort_chunks
+    from breakpoint_eval.export_runtime import resolve_onnx_runtime
+    from breakpoint_eval.export_validation import write_int4_validation_from_export
+
+    export_dir = Path(export_dir).resolve()
+    manifest_path = export_dir / "export_manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"missing export_manifest.json in {export_dir}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError(f"export manifest must be a JSON object: {manifest_path}")
+
+    variants = [v for v in (manifest.get("variants") or []) if isinstance(v, dict)]
+    fp32_ok = [v for v in variants if v.get("label") == "onnx_fp32" and v.get("status") == "ok"]
+    if len(fp32_ok) != 1:
+        raise ValueError(
+            f"export manifest must list exactly one ok onnx_fp32 variant; found {len(fp32_ok)}"
+        )
+    fp32 = fp32_ok[0]
+    fp32_name = Path(str(fp32.get("path") or "act_chunk_fp32.onnx")).name
+    fp32_path = export_dir / fp32_name
+    if not fp32_path.is_file():
+        raise FileNotFoundError(f"onnx_fp32 graph not found in export dir: {fp32_path}")
+    file_sha = sha256_file(fp32_path)
+    manifest_sha = str((fp32.get("graph") or {}).get("sha256") or "")
+    if not manifest_sha or manifest_sha != file_sha:
+        raise ValueError(
+            "onnx_fp32 manifest sha256 does not match file in export dir: "
+            f"manifest={manifest_sha!r} file={file_sha!r}"
+        )
+    resolve_onnx_runtime(fp32_path, require_export_validation=True)
+
+    if any(v.get("label") == "int4_weight_only" for v in variants):
+        raise ValueError(
+            f"export manifest already lists int4_weight_only; refuse overwrite in {export_dir}"
+        )
+    int4_path = export_dir / _INT4_GRAPH_NAME
+    if int4_path.is_file():
+        raise ValueError(f"{_INT4_GRAPH_NAME} already exists in {export_dir}; refuse overwrite")
+
+    eval_meta = (manifest.get("corpus") or {}).get("evaluation") or {}
+    corpus_path = export_dir / "corpus_eval.npz"
+    if not corpus_path.is_file():
+        raise FileNotFoundError(f"missing corpus_eval.npz in {export_dir}")
+    corpus_sha = sha256_file(corpus_path)
+    expected_sha = str(eval_meta.get("sha256") or "")
+    if not expected_sha or corpus_sha != expected_sha:
+        raise ValueError(
+            "corpus_eval.npz sha256 does not match manifest corpus.evaluation.sha256: "
+            f"file={corpus_sha!r} manifest={expected_sha!r}"
+        )
+    eval_samples = load_corpus(corpus_path)
+    expected_ids = [str(x) for x in (eval_meta.get("sample_ids") or [])]
+    actual_ids = [s.sample_id for s in eval_samples]
+    if not expected_ids or actual_ids != expected_ids:
+        raise ValueError(
+            "corpus_eval.npz sample_ids do not match manifest corpus.evaluation.sample_ids"
+        )
+    if not eval_samples:
+        raise ValueError("evaluation corpus is empty")
+
+    provider_list = list(providers) or ["CPUExecutionProvider"]
+    int4 = quantize_int4_weight_only(
+        fp32_path,
+        int4_path,
+        providers=provider_list,
+        probe_sample=eval_samples[0],
+    )
+
+    comparisons = dict(manifest.get("comparisons") or {})
+    if int4.status == "ok" and int4.path:
+        onnx_ref_path = export_dir / "eval_chunks_onnx_fp32.npz"
+        if not onnx_ref_path.is_file():
+            raise FileNotFoundError(
+                f"missing eval_chunks_onnx_fp32.npz in {export_dir}; "
+                "required for INT4 vs ONNX FP32 corpus comparison"
+            )
+        onnx_ref = np.load(onnx_ref_path)
+        missing = [sid for sid in actual_ids if sid not in onnx_ref.files]
+        if missing:
+            raise ValueError(
+                "eval_chunks_onnx_fp32.npz missing sample_id keys required by evaluation corpus: "
+                f"{missing[:5]}"
+            )
+        int4_sess = OrtActChunkSession(Path(int4.path), providers=provider_list)
+        int4_chunks = run_ort_chunks(int4_sess, eval_samples)
+        ref_onnx = [np.asarray(onnx_ref[sid], dtype=np.float32) for sid in actual_ids]
+        comparisons["int4_weight_only_vs_onnx_fp32"] = evaluate_corpus_parity(
+            reference_chunks=ref_onnx,
+            candidate_chunks=int4_chunks,
+            seeds=[s.seed for s in eval_samples],
+            sample_ids=actual_ids,
+            reference_label="onnx_fp32",
+            candidate_label="int4_weight_only",
+            enforce_fp32_gates=False,
+        ).to_dict()
+        pytorch_ref_path = export_dir / "eval_chunks_pytorch_fp32.npz"
+        if pytorch_ref_path.is_file():
+            pytorch_ref = np.load(pytorch_ref_path)
+            missing_pt = [sid for sid in actual_ids if sid not in pytorch_ref.files]
+            if missing_pt:
+                raise ValueError(
+                    f"eval_chunks_pytorch_fp32.npz missing sample_id keys: {missing_pt[:5]}"
+                )
+            ref_pt = [np.asarray(pytorch_ref[sid], dtype=np.float32) for sid in actual_ids]
+            comparisons["int4_weight_only_vs_pytorch_fp32"] = evaluate_corpus_parity(
+                reference_chunks=ref_pt,
+                candidate_chunks=int4_chunks,
+                seeds=[s.seed for s in eval_samples],
+                sample_ids=actual_ids,
+                reference_label="pytorch_fp32",
+                candidate_label="int4_weight_only",
+                enforce_fp32_gates=False,
+            ).to_dict()
+    elif int4.status != "ok":
+        LOGGER.warning(
+            "INT4 variant status=%s detail=%s (no silent recipe fallback)",
+            int4.status,
+            int4.detail,
+        )
+
+    updated = dict(manifest)
+    updated["variants"] = list(variants) + [int4.to_dict()]
+    updated["comparisons"] = comparisons
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix="export_manifest_",
+        suffix=".json",
+        dir=str(export_dir),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        write_json(tmp_path, updated)
+        os.replace(tmp_path, manifest_path)
+    except Exception:
+        if tmp_path.is_file():
+            tmp_path.unlink()
+        raise
+
+    return write_int4_validation_from_export(export_dir)

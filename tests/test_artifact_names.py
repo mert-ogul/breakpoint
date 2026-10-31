@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     LEGACY_NAMES,
@@ -64,6 +65,17 @@ def test_find_export_validation_prefers_matching_variant(tmp_path: Path) -> None
     assert find_export_validation_v2(tmp_path / "m.onnx") is None
     found = find_export_validation_v2(tmp_path / "m.onnx", variant_label="int8")
     assert found.name == "export_validation_v2_int8.json"
+
+
+def test_resolve_artifact_works_for_int4_canonical_without_legacy(tmp_path: Path) -> None:
+    assert EXPORT_VALIDATION_INT4_NAME not in LEGACY_NAMES
+    assert resolve_artifact(tmp_path, EXPORT_VALIDATION_INT4_NAME) is None
+    with pytest.raises(FileNotFoundError, match=EXPORT_VALIDATION_INT4_NAME):
+        require_artifact(tmp_path, EXPORT_VALIDATION_INT4_NAME)
+    _write(tmp_path / EXPORT_VALIDATION_INT4_NAME, {"passed": True})
+    found = resolve_artifact(tmp_path, EXPORT_VALIDATION_INT4_NAME)
+    assert found is not None and found.name == EXPORT_VALIDATION_INT4_NAME
+    assert require_artifact(tmp_path, EXPORT_VALIDATION_INT4_NAME) == found
 
 
 def test_active_config_has_named_protocol() -> None:

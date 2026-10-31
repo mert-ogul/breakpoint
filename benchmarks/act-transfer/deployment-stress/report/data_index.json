@@ -200,6 +200,78 @@
       "wilson_low": 0.5907167384187784
     },
     {
+      "axis": "h264",
+      "condition_id": "h264_bypass",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_h264",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_2000kbps",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_h264",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 25,
+      "wilson_high": 0.9266345762815145,
+      "wilson_low": 0.6643564949358398
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_1000kbps",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_h264",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 26,
+      "wilson_high": 0.9469034451594525,
+      "wilson_low": 0.7031867331796371
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_500kbps",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_h264",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 28,
+      "wilson_high": 0.9815229762087295,
+      "wilson_low": 0.7867654163738308
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_250kbps",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_h264",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 19,
+      "wilson_high": 0.7812607919389929,
+      "wilson_low": 0.4551356365479487
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_100kbps",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_h264",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 10,
+      "wilson_high": 0.5121994835545616,
+      "wilson_low": 0.19230498083676134
+    },
+    {
       "axis": "precision",
       "condition_id": "precision_onnx_fp32",
       "derived_by_report": false,
@@ -222,6 +294,18 @@
       "successes": 24,
       "wilson_high": 0.9049489282271013,
       "wilson_low": 0.6269430358685175
+    },
+    {
+      "axis": "precision",
+      "condition_id": "precision_int4_weight_only",
+      "derived_by_report": false,
+      "eligible": 30,
+      "plan_id": "v0.1_full_precision",
+      "planned": 30,
+      "runtime_errors": 0,
+      "successes": 23,
+      "wilson_high": 0.8820761185551049,
+      "wilson_low": 0.5907167384187784
     },
     {
       "axis": "device_profile",
@@ -262,9 +346,9 @@
   ],
   "files": [
     {
-      "bytes": 93536,
+      "bytes": 119985,
       "path": "index.html",
-      "sha256": "2364f700f1f50e52f1655b4ee00212afd2edf91427748fafd394ff67fa7f3897"
+      "sha256": "a415acf3d08696ffa42786b919f5603abf289c15e9a2cfe1790d2ebc2e758c74"
     },
     {
       "bytes": 76927,
@@ -312,6 +396,21 @@
       "sha256": "8e21e23cb926b9da39e6ba5bf9859c397df655cb8eb6e3a9730466d674d5ec47"
     },
     {
+      "bytes": 20642,
+      "path": "plots/success_h264.dark.svg",
+      "sha256": "5eda398d88c5dcca52ff23f39a7f0fce3e51942a83e96a6d2565048d8c72c4c2"
+    },
+    {
+      "bytes": 65830,
+      "path": "plots/success_h264.png",
+      "sha256": "6bc8fd090f35ba0a0f30a2a1251173c439eb5b1afe42d6a65f5cbb3ba2f0963a"
+    },
+    {
+      "bytes": 20642,
+      "path": "plots/success_h264.svg",
+      "sha256": "170af738559b574618a9510e094c30bbd0807c283631aa8e1474ca61bad543f0"
+    },
+    {
       "bytes": 20383,
       "path": "plots/success_jpeg.dark.svg",
       "sha256": "f63ac94748b16b5b62bba45045ae8cb02a9b4abcc74b6388cd50785233ac1454"
@@ -342,19 +441,19 @@
       "sha256": "4ffd4fb55644583f323b106b75ec7fc60c0eced261c032423f936f3aea481652"
     },
     {
-      "bytes": 13560,
+      "bytes": 15282,
       "path": "plots/success_precision.dark.svg",
-      "sha256": "c6b1813a2924c72a4834309c1278f68bcaaf6ae22a3967d1f8717cb249918964"
+      "sha256": "d110868a4ab2f29b13686d0c4dac7ad42a1594fdfa22faa66256d97ccd42537a"
     },
     {
-      "bytes": 49825,
+      "bytes": 54217,
       "path": "plots/success_precision.png",
-      "sha256": "df2332fa47be3757530d666c0d1cb0b01ddbce4d3b9c6917a98743dbf72d8f85"
+      "sha256": "a6f6295c81787c9e81a2b1e9c7c8388ec27de2c90dd7e315afa2598609f426b2"
     },
     {
-      "bytes": 13560,
+      "bytes": 15282,
       "path": "plots/success_precision.svg",
-      "sha256": "71cc048b2f929e6dce838e919291e8c0d9df0c70ab594cffd6005352e3aae148"
+      "sha256": "51a4f819c9e6128e059e0b219a3f16d56fc144dfd2f93318f85e71e26bffd7c0"
     },
     {
       "bytes": 17376,
@@ -372,26 +471,26 @@
       "sha256": "691931591bbeada322f8b2553c09c0f6d4f31898d2cc19423c2536b14f41f618"
     },
     {
-      "bytes": 13385,
+      "bytes": 17927,
       "path": "report.md",
-      "sha256": "3d6d4fdd8a6fe5337fbdd9840fab00a10bad5ad130dffb3e41b195543a9cea83"
+      "sha256": "53c8a2a99a98bc779c9ad6799b4c9be43422e49edec7c30515839b89b13afb59"
     }
   ],
   "generator": "scripts/render_benchmark.py",
   "input": {
-    "episode_rows": 600,
-    "manifest_sha256": "696b73a06d637b3951a1fb2d961edd10e588b54b6b25b357a0a60f2ffd307b2a",
-    "simulated_runs": 18
+    "episode_rows": 810,
+    "manifest_sha256": "4879c96f7a527bb9e75c3f0d050ea6244d7c083e07f3870fe9f1821156f521a9",
+    "simulated_runs": 24
   },
   "schema_version": 1,
   "validation": [
     {
-      "detail": "61 files hashed",
+      "detail": "77 files hashed",
       "name": "packaged files match manifest sha256",
       "passed": true
     },
     {
-      "detail": "600 rows",
+      "detail": "810 rows",
       "name": "episode rows: planned seeds, policy RNG seeds, success flag vs outcome",
       "passed": true
     },
@@ -401,7 +500,7 @@
       "passed": true
     },
     {
-      "detail": "21 condition rows",
+      "detail": "28 condition rows",
       "name": "displayed counts: every axis lists each planned condition once",
       "passed": true
     },
@@ -421,12 +520,17 @@
       "passed": true
     },
     {
-      "detail": "2 conditions",
+      "detail": "6 conditions",
+      "name": "v0.1_full_h264: saved summary counts and Wilson intervals equal episode records",
+      "passed": true
+    },
+    {
+      "detail": "3 conditions",
       "name": "v0.1_full_precision: saved summary counts and Wilson intervals equal episode records",
       "passed": true
     },
     {
-      "detail": "90 referenced rows; differing: []",
+      "detail": "120 referenced rows; differing: []",
       "name": "shared baseline outcomes equal the latency_ms_0 condition seed by seed",
       "passed": true
     },
@@ -443,6 +547,16 @@
     {
       "detail": "fp32 sha256 27bf9278030e",
       "name": "device profiles were measured on the locked FP32 graph",
+      "passed": true
+    },
+    {
+      "detail": "106 INT4 inference calls",
+      "name": "INT4 episodes complete with no policy_failed (finite closed-loop outputs)",
+      "passed": true
+    },
+    {
+      "detail": "150 H.264 episodes",
+      "name": "H.264 rows: measured kbps matches bytes/frames at 50 fps; frames=n_control_steps; zero holds; first-frame keyframe",
       "passed": true
     }
   ]
