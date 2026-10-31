@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from breakpoint_eval.artifact_names import (
+    EXPORT_VALIDATION_INT4_NAME,
     EXPORT_VALIDATION_INT8_NAME,
     EXPORT_VALIDATION_NAME,
     resolve_artifact,
@@ -35,6 +36,7 @@ from breakpoint_eval.source_revision import read_source_revision
 SCHEMA_VERSION = 2
 VALIDATION_FILENAME = EXPORT_VALIDATION_NAME
 INT8_VALIDATION_FILENAME = EXPORT_VALIDATION_INT8_NAME
+INT4_VALIDATION_FILENAME = EXPORT_VALIDATION_INT4_NAME
 
 # Terminal outcomes from a finished episode (not policy_failed / runtime_error).
 _COMPLETED_TASK_OUTCOMES = frozenset(
@@ -427,6 +429,14 @@ def assert_validation_v2_acceptable(
             "FP32 deployment resolve refused INT8 validation sidecar; "
             "use export_validation_int8.json for INT8 graphs"
         )
+    if (
+        result.get("variant_label") == "int4_weight_only"
+        or (result.get("binding") or {}).get("variant_label") == "int4_weight_only"
+    ):
+        raise ValueError(
+            "FP32 deployment resolve refused INT4 validation sidecar; "
+            "use export_validation_int4.json for INT4 graphs"
+        )
     if result.get("passed") is not True:
         raise ValueError(
             "export_validation.passed is not true; refuse unvalidated deployment runtime "
@@ -626,6 +636,249 @@ def assert_int8_validation_acceptable(
         raise ValueError("INT8 must not be authorized by the FP32 validation sidecar")
 
 
+def evaluate_int4_runtime_checks(parity_report: dict[str, Any] | None) -> dict[str, Any]:
+    """INT4 requires finite outputs and matching shapes; not FP32 allclose."""
+    reasons: list[str] = []
+    if not parity_report:
+        return {
+            "passed": False,
+            "shapes_ok": False,
+            "finite_ok": False,
+            "fp32_allclose_required": False,
+            "not_passed_reasons": ["int4_parity_report_missing"],
+        }
+    shapes_ok = parity_report.get("shapes_ok") is True
+    finite_ok = parity_report.get("finite_ok") is True
+    if not shapes_ok:
+        reasons.append("int4_shape_mismatch_or_missing")
+    if not finite_ok:
+        reasons.append("int4_nonfinite_or_missing")
+    return {
+        "passed": shapes_ok and finite_ok,
+        "shapes_ok": shapes_ok,
+        "finite_ok": finite_ok,
+        "max_abs_error": parity_report.get("max_abs_error"),
+        "mean_abs_error": parity_report.get("mean_abs_error"),
+        "action_unit_mean_abs_error": parity_report.get("action_unit_mean_abs_error"),
+        "fp32_allclose_required": False,
+        "task_success_required": False,
+        "not_passed_reasons": reasons,
+    }
+
+
+def build_int4_validation_v2(
+    *,
+    binding: dict[str, Any],
+    parity_vs_onnx_fp32: dict[str, Any] | None,
+    parity_vs_pytorch_fp32: dict[str, Any] | None,
+    quantization_coverage: dict[str, Any] | None,
+    parent_fp32_sha256: str,
+    variant_status: str,
+    source_export_manifest_path: str | None = None,
+) -> dict[str, Any]:
+    """INT4 sidecar: own identity, finite/shape checks, coverage; no task/allclose gate."""
+    runtime = evaluate_int4_runtime_checks(parity_vs_onnx_fp32)
+    reasons: list[str] = []
+    if variant_status != "ok":
+        reasons.append(f"int4_variant_status={variant_status}")
+    if not parent_fp32_sha256:
+        reasons.append("parent_fp32_sha256_missing")
+    if binding.get("model_sha256") in {None, ""}:
+        reasons.append("int4_model_sha256_missing")
+    if binding.get("recipe_id") in {None, ""}:
+        reasons.append("int4_recipe_id_missing")
+    if binding.get("candidate") in {None, ""}:
+        reasons.append("candidate_missing")
+    if binding.get("hub_revision") in {None, ""}:
+        reasons.append("hub_revision_missing")
+    if not quantization_coverage:
+        reasons.append("quantization_coverage_missing")
+    nbits = int((quantization_coverage or {}).get("matmul_nbits_nodes") or 0)
+    if nbits < 1:
+        reasons.append("matmul_nbits_nodes_missing_or_zero")
+    if not runtime["passed"]:
+        reasons.extend(runtime.get("not_passed_reasons") or [])
+    if binding.get("parent_fp32_sha256") not in {None, "", parent_fp32_sha256}:
+        reasons.append("parent_fp32_sha256_binding_mismatch")
+
+    passed = variant_status == "ok" and runtime["passed"] and not reasons
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "variant_label": "int4_weight_only",
+        "passed": passed,
+        "not_passed_reasons": [] if passed else reasons,
+        "binding": {
+            **binding,
+            "variant_label": "int4_weight_only",
+            "parent_fp32_sha256": parent_fp32_sha256,
+        },
+        "runtime_checks": runtime,
+        "quantization_coverage": quantization_coverage or {},
+        "numeric_errors": {
+            "vs_onnx_fp32": {
+                "max_abs_error": (parity_vs_onnx_fp32 or {}).get("max_abs_error"),
+                "mean_abs_error": (parity_vs_onnx_fp32 or {}).get("mean_abs_error"),
+                "action_unit_mean_abs_error": (parity_vs_onnx_fp32 or {}).get(
+                    "action_unit_mean_abs_error"
+                ),
+                "shapes_ok": (parity_vs_onnx_fp32 or {}).get("shapes_ok"),
+                "finite_ok": (parity_vs_onnx_fp32 or {}).get("finite_ok"),
+                "fp32_allclose_enforced": False,
+            },
+            "vs_pytorch_fp32": {
+                "max_abs_error": (parity_vs_pytorch_fp32 or {}).get("max_abs_error"),
+                "mean_abs_error": (parity_vs_pytorch_fp32 or {}).get("mean_abs_error"),
+                "action_unit_mean_abs_error": (parity_vs_pytorch_fp32 or {}).get(
+                    "action_unit_mean_abs_error"
+                ),
+                "shapes_ok": (parity_vs_pytorch_fp32 or {}).get("shapes_ok"),
+                "finite_ok": (parity_vs_pytorch_fp32 or {}).get("finite_ok"),
+                "fp32_allclose_enforced": False,
+            },
+        },
+        "task_success_required": False,
+        "fp32_allclose_required": False,
+        "fp32_validation_sidecar_authorizes_int4": False,
+        "full_model_int4_claim": False,
+        "native_int4_execution_claim": False,
+        "source_export_manifest_path": source_export_manifest_path,
+        "note": (
+            "INT4 validation is separate from FP32. Requires runnable MatMulNBits "
+            "weight-only graph with finite matching shapes vs the FP32 parent and "
+            "recorded quantization coverage. Does not require FP32-level allclose or "
+            "task success; not a native INT4 activation execution claim."
+        ),
+    }
+
+
+def assert_int4_validation_acceptable(
+    result: dict[str, Any],
+    *,
+    model_sha256: str,
+    parent_fp32_sha256: str | None = None,
+) -> None:
+    if not isinstance(result, dict):
+        raise ValueError("export_validation_int4 must be a JSON object")
+    if result.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(
+            f"export_validation_int4 schema_version must be {SCHEMA_VERSION}; "
+            f"got {result.get('schema_version')!r}"
+        )
+    if result.get("variant_label") != "int4_weight_only":
+        raise ValueError("INT4 resolve requires variant_label=int4_weight_only validation sidecar")
+    if result.get("passed") is not True:
+        raise ValueError(
+            "export_validation_int4.passed is not true; refuse unvalidated INT4 runtime "
+            f"(reasons={result.get('not_passed_reasons')})"
+        )
+    binding = result.get("binding") or {}
+    if binding.get("model_sha256") != model_sha256:
+        raise ValueError(
+            "INT4 validation model_sha256 mismatch: "
+            f"validation={binding.get('model_sha256')!r} model={model_sha256!r}"
+        )
+    if not binding.get("recipe_id"):
+        raise ValueError("INT4 validation binding.recipe_id missing")
+    if not binding.get("parent_fp32_sha256"):
+        raise ValueError("INT4 validation binding.parent_fp32_sha256 missing")
+    if parent_fp32_sha256 is not None and binding.get("parent_fp32_sha256") != parent_fp32_sha256:
+        raise ValueError("INT4 parent_fp32_sha256 mismatch")
+    runtime = result.get("runtime_checks") or {}
+    if runtime.get("passed") is not True:
+        raise ValueError("INT4 runtime_checks.passed is not true")
+    if result.get("fp32_validation_sidecar_authorizes_int4") is True:
+        raise ValueError("INT4 must not be authorized by the FP32 validation sidecar")
+    coverage = result.get("quantization_coverage") or {}
+    if int(coverage.get("matmul_nbits_nodes") or 0) < 1:
+        raise ValueError("INT4 validation requires matmul_nbits_nodes > 0")
+    if result.get("full_model_int4_claim") is True:
+        raise ValueError("INT4 full_model_int4_claim must be false")
+    if result.get("native_int4_execution_claim") is True:
+        raise ValueError("INT4 native_int4_execution_claim must be false")
+
+
+def write_int4_validation_from_export(
+    export_dir: Path,
+    *,
+    output_path: Path | None = None,
+) -> Path:
+    """Write INT4 sidecar from export manifest comparisons (no FP32 hash reuse)."""
+    export_dir = Path(export_dir).resolve()
+    manifest_path = export_dir / "export_manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"missing export_manifest.json in {export_dir}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    variants = manifest.get("variants") or []
+    fp32 = next((v for v in variants if v.get("label") == "onnx_fp32"), None)
+    int4 = next((v for v in variants if v.get("label") == "int4_weight_only"), None)
+    if fp32 is None:
+        raise ValueError("export manifest missing onnx_fp32 variant")
+    if int4 is None:
+        raise ValueError("export manifest missing int4_weight_only variant")
+    parent_sha = str((fp32.get("graph") or {}).get("sha256") or "")
+    if not parent_sha and fp32.get("path"):
+        parent_path = Path(fp32["path"])
+        if not parent_path.is_file():
+            parent_path = export_dir / Path(fp32["path"]).name
+        if parent_path.is_file():
+            parent_sha = sha256_file(parent_path)
+    if not parent_sha:
+        raise ValueError("cannot resolve parent FP32 sha256 for INT4 validation")
+
+    status = str(int4.get("status") or "errored")
+    int4_path = int4.get("path")
+    int4_sha = str((int4.get("graph") or {}).get("sha256") or "")
+    if status == "ok":
+        if not int4_path:
+            raise ValueError("int4_weight_only status=ok but path missing")
+        model_path = Path(int4_path)
+        if not model_path.is_file():
+            model_path = export_dir / Path(int4_path).name
+        if not model_path.is_file():
+            raise FileNotFoundError(f"INT4 ONNX not found: {int4_path}")
+        file_sha = sha256_file(model_path)
+        if int4_sha and int4_sha != file_sha:
+            raise ValueError(
+                f"INT4 manifest graph sha256 {int4_sha} does not match file {file_sha}"
+            )
+        int4_sha = file_sha
+    candidate = str(manifest.get("candidate") or "")
+    hub_revision = str(manifest.get("hub_revision") or "")
+    recipe_id = str(int4.get("recipe_id") or "")
+    comparisons = manifest.get("comparisons") or {}
+    parity_onnx = comparisons.get("int4_weight_only_vs_onnx_fp32")
+    parity_pt = comparisons.get("int4_weight_only_vs_pytorch_fp32")
+    coverage = int4.get("quantization_coverage")
+    binding = {
+        "model_sha256": int4_sha,
+        "corpus_eval_sha256": str(
+            ((manifest.get("corpus") or {}).get("evaluation") or {}).get("sha256") or ""
+        ),
+        "hub_revision": hub_revision,
+        "candidate": candidate,
+        "recipe_id": recipe_id,
+        "variant_label": "int4_weight_only",
+        "parent_fp32_sha256": parent_sha,
+    }
+    result = build_int4_validation_v2(
+        binding=binding,
+        parity_vs_onnx_fp32=parity_onnx if isinstance(parity_onnx, dict) else None,
+        parity_vs_pytorch_fp32=parity_pt if isinstance(parity_pt, dict) else None,
+        quantization_coverage=coverage if isinstance(coverage, dict) else None,
+        parent_fp32_sha256=parent_sha,
+        variant_status=status,
+        source_export_manifest_path=str(manifest_path),
+    )
+    out = (
+        Path(output_path).resolve()
+        if output_path is not None
+        else (export_dir / INT4_VALIDATION_FILENAME)
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
 def build_validation_v2_from_artifacts(
     *,
     export_dir: Path,
@@ -761,6 +1014,8 @@ def find_export_validation_v2(model_path: Path, *, variant_label: str | None = N
     name = Path(model_path).name.lower()
     if label == "int8" or "int8" in name:
         return resolve_artifact(parent, INT8_VALIDATION_FILENAME)
+    if label == "int4_weight_only" or "int4" in name:
+        return resolve_artifact(parent, INT4_VALIDATION_FILENAME)
     return resolve_artifact(parent, VALIDATION_FILENAME)
 
 
@@ -848,21 +1103,26 @@ def write_int8_validation_from_export(
 
 
 __all__ = [
+    "INT4_VALIDATION_FILENAME",
     "INT8_VALIDATION_FILENAME",
     "SCHEMA_VERSION",
     "VALIDATION_FILENAME",
     "ValidationBinding",
+    "assert_int4_validation_acceptable",
     "assert_int8_validation_acceptable",
     "assert_validation_v2_acceptable",
     "build_export_validation_v2",
+    "build_int4_validation_v2",
     "build_int8_validation_v2",
     "build_validation_v2_from_artifacts",
     "collect_code_revision",
     "evaluate_closed_loop_task_outcomes",
     "evaluate_independent_trajectory_diagnostic",
+    "evaluate_int4_runtime_checks",
     "evaluate_int8_runtime_checks",
     "evaluate_numerical_parity",
     "find_export_validation_v2",
     "load_export_validation_v2",
+    "write_int4_validation_from_export",
     "write_int8_validation_from_export",
 ]

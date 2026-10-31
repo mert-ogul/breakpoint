@@ -160,6 +160,17 @@ def test_resolve_rejects_path_match_when_manifest_hash_disagrees(tmp_path: Path)
 
 
 @pytest.mark.requires_onnx
+def test_resolve_int4_refuses_missing_sidecar(tmp_path: Path) -> None:
+    model_path, man_path, _digest = _write_export_dir(tmp_path)
+    payload = json.loads(man_path.read_text())
+    payload["variants"][0]["label"] = "int4_weight_only"
+    payload["variants"][0]["recipe_id"] = "onnxruntime_matmul_nbits_weight_only_int4_rtn"
+    man_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="INT4 needs its own sidecar"):
+        resolve_onnx_runtime(model_path, expected_candidate="act_aloha_transfer")
+
+
+@pytest.mark.requires_onnx
 def test_resolve_int8_refuses_fp32_validation_sidecar(tmp_path: Path) -> None:
     model_path, man_path, digest = _write_export_dir(tmp_path)
     # Relabel the only graph as int8; FP32 v2 sidecar must not authorize it.

@@ -15,6 +15,7 @@ BENCHMARK_CONFIG_NAME = "benchmark_config.json"
 PROTOCOL_LOCK_NAME = "protocol_lock.json"
 EXPORT_VALIDATION_NAME = "export_validation.json"
 EXPORT_VALIDATION_INT8_NAME = "export_validation_int8.json"
+EXPORT_VALIDATION_INT4_NAME = "export_validation_int4.json"
 
 LEGACY_NAMES = {
     BENCHMARK_CONFIG_NAME: "v1_config.json",
@@ -39,7 +40,10 @@ def resolve_artifact(directory: Path, canonical: str) -> Path | None:
     """
     directory = Path(directory)
     current = directory / canonical
-    legacy = directory / LEGACY_NAMES[canonical]
+    legacy_name = LEGACY_NAMES.get(canonical)
+    if legacy_name is None:
+        return current if current.is_file() else None
+    legacy = directory / legacy_name
     if current.is_file() and legacy.is_file():
         if _read_json(current) != _read_json(legacy):
             raise ValueError(
@@ -57,9 +61,10 @@ def resolve_artifact(directory: Path, canonical: str) -> Path | None:
 def require_artifact(directory: Path, canonical: str) -> Path:
     path = resolve_artifact(directory, canonical)
     if path is None:
-        raise FileNotFoundError(
-            f"missing {canonical} (or legacy {LEGACY_NAMES[canonical]}) in {directory}"
-        )
+        legacy_name = LEGACY_NAMES.get(canonical)
+        if legacy_name is None:
+            raise FileNotFoundError(f"missing {canonical} in {directory}")
+        raise FileNotFoundError(f"missing {canonical} (or legacy {legacy_name}) in {directory}")
     return path
 
 
