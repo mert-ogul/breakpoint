@@ -9,8 +9,8 @@ Run every command from the clone root. The commands call `.venv/bin/...` directl
 - Tested host: macOS 14.6 arm64, Python 3.11, CPU. Other hosts are untested ([compatibility](compatibility.md)).
 - The first export needs network access: it fetches the pinned LeRobot checkout into `vendor/lerobot` (no git-lfs needed) and downloads the pinned Hub policy.
 - The simulator and the export need the simulator install below. The Pi needs only the ONNX profile install.
-- Disk: the full run writes about 390 MB under `outputs/`. The exported graphs and corpora add more under `artifacts/`.
-- Run time was not recorded for the saved run. The full phase is 600 simulated episodes, so run `--dry-run` and the smoke phase first.
+- Disk: the full run writes about 580 MB under `outputs/` (364 MB of run reports plus 217 MB of duplicate `episodes.jsonl`, from [`large_evidence.json`](../benchmarks/act-transfer/deployment-stress/data/large_evidence.json)). The exported graphs and corpora add more under `artifacts/`.
+- Run time was not recorded for the saved run. The full phase is 690 fresh episodes (810 episode rows including referenced baselines), so run `--dry-run` and the smoke phase first.
 - The commands below write to `artifacts/export/act-transfer`, `profiles/` and `outputs/act-transfer/`. All are git-ignored. The saved evidence under `benchmarks/` is not touched.
 
 ## 1. Install the simulator environment
