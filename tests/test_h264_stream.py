@@ -220,3 +220,170 @@ def test_isolated_still_h264_frame_rejected() -> None:
     )
     with pytest.raises(RuntimeError, match="persistent"):
         degrade_frame(np.zeros((32, 40, 3), dtype=np.uint8), cfg, camera_key="top")
+
+
+def _benchmark_cfg(bitrate_kbps: float = 1000.0) -> H264StreamConfig:
+    return H264StreamConfig(
+        bitrate_kbps=bitrate_kbps,
+        frame_rate_hz=50.0,
+        gop=30,
+        preset="veryfast",
+        tune="zerolatency",
+        latency_mode=H264LatencyMode.QUALITY_ONLY,
+    )
+
+
+def _run_clip(
+    session: EpisodeH264Session,
+    clip: list[np.ndarray],
+    *,
+    camera_key: str = "top",
+    fps: float = 50.0,
+) -> tuple[list[np.ndarray], list[int]]:
+    outs: list[np.ndarray] = []
+    packet_sizes: list[int] = []
+    for i, frame in enumerate(clip):
+        out, rec = session.process_frame(frame, camera_key=camera_key, capture_timestamp_s=i / fps)
+        outs.append(out.copy())
+        packet_sizes.append(int(rec.packet_bytes))
+        session.advance_time(1.0 / fps)
+    return outs, packet_sizes
+
+
+def test_causality_prefix_identical(h264_ready: FFmpegProbe) -> None:
+    k = 6
+    n = 12
+    base = _moving_clip(n, h=48, w=64)
+    clip_a = [f.copy() for f in base]
+    clip_b = [f.copy() for f in base]
+    for i in range(k, n):
+        clip_b[i] = np.full_like(clip_b[i], 180)
+
+    cfg = _benchmark_cfg(2000.0)
+    sa = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    sb = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    outs_a, sizes_a = _run_clip(sa, clip_a)
+    outs_b, sizes_b = _run_clip(sb, clip_b)
+    for i in range(k):
+        assert sizes_a[i] == sizes_b[i]
+        assert np.array_equal(outs_a[i], outs_b[i])
+    assert not np.array_equal(outs_a[k], outs_b[k])
+    sa.close()
+    sb.close()
+
+
+def test_reset_episode_and_fresh_session_match(h264_ready: FFmpegProbe) -> None:
+    cfg = _benchmark_cfg(1000.0)
+    clip = _moving_clip(10, h=48, w=64)
+    session = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    outs1, sizes1 = _run_clip(session, clip)
+    cam1 = session.summary()["cameras"]["top"]
+    assert cam1["first_frame_keyframe"] is True
+    assert cam1["frame_records"][0]["frame_index"] == 0
+
+    session.reset_episode()
+    outs2, sizes2 = _run_clip(session, clip)
+    cam2 = session.summary()["cameras"]["top"]
+    assert cam2["first_frame_keyframe"] is True
+    assert cam2["frame_records"][0]["frame_index"] == 0
+    assert sizes1 == sizes2
+    for a, b in zip(outs1, outs2, strict=True):
+        assert np.array_equal(a, b)
+    session.close()
+
+    fresh = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    outs3, sizes3 = _run_clip(fresh, clip)
+    cam3 = fresh.summary()["cameras"]["top"]
+    assert cam3["first_frame_keyframe"] is True
+    assert sizes1 == sizes3
+    for a, b in zip(outs1, outs3, strict=True):
+        assert np.array_equal(a, b)
+    fresh.close()
+
+
+def test_quality_only_decodes_every_frame(h264_ready: FFmpegProbe) -> None:
+    cfg = _benchmark_cfg(500.0)
+    clip = _moving_clip(8, h=48, w=64)
+    session = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    outs, _ = _run_clip(session, clip)
+    cam = session.summary()["cameras"]["top"]
+    assert all(r["availability"] == "decoded" for r in cam["frame_records"])
+    assert cam["n_startup_holds"] == 0
+    assert cam["n_last_frame_holds"] == 0
+    assert cam["n_frames_decoded"] == cam["n_frames_in"] == len(outs)
+    session.close()
+
+
+def test_quality_only_raises_when_decoder_returns_nothing(
+    h264_ready: FFmpegProbe,
+) -> None:
+    cfg = _benchmark_cfg(1000.0)
+    stream = CausalH264CameraStream(
+        camera_key="cam",
+        native_height=32,
+        native_width=40,
+        config=cfg,
+        ffmpeg_probe=h264_ready,
+    )
+    frame = np.full((32, 40, 3), 40, dtype=np.uint8)
+
+    class _EmptyDecoder:
+        def decode(self, _packet: object) -> list:
+            return []
+
+    stream._decoder = _EmptyDecoder()
+    with pytest.raises(RuntimeError, match="not decoded in its own control step"):
+        stream.push_frame(frame, capture_timestamp_s=0.0)
+    stream.close()
+
+
+def test_encoded_bytes_match_packet_sum_and_flush_empty(
+    h264_ready: FFmpegProbe,
+) -> None:
+    cfg = _benchmark_cfg(4000.0)
+    clip = _moving_clip(15, h=48, w=64)
+    session = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    _run_clip(session, clip)
+    stream = session._streams["top"]
+    flush_packets = list(stream._encoder.encode(None))
+    assert flush_packets == []
+    cam = session.summary()["cameras"]["top"]
+    packet_sum = sum(int(r["packet_bytes"]) for r in cam["frame_records"])
+    assert cam["encoded_bytes_total"] == packet_sum
+    assert cam["n_keyframes"] >= 1
+    assert cam["first_frame_keyframe"] is True
+    session.close()
+
+
+def test_summary_records_encoder_settings(h264_ready: FFmpegProbe) -> None:
+    cfg = _benchmark_cfg(2000.0)
+    session = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+    frame = np.zeros((48, 64, 3), dtype=np.uint8)
+    session.process_frame(frame, camera_key="top", capture_timestamp_s=0.0)
+    summary = session.summary()
+    requested = summary["requested"]
+    encoder = summary["encoder"]
+    expected_options = {
+        "preset": "veryfast",
+        "tune": "zerolatency",
+        "x264-params": "rc-lookahead=0:bframes=0:sliced_threads=1",
+    }
+    assert requested["gop"] == 30
+    assert requested["preset"] == "veryfast"
+    assert requested["tune"] == "zerolatency"
+    assert requested["pixel_format"] == cfg.pixel_format
+    assert requested["encoder_options"] == expected_options
+    assert requested["encoder_thread_count"] == 1
+    assert requested["decoder_thread_count"] == 1
+    assert requested["decoder_thread_type"] == "SLICE"
+    assert requested["decoder_low_delay"] is True
+    assert encoder["options"] == expected_options
+    assert encoder["encoder_thread_count"] == 1
+    assert encoder["decoder_thread_count"] == 1
+    assert encoder["decoder_thread_type"] == "SLICE"
+    assert encoder["decoder_low_delay"] is True
+    assert encoder["pixel_format"] == cfg.pixel_format
+    assert encoder["gop"] == 30
+    assert encoder["codec_hw"]["top"] == [48, 64]
+    assert summary["ffmpeg"]["pyav_version"]
+    session.close()

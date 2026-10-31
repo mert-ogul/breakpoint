@@ -13,7 +13,10 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from breakpoint_eval.benchmark_report import ReportValidationError, render_benchmark_report  # noqa: E402
+from breakpoint_eval.benchmark_report import (  # noqa: E402
+    ReportValidationError,
+    render_benchmark_report,
+)
 from breakpoint_eval.benchmark_report_data import ReportDataError, load_report_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
