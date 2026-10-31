@@ -75,6 +75,8 @@ def test_compact_row_records_success_step_and_simulated_duration() -> None:
 
 
 def test_compact_row_h264_fields_sum_cameras() -> None:
+    from breakpoint_eval.benchmark_report_data import H264_FRAME_RATE_HZ, measured_h264_kbps
+
     module = load_script()
     row = module.compact_episode_row(
         axis="h264",
@@ -110,11 +112,47 @@ def test_compact_row_h264_fields_sum_cameras() -> None:
     )
     assert row["h264_requested_kbps"] == 500.0
     assert row["h264_encoded_bytes"] == 1500
-    assert row["h264_frames"] == 10
+    assert row["h264_frames"] == 20
     assert row["h264_holds"] == 1
     assert row["h264_keyframes"] == 3
     assert row["h264_first_frame_keyframe"] is True
-    assert row["h264_actual_kbps"] == pytest.approx(1500 * 8 * 50 / 10 / 1000)
+    assert row["h264_actual_kbps"] == pytest.approx(
+        measured_h264_kbps(1500, 20, frame_rate_hz=H264_FRAME_RATE_HZ)
+    )
+
+    one_false = module.compact_episode_row(
+        axis="h264",
+        plan_id="v0.1_full_h264",
+        condition_id="h264_500kbps",
+        referenced=False,
+        source="s",
+        episode=episode(
+            image_mode="h264",
+            n_control_steps=10,
+            h264_summary={
+                "requested": {"bitrate_kbps": 500.0},
+                "cameras": {
+                    "top": {
+                        "n_frames_in": 10,
+                        "encoded_bytes_total": 1000,
+                        "n_startup_holds": 0,
+                        "n_last_frame_holds": 0,
+                        "n_keyframes": 1,
+                        "first_frame_keyframe": True,
+                    },
+                    "wrist": {
+                        "n_frames_in": 10,
+                        "encoded_bytes_total": 500,
+                        "n_startup_holds": 0,
+                        "n_last_frame_holds": 0,
+                        "n_keyframes": 1,
+                        "first_frame_keyframe": False,
+                    },
+                },
+            },
+        ),
+    )
+    assert one_false["h264_first_frame_keyframe"] is False
 
 
 def test_compact_row_keeps_replay_window_and_consumed_delays() -> None:

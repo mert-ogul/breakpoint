@@ -815,7 +815,11 @@ def validate_identities(lock: dict[str, Any], profiles: list[ProfileView]) -> Ch
 
 
 def validate_int4_episodes(rows: list[dict[str, Any]]) -> Check | None:
-    """Every INT4 episode finished without policy_failed; ORT refuses non-finite chunks."""
+    """Every INT4 episode completed with no policy_failed or runtime_error.
+
+    OrtActChunkSession raises on a non-finite chunk, which the episode records as
+    policy_failed, so this covers finite closed-loop outputs.
+    """
     int4_rows = [r for r in rows if r["condition_id"] == "precision_int4_weight_only"]
     if not int4_rows:
         return None

@@ -269,7 +269,8 @@ def test_smoke_and_full_isolation_and_variant_selection(
         ExperimentAxis.JPEG.value,
         ExperimentAxis.PRECISION.value,
     ]
-    assert any("H.264 status at plan build: unsupported" in n for n in full_no_h264[2].notes)
+    assert full_no_h264[2].notes == ["Isolated JPEG axis; bypass ≠ quality 100."]
+    assert not any("H.264 status" in n for n in full_no_h264[2].notes)
 
 
 def test_freeze_protocol_lock_includes_int4_fields(tmp_path: Path) -> None:

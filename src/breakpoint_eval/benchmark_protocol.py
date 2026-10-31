@@ -556,9 +556,6 @@ def build_full_axis_plans(
     )
     plans.append(res)
 
-    jpeg_notes = ["Isolated JPEG axis; bypass ≠ quality 100."]
-    if support.get("status") != "ok":
-        jpeg_notes.append(f"H.264 status at plan build: {support.get('status')}")
     jpeg = ExperimentPlan(
         plan_id="v0.1_full_jpeg",
         candidate=candidate,
@@ -569,7 +566,7 @@ def build_full_axis_plans(
         conditions=jpeg_conditions(tuple(full["jpeg_qualities"])),
         isolation_notes=["JPEG visual-quality axis only; native resolution."],
         baseline_condition_id="jpeg_bypass",
-        notes=jpeg_notes,
+        notes=["Isolated JPEG axis; bypass ≠ quality 100."],
     )
     plans.append(jpeg)
 
@@ -974,50 +971,25 @@ def condition_completed(
     return reason is None
 
 
-def write_unsupported_int8_record(
+def write_unsupported_record(
     out_dir: Path,
     *,
-    artifacts: ResolvedArtifacts | None = None,
-    stem: str = "int8",
-    support: dict[str, Any] | None = None,
+    stem: str,
+    status: str | None,
+    detail: str | None,
+    path: Path | str | None = None,
+    sha256: str | None = None,
 ) -> Path:
-    """Write int8/int4/h264_unsupported.json with the same field layout."""
-    if stem == "h264":
-        if support is None:
-            raise ValueError("h264 unsupported record requires support=resolve_h264_support(...)")
-        status, detail, model_path, sha256 = (
-            support.get("status"),
-            support.get("detail"),
-            None,
-            None,
-        )
-    elif stem == "int4":
-        if artifacts is None:
-            raise ValueError("int4 unsupported record requires artifacts")
-        status, detail, model_path, sha256 = (
-            artifacts.int4_status,
-            artifacts.int4_detail,
-            artifacts.int4_path,
-            artifacts.int4_sha256,
-        )
-    else:
-        if artifacts is None:
-            raise ValueError("int8 unsupported record requires artifacts")
-        status, detail, model_path, sha256 = (
-            artifacts.int8_status,
-            artifacts.int8_detail,
-            artifacts.int8_path,
-            artifacts.int8_sha256,
-        )
-    path = out_dir / f"{stem}_unsupported.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    """Write {stem}_unsupported.json with status, detail, and optional path/sha256."""
+    out = out_dir / f"{stem}_unsupported.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
         json.dumps(
             {
                 "status": status,
                 "detail": detail,
                 "measurements_fabricated": False,
-                "path": str(model_path) if model_path else None,
+                "path": str(path) if path else None,
                 "sha256": sha256,
             },
             indent=2,
@@ -1026,7 +998,7 @@ def write_unsupported_int8_record(
         + "\n",
         encoding="utf-8",
     )
-    return path
+    return out
 
 
 def describe_plan_commands(plan: ExperimentPlan, *, axis_out: Path) -> list[str]:

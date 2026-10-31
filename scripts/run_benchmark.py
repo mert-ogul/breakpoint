@@ -38,7 +38,7 @@ from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     resolve_h264_support,
     shared_baseline_problem,
     write_plan_bundle,
-    write_unsupported_int8_record,
+    write_unsupported_record,
 )
 from breakpoint_eval.experiment_summary import (  # noqa: E402
     summarize_from_plan_file,
@@ -376,15 +376,34 @@ def main(argv: list[str] | None = None) -> int:
         shutil.copy2(args.config.resolve(), out / BENCHMARK_CONFIG_NAME)
 
     if artifacts.int8_status != "ok":
-        write_unsupported_int8_record(out, artifacts=artifacts)
+        write_unsupported_record(
+            out,
+            stem="int8",
+            status=artifacts.int8_status,
+            detail=artifacts.int8_detail,
+            path=artifacts.int8_path,
+            sha256=artifacts.int8_sha256,
+        )
     phase_cfg = config.get(args.phase) or {}
     if (
         "int4_weight_only" in phase_cfg.get("precision_variants", [])
         and artifacts.int4_status != "ok"
     ):
-        write_unsupported_int8_record(out, artifacts=artifacts, stem="int4")
+        write_unsupported_record(
+            out,
+            stem="int4",
+            status=artifacts.int4_status,
+            detail=artifacts.int4_detail,
+            path=artifacts.int4_path,
+            sha256=artifacts.int4_sha256,
+        )
     if config.get("h264") is not None and h264_support.get("status") != "ok":
-        write_unsupported_int8_record(out, stem="h264", support=h264_support)
+        write_unsupported_record(
+            out,
+            stem="h264",
+            status=h264_support.get("status"),
+            detail=h264_support.get("detail"),
+        )
 
     plan_paths = write_plan_bundle(plans, out / "plans")
     shared = _shared_baseline_dir(out)

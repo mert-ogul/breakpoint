@@ -30,6 +30,10 @@ from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     condition_incomplete_reason,
     resolve_profile_by_identity,
 )
+from breakpoint_eval.benchmark_report_data import (  # noqa: E402
+    H264_FRAME_RATE_HZ,
+    measured_h264_kbps,
+)
 from breakpoint_eval.experiment_plan import ExperimentPlan, load_experiment_plan  # noqa: E402
 from breakpoint_eval.file_digest import sha256_file  # noqa: E402
 from breakpoint_eval.latency_trace import load_latency_profile  # noqa: E402
@@ -138,17 +142,19 @@ def _h264_compact_fields(episode: dict[str, Any]) -> dict[str, Any]:
     if not cams:
         return empty
     encoded = sum(int(c.get("encoded_bytes_total") or 0) for c in cams)
+    frames = sum(int(c.get("n_frames_in") or 0) for c in cams)
     holds = sum(
         int(c.get("n_startup_holds") or 0) + int(c.get("n_last_frame_holds") or 0) for c in cams
     )
     keyframes = sum(int(c.get("n_keyframes") or 0) for c in cams)
-    # Per-camera frame counts must match; store that common count (equals n_control_steps).
-    frames = int(cams[0].get("n_frames_in") or 0)
     requested = (summary.get("requested") or {}).get("bitrate_kbps")
     if requested is None:
         requested = cams[0].get("requested_bitrate_kbps")
-    fps = 50.0
-    actual = (encoded * 8.0 * fps / frames / 1000.0) if frames > 0 else None
+    actual = (
+        measured_h264_kbps(encoded, frames, frame_rate_hz=H264_FRAME_RATE_HZ)
+        if frames > 0
+        else None
+    )
     return {
         "h264_requested_kbps": float(requested) if requested is not None else None,
         "h264_encoded_bytes": encoded,

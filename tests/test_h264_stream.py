@@ -20,6 +20,7 @@ from breakpoint_eval.h264_stream import (
     H264LatencyMode,
     H264StreamConfig,
     pad_to_codec_dimensions,
+    x264_encoder_options,
 )
 
 
@@ -357,33 +358,35 @@ def test_encoded_bytes_match_packet_sum_and_flush_empty(
 
 def test_summary_records_encoder_settings(h264_ready: FFmpegProbe) -> None:
     cfg = _benchmark_cfg(2000.0)
-    session = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
-    frame = np.zeros((48, 64, 3), dtype=np.uint8)
-    session.process_frame(frame, camera_key="top", capture_timestamp_s=0.0)
-    summary = session.summary()
-    requested = summary["requested"]
-    encoder = summary["encoder"]
-    expected_options = {
-        "preset": "veryfast",
-        "tune": "zerolatency",
-        "x264-params": "rc-lookahead=0:bframes=0:sliced_threads=1",
-    }
-    assert requested["gop"] == 30
-    assert requested["preset"] == "veryfast"
-    assert requested["tune"] == "zerolatency"
+    expected_options = x264_encoder_options(cfg)
+    frames = _moving_clip(n=8, h=48, w=64)
+
+    def _run() -> dict:
+        session = EpisodeH264Session(cfg, ffmpeg_probe=h264_ready)
+        for i, frame in enumerate(frames):
+            session.process_frame(
+                frame, camera_key="top", capture_timestamp_s=i / cfg.frame_rate_hz
+            )
+        summary = session.summary()
+        session.close()
+        return summary
+
+    first = _run()
+    second = _run()
+    requested = first["requested"]
+    encoder = first["encoder"]
+    assert requested["gop"] == cfg.gop
+    assert requested["preset"] == cfg.preset
+    assert requested["tune"] == cfg.tune
     assert requested["pixel_format"] == cfg.pixel_format
+    assert requested["rc_lookahead"] == cfg.rc_lookahead
+    assert requested["max_b_frames"] == cfg.max_b_frames
     assert requested["encoder_options"] == expected_options
-    assert requested["encoder_thread_count"] == 1
-    assert requested["decoder_thread_count"] == 1
-    assert requested["decoder_thread_type"] == "SLICE"
-    assert requested["decoder_low_delay"] is True
     assert encoder["options"] == expected_options
-    assert encoder["encoder_thread_count"] == 1
-    assert encoder["decoder_thread_count"] == 1
-    assert encoder["decoder_thread_type"] == "SLICE"
-    assert encoder["decoder_low_delay"] is True
     assert encoder["pixel_format"] == cfg.pixel_format
-    assert encoder["gop"] == 30
-    assert encoder["codec_hw"]["top"] == [48, 64]
-    assert summary["ffmpeg"]["pyav_version"]
-    session.close()
+    assert encoder["gop"] == cfg.gop
+    assert (
+        first["cameras"]["top"]["encoded_bytes_total"]
+        == second["cameras"]["top"]["encoded_bytes_total"]
+    )
+    assert first["encoder"]["options"] == second["encoder"]["options"]
