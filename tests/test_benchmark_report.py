@@ -474,6 +474,92 @@ def test_short_label_int4_weight_only() -> None:
     assert short_label("precision_int8") == "INT8 QDQ"
 
 
+def test_short_label_h264() -> None:
+    from breakpoint_eval.benchmark_report_plots import short_label
+
+    assert short_label("h264_bypass") == "bypass"
+    assert short_label("h264_500kbps") == "500 kbps"
+    assert short_label("h264_2000kbps") == "2000 kbps"
+
+
+def test_h264_bytes_table_and_validate_rows() -> None:
+    from breakpoint_eval.benchmark_report import h264_bytes_table_html, h264_bytes_table_markdown
+    from breakpoint_eval.benchmark_report_data import (
+        AxisView,
+        ConditionView,
+        measured_h264_kbps,
+        validate_h264_rows,
+    )
+
+    rows = [
+        {
+            "axis": "h264",
+            "condition_id": "h264_500kbps",
+            "episode_index": 0,
+            "n_control_steps": 10,
+            "h264_requested_kbps": 500.0,
+            "h264_encoded_bytes": 1250,
+            "h264_frames": 10,
+            "h264_actual_kbps": measured_h264_kbps(1250, 10),
+            "h264_holds": 0,
+            "h264_first_frame_keyframe": True,
+        },
+        {
+            "axis": "h264",
+            "condition_id": "h264_500kbps",
+            "episode_index": 1,
+            "n_control_steps": 10,
+            "h264_requested_kbps": 500.0,
+            "h264_encoded_bytes": 1000,
+            "h264_frames": 10,
+            "h264_actual_kbps": measured_h264_kbps(1000, 10),
+            "h264_holds": 0,
+            "h264_first_frame_keyframe": True,
+        },
+    ]
+    view = ConditionView(
+        condition_id="h264_500kbps",
+        label="H.264 500 kbps",
+        referenced_baseline=False,
+        is_baseline=False,
+        rows=rows,
+        successes=2,
+        eligible=2,
+        n_runtime_error=0,
+        wilson={"low": 0.3, "high": 0.9},
+    )
+    axis = AxisView(
+        axis="h264",
+        plan_id="v0.1_full_h264",
+        title="H.264 bitrate",
+        unit="kbps",
+        phase="exploratory",
+        baseline_condition_id="h264_bypass",
+        ratio=0.8,
+        baseline_floor=0.5,
+        baseline_rate=1.0,
+        threshold_rate=0.8,
+        conditions=[view],
+        derived=True,
+        saved_breakpoint=None,
+        saved_note=None,
+        isolation_notes=[],
+        ordered=True,
+    )
+    html = h264_bytes_table_html(axis)
+    assert "500" in html
+    assert "Mean encoded bytes" in html
+    md = "\n".join(h264_bytes_table_markdown(axis))
+    assert "Requested kbps" in md
+    check = validate_h264_rows(rows)
+    assert check is not None and check.passed
+
+    bad = dict(rows[0])
+    bad["h264_actual_kbps"] = 1.0
+    bad_check = validate_h264_rows([bad])
+    assert bad_check is not None and not bad_check.passed
+
+
 def test_int4_limitation_line_from_sidecar() -> None:
     from types import SimpleNamespace
 

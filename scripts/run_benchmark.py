@@ -35,6 +35,7 @@ from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     host_settings_from_config,
     load_benchmark_config,
     resolve_benchmark_artifacts,
+    resolve_h264_support,
     shared_baseline_problem,
     write_plan_bundle,
     write_unsupported_int8_record,
@@ -287,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
             export_dir=args.export_dir.resolve() if args.export_dir else None,
             profile_overrides=overrides or None,
         )
+        h264_support = resolve_h264_support(config)
         source_revision = read_source_revision(repo_root)
         lock = freeze_protocol_lock(
             config=config,
@@ -294,12 +296,13 @@ def main(argv: list[str] | None = None) -> int:
             source_revision=source_revision,
             host=host,
             phase=args.phase,
+            h264_support=h264_support,
         )
 
         if args.phase == "smoke":
-            plans = [build_smoke_plan(config, artifacts)]
+            plans = [build_smoke_plan(config, artifacts, h264_support=h264_support)]
         else:
-            plans = build_full_axis_plans(config, artifacts)
+            plans = build_full_axis_plans(config, artifacts, h264_support=h264_support)
     except (ValueError, FileNotFoundError, OSError, json.JSONDecodeError) as exc:
         LOGGER.error("%s", exc)
         return 2
@@ -350,6 +353,7 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
+        print(json.dumps({"h264": h264_support}, indent=2))
         print("# dry-run complete: no run-result directories created, no episodes evaluated")
         return 0
 
@@ -379,6 +383,8 @@ def main(argv: list[str] | None = None) -> int:
         and artifacts.int4_status != "ok"
     ):
         write_unsupported_int8_record(out, artifacts=artifacts, stem="int4")
+    if config.get("h264") is not None and h264_support.get("status") != "ok":
+        write_unsupported_int8_record(out, stem="h264", support=h264_support)
 
     plan_paths = write_plan_bundle(plans, out / "plans")
     shared = _shared_baseline_dir(out)

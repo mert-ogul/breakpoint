@@ -15,6 +15,7 @@ from breakpoint_eval.experiment_plan import (
     ExperimentPlan,
     PlanPhase,
     build_seed_pairs,
+    h264_conditions,
     jpeg_conditions,
     latency_conditions,
     precision_conditions,
@@ -90,7 +91,46 @@ def load_benchmark_config(path: Path) -> dict[str, Any]:
         raise ValueError(
             f"expected protocol {PROTOCOL_NAME} {PROTOCOL_VERSION}, got {identity[0]} {identity[1]}"
         )
+    h264 = payload.get("h264")
+    if isinstance(h264, dict):
+        latency_mode = h264.get("latency_mode")
+        if latency_mode != "quality_only":
+            raise ValueError(
+                f"h264.latency_mode {latency_mode!r} refused; only quality_only is allowed "
+                "for this benchmark (deployment mode is not part of the protocol)"
+            )
     return payload
+
+
+def resolve_h264_support(config: dict[str, Any]) -> dict[str, Any]:
+    """Probe libx264/PyAV once; never raises for a missing codec."""
+    from breakpoint_eval.h264_ffmpeg import (
+        REQUESTED_MAX_B_FRAMES,
+        REQUESTED_PIXEL_FORMAT,
+        REQUESTED_RC_LOOKAHEAD,
+        REQUESTED_TUNE,
+        probe_ffmpeg_h264,
+    )
+
+    h264_cfg = config.get("h264") if isinstance(config.get("h264"), dict) else {}
+    probe = probe_ffmpeg_h264()
+    status = "ok" if probe.available else "unsupported"
+    return {
+        "status": status,
+        "detail": probe.unsupported_reason,
+        "gop": int(h264_cfg.get("gop", 30)),
+        "preset": str(h264_cfg.get("preset", "veryfast")),
+        "latency_mode": str(h264_cfg.get("latency_mode", "quality_only")),
+        "frame_rate_hz": 50.0,
+        "tune": REQUESTED_TUNE,
+        "pixel_format": REQUESTED_PIXEL_FORMAT,
+        "max_b_frames": REQUESTED_MAX_B_FRAMES,
+        "rc_lookahead": REQUESTED_RC_LOOKAHEAD,
+        "pyav_version": probe.pyav_version,
+        "libav_versions": dict(probe.libav_versions),
+        "ffmpeg_version_line": probe.version_line,
+        "measurements_fabricated": False,
+    }
 
 
 def _external_weight_files(model_path: Path) -> list[dict[str, str]]:
@@ -398,6 +438,8 @@ def condition_is_shared_baseline(condition: ConditionSpec) -> bool:
         return params.get("mode") == "native"
     if condition.axis == ExperimentAxis.JPEG.value:
         return bool(params.get("bypass"))
+    if condition.axis == ExperimentAxis.H264.value:
+        return bool(params.get("bypass"))
     if condition.axis == ExperimentAxis.PRECISION.value:
         return params.get("variant_label") == "onnx_fp32"
     return False
@@ -406,6 +448,8 @@ def condition_is_shared_baseline(condition: ConditionSpec) -> bool:
 def build_smoke_plan(
     config: dict[str, Any],
     artifacts: ResolvedArtifacts,
+    *,
+    h264_support: dict[str, Any] | None = None,
 ) -> ExperimentPlan:
     smoke = config["smoke"]
     seeds = build_seed_pairs(
@@ -414,10 +458,21 @@ def build_smoke_plan(
         policy_seed_offset=int(smoke["policy_seed_offset"]),
     )
     window_length = int(config["trace_window"]["length"])
+    support = h264_support if h264_support is not None else resolve_h264_support(config)
     conditions: list[ConditionSpec] = []
     conditions.extend(latency_conditions(tuple(int(x) for x in smoke["latency_ms"])))
     conditions.extend(_resolution_conditions_from_hw(list(smoke["resolution_hw"])))
     conditions.extend(jpeg_conditions(tuple(smoke["jpeg_qualities"])))
+    if support.get("status") == "ok" and smoke.get("h264_bitrates_kbps"):
+        conditions.extend(
+            h264_conditions(
+                tuple(smoke["h264_bitrates_kbps"]),
+                frame_rate_hz=float(support["frame_rate_hz"]),
+                gop=int(support["gop"]),
+                preset=str(support["preset"]),
+                latency_mode="quality_only",
+            )
+        )
     # Precision: always list FP32; INT8/INT4 only if runnable, else recorded separately.
     prec_variants = ["onnx_fp32"]
     if "int8" in smoke.get("precision_variants", []) and artifacts.int8_status == "ok":
@@ -450,6 +505,7 @@ def build_smoke_plan(
             "Smoke plan; not for publication claims.",
             f"INT8 status at plan build: {artifacts.int8_status}",
             f"INT4 status at plan build: {artifacts.int4_status}",
+            f"H.264 status at plan build: {support.get('status')}",
         ],
     )
 
@@ -457,6 +513,8 @@ def build_smoke_plan(
 def build_full_axis_plans(
     config: dict[str, Any],
     artifacts: ResolvedArtifacts,
+    *,
+    h264_support: dict[str, Any] | None = None,
 ) -> list[ExperimentPlan]:
     full = config["full"]
     n = int(full["n_episodes"])
@@ -467,6 +525,7 @@ def build_full_axis_plans(
     )
     window_length = int(config["trace_window"]["length"])
     candidate = config["candidate"]
+    support = h264_support if h264_support is not None else resolve_h264_support(config)
     plans: list[ExperimentPlan] = []
 
     lat = ExperimentPlan(
@@ -497,6 +556,9 @@ def build_full_axis_plans(
     )
     plans.append(res)
 
+    jpeg_notes = ["Isolated JPEG axis; bypass ≠ quality 100."]
+    if support.get("status") != "ok":
+        jpeg_notes.append(f"H.264 status at plan build: {support.get('status')}")
     jpeg = ExperimentPlan(
         plan_id="v0.1_full_jpeg",
         candidate=candidate,
@@ -507,9 +569,34 @@ def build_full_axis_plans(
         conditions=jpeg_conditions(tuple(full["jpeg_qualities"])),
         isolation_notes=["JPEG visual-quality axis only; native resolution."],
         baseline_condition_id="jpeg_bypass",
-        notes=["Isolated JPEG axis; bypass ≠ quality 100."],
+        notes=jpeg_notes,
     )
     plans.append(jpeg)
+
+    if support.get("status") == "ok" and full.get("h264_bitrates_kbps"):
+        plans.append(
+            ExperimentPlan(
+                plan_id="v0.1_full_h264",
+                candidate=candidate,
+                phase=PlanPhase.EXPLORATORY.value,
+                n_episodes=n,
+                axis=ExperimentAxis.H264.value,
+                seed_pairs=seeds,
+                conditions=h264_conditions(
+                    tuple(full["h264_bitrates_kbps"]),
+                    frame_rate_hz=float(support["frame_rate_hz"]),
+                    gop=int(support["gop"]),
+                    preset=str(support["preset"]),
+                    latency_mode="quality_only",
+                ),
+                isolation_notes=[
+                    "H.264 causal stream quality-only at native resolution; FP32 and 0 ms delay.",
+                    "No codec, transport, or decoding delay is simulated on this axis.",
+                ],
+                baseline_condition_id="h264_bypass",
+                notes=["Isolated H.264 bitrate axis; visual quality only."],
+            )
+        )
 
     prec_variants = ["onnx_fp32"]
     if "int8" in full.get("precision_variants", []) and artifacts.int8_status == "ok":
@@ -567,9 +654,10 @@ def freeze_protocol_lock(
     source_revision: dict[str, Any],
     host: BenchmarkHostSettings,
     phase: str,
+    h264_support: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     stats = config["statistics"]
-    return {
+    lock: dict[str, Any] = {
         "schema_version": 1,
         "protocol_name": protocol_identity(config)[0],
         "protocol_version": protocol_identity(config)[1],
@@ -614,6 +702,9 @@ def freeze_protocol_lock(
         "baseline_reuse": config.get("baseline_reuse") or {"enabled": True},
         "phase_config": config[phase] if phase in config else config.get("smoke"),
     }
+    if h264_support is not None:
+        lock["h264"] = dict(h264_support)
+    return lock
 
 
 # Lock fields that may differ on resume: they record where and when a run happened,
@@ -660,11 +751,58 @@ def _expected_runtime(condition: ConditionSpec) -> dict[str, Any]:
         "image_mode": "native",
         "variant_label": "onnx_fp32",
     }
-    if axis in {ExperimentAxis.RESOLUTION.value, ExperimentAxis.JPEG.value}:
+    if axis in {
+        ExperimentAxis.RESOLUTION.value,
+        ExperimentAxis.JPEG.value,
+        ExperimentAxis.H264.value,
+    }:
         expected["image_mode"] = "native" if params.get("bypass") else params["mode"]
     if axis in {ExperimentAxis.PRECISION.value, ExperimentAxis.DEVICE_PROFILE.value}:
         expected["variant_label"] = params["variant_label"]
     return expected
+
+
+def _h264_summary_problem(episode: dict[str, Any], condition: ConditionSpec) -> str | None:
+    """Return why one H.264 episode summary fails the quality-only evidence checks."""
+    index = episode["episode_index"]
+    summary = episode.get("h264_summary")
+    if not isinstance(summary, dict):
+        return f"episode {index} missing h264_summary"
+    if summary.get("latency_mode") != "quality_only":
+        return f"episode {index} h264_summary.latency_mode is not quality_only"
+    requested = summary.get("requested") or {}
+    params = condition.params
+    if float(requested.get("bitrate_kbps", -1)) != float(params["h264_bitrate_kbps"]):
+        return f"episode {index} h264 requested bitrate differs from the condition"
+    if int(requested.get("gop", -1)) != int(params["h264_gop"]):
+        return f"episode {index} h264 requested gop differs from the condition"
+    if str(requested.get("preset")) != str(params["h264_preset"]):
+        return f"episode {index} h264 requested preset differs from the condition"
+    if float(requested.get("frame_rate_hz", -1)) != float(params["frame_rate_hz"]):
+        return f"episode {index} h264 requested frame_rate_hz differs from the condition"
+    cameras = summary.get("cameras")
+    if not isinstance(cameras, dict) or not cameras:
+        return f"episode {index} h264_summary has no cameras"
+    n_steps = int(episode["n_control_steps"])
+    for cam_key, cam in cameras.items():
+        if not isinstance(cam, dict):
+            return f"episode {index} camera {cam_key!r} h264 stats missing"
+        if int(cam.get("n_frames_in", -1)) != n_steps:
+            return (
+                f"episode {index} camera {cam_key!r} n_frames_in "
+                f"{cam.get('n_frames_in')!r} != n_control_steps {n_steps}"
+            )
+        if int(cam.get("n_frames_decoded", -1)) != int(cam.get("n_frames_in", -1)):
+            return f"episode {index} camera {cam_key!r} n_frames_decoded != n_frames_in"
+        if int(cam.get("n_startup_holds", -1)) != 0:
+            return f"episode {index} camera {cam_key!r} n_startup_holds is not 0"
+        if int(cam.get("n_last_frame_holds", -1)) != 0:
+            return f"episode {index} camera {cam_key!r} n_last_frame_holds is not 0"
+        if cam.get("first_frame_keyframe") is not True:
+            return f"episode {index} camera {cam_key!r} first_frame_keyframe is not true"
+        if int(cam.get("encoded_bytes_total", 0)) <= 0:
+            return f"episode {index} camera {cam_key!r} encoded_bytes_total is not > 0"
+    return None
 
 
 def _shared_baseline_runtime() -> dict[str, Any]:
@@ -756,14 +894,24 @@ def condition_report_problem(
     problem = run_report_problem(
         report_path, plan=plan, expected_runtime=_expected_runtime(condition)
     )
-    if problem is not None or condition.axis != ExperimentAxis.DEVICE_PROFILE.value:
+    if problem is not None:
         return problem
-    starts = condition.params.get("window_starts")
-    episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
-    for ep in episodes:
-        window = (ep.get("latency_trace_provenance") or {}).get("window_start")
-        if starts is not None and window != starts[ep["episode_index"]]:
-            return f"episode {ep['episode_index']} replay window_start differs from the condition"
+    if condition.axis == ExperimentAxis.DEVICE_PROFILE.value:
+        starts = condition.params.get("window_starts")
+        episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
+        for ep in episodes:
+            window = (ep.get("latency_trace_provenance") or {}).get("window_start")
+            if starts is not None and window != starts[ep["episode_index"]]:
+                return (
+                    f"episode {ep['episode_index']} replay window_start differs from the condition"
+                )
+        return None
+    if condition.axis == ExperimentAxis.H264.value and not condition.params.get("bypass"):
+        episodes = json.loads(Path(report_path).read_text(encoding="utf-8"))["episodes"]
+        for ep in episodes:
+            h264_problem = _h264_summary_problem(ep, condition)
+            if h264_problem is not None:
+                return h264_problem
     return None
 
 
@@ -829,11 +977,23 @@ def condition_completed(
 def write_unsupported_int8_record(
     out_dir: Path,
     *,
-    artifacts: ResolvedArtifacts,
+    artifacts: ResolvedArtifacts | None = None,
     stem: str = "int8",
+    support: dict[str, Any] | None = None,
 ) -> Path:
-    """Write int8_unsupported.json or int4_unsupported.json with the same field layout."""
-    if stem == "int4":
+    """Write int8/int4/h264_unsupported.json with the same field layout."""
+    if stem == "h264":
+        if support is None:
+            raise ValueError("h264 unsupported record requires support=resolve_h264_support(...)")
+        status, detail, model_path, sha256 = (
+            support.get("status"),
+            support.get("detail"),
+            None,
+            None,
+        )
+    elif stem == "int4":
+        if artifacts is None:
+            raise ValueError("int4 unsupported record requires artifacts")
         status, detail, model_path, sha256 = (
             artifacts.int4_status,
             artifacts.int4_detail,
@@ -841,6 +1001,8 @@ def write_unsupported_int8_record(
             artifacts.int4_sha256,
         )
     else:
+        if artifacts is None:
+            raise ValueError("int8 unsupported record requires artifacts")
         status, detail, model_path, sha256 = (
             artifacts.int8_status,
             artifacts.int8_detail,

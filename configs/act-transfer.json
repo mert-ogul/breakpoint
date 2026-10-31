@@ -57,6 +57,11 @@
     "show_weak_baseline_and_unresolved": true,
     "confirmation_fresh_seeds_separate": true
   },
+  "h264": {
+    "gop": 30,
+    "preset": "veryfast",
+    "latency_mode": "quality_only"
+  },
   "smoke": {
     "phase": "smoke",
     "env_seeds": [3000, 3001, 3002, 3003, 3004],
@@ -64,6 +69,7 @@
     "latency_ms": [0, 640],
     "resolution_hw": [[60, 80]],
     "jpeg_qualities": [10],
+    "h264_bitrates_kbps": [100],
     "precision_variants": ["onnx_fp32", "int8", "int4_weight_only"],
     "device_profiles": ["laptop-m3", "rpi5"],
     "include_baseline": true,
@@ -77,6 +83,7 @@
     "latency_ms": [0, 40, 80, 160, 320, 640],
     "resolution_hw": [[480, 640], [240, 320], [120, 160], [60, 80]],
     "jpeg_qualities": ["bypass", 95, 75, 50, 25, 10],
+    "h264_bitrates_kbps": ["bypass", 2000, 1000, 500, 250, 100],
     "precision_variants": ["onnx_fp32", "int8", "int4_weight_only"],
     "device_profiles": ["laptop-m3", "rpi5"],
     "isolate_axes": true,

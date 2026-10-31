@@ -304,6 +304,86 @@ def rel_link(data: ReportData, out_dir: Path, path: str) -> str:
     return Path(os.path.relpath(data.data_dir / path, out_dir)).as_posix()
 
 
+def h264_condition_byte_stats(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Aggregate encoded-byte stats for one H.264 condition's episode rows."""
+    usable = [r for r in rows if r.get("h264_encoded_bytes") is not None]
+    if not usable:
+        return None
+    measured = [
+        float(r["h264_actual_kbps"]) for r in usable if r.get("h264_actual_kbps") is not None
+    ]
+    encoded = [int(r["h264_encoded_bytes"]) for r in usable]
+    frames = [int(r["h264_frames"]) for r in usable if r.get("h264_frames")]
+    requested = usable[0].get("h264_requested_kbps")
+    mean_bpf = (
+        sum(e / f for e, f in zip(encoded, frames, strict=True)) / len(frames) if frames else None
+    )
+    return {
+        "requested_kbps": requested,
+        "measured_kbps_median": sorted(measured)[len(measured) // 2] if measured else None,
+        "measured_kbps_min": min(measured) if measured else None,
+        "measured_kbps_max": max(measured) if measured else None,
+        "mean_encoded_bytes_per_frame": mean_bpf,
+        "total_encoded_mb": sum(encoded) / 1_000_000.0,
+        "n_episodes": len(usable),
+    }
+
+
+def h264_bytes_table_html(axis: AxisView) -> str:
+    body = []
+    for view in axis.conditions:
+        stats = h264_condition_byte_stats(view.rows)
+        if stats is None:
+            body.append(
+                f'<tr><th scope="row">{esc(display_label(view))}</th>'
+                '<td colspan="4">no encoded-byte records (bypass / referenced baseline)</td></tr>'
+            )
+            continue
+        measured = (
+            f"{stats['measured_kbps_median']:.1f} "
+            f"({stats['measured_kbps_min']:.1f}\u2013{stats['measured_kbps_max']:.1f})"
+        )
+        body.append(
+            f'<tr><th scope="row">{esc(display_label(view))}</th>'
+            f'<td class="num">{esc(stats["requested_kbps"])}</td>'
+            f'<td class="num">{esc(measured)}</td>'
+            f'<td class="num">{stats["mean_encoded_bytes_per_frame"]:.1f}</td>'
+            f'<td class="num">{stats["total_encoded_mb"]:.3f}</td></tr>'
+        )
+    return (
+        '<div class="scroll"><table class="data"><caption>Encoded bytes from the causal libx264 '
+        "stream (summed over cameras). Measured kbps is ABR at 50 fps.</caption>"
+        '<thead><tr><th scope="col">Condition</th><th scope="col">Requested kbps</th>'
+        '<th scope="col">Measured kbps (median, min\u2013max)</th>'
+        '<th scope="col">Mean encoded bytes / frame</th>'
+        '<th scope="col">Total encoded MB</th></tr></thead>'
+        f"<tbody>{''.join(body)}</tbody></table></div>"
+    )
+
+
+def h264_bytes_table_markdown(axis: AxisView) -> list[str]:
+    lines = [
+        "| Condition | Requested kbps | Measured kbps (median, min-max) | "
+        "Mean encoded bytes / frame | Total encoded MB |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for view in axis.conditions:
+        stats = h264_condition_byte_stats(view.rows)
+        if stats is None:
+            lines.append(f"| {md_cell(display_label(view))} | — | — | — | — |")
+            continue
+        measured = (
+            f"{stats['measured_kbps_median']:.1f} "
+            f"({stats['measured_kbps_min']:.1f}-{stats['measured_kbps_max']:.1f})"
+        )
+        lines.append(
+            f"| {md_cell(display_label(view))} | {stats['requested_kbps']} | "
+            f"{md_cell(measured)} | {stats['mean_encoded_bytes_per_frame']:.1f} | "
+            f"{stats['total_encoded_mb']:.3f} |"
+        )
+    return lines
+
+
 def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: str) -> str:
     n = episodes_per_condition(data)
     unresolved = unresolved_conditions(axis)
@@ -337,12 +417,14 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
         f"<li>{esc(plain_label(v.condition_id))}: <code>{esc(v.condition_id)}</code></li>"
         for v in axis.conditions
     )
+    h264_bytes = h264_bytes_table_html(axis) if axis.axis == "h264" else ""
     return (
         f'<section class="panel" id="panel-{axis.axis}" aria-labelledby="h-{axis.axis}">'
         f'<h2 id="h-{axis.axis}">{esc(axis.title)}</h2>'
         f'<p class="unit">Stress variable: {esc(axis.unit)}.</p>'
         f"{picture_html(f'success_{axis.axis}', f'Success rate by condition for {axis.title}', plots_rel)}"
         f"{condition_table_html(axis, n)}"
+        f"{h264_bytes}"
         f"<p>{esc(breakpoint_sentence(axis))}</p>"
         f"<p>{unresolved_text}</p>"
         "<details><summary>Paired outcomes by seed</summary>"
@@ -480,6 +562,57 @@ def int4_note(data: ReportData) -> str | None:
     )
 
 
+def _h264_unsupported_record(data: ReportData) -> dict[str, Any] | None:
+    path = data.data_dir / "protocol" / "h264_unsupported.json"
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def h264_note(data: ReportData) -> str | None:
+    """Limitations line for a run H.264 plan or an explicit unsupported record."""
+    h264_axis = next((a for a in data.axes if a.axis == "h264"), None)
+    unsupported = _h264_unsupported_record(data)
+    if h264_axis is None and unsupported is None:
+        return None
+    if h264_axis is None:
+        status = unsupported.get("status") if unsupported else "unsupported"
+        detail = unsupported.get("detail") if unsupported else None
+        detail_bit = f" ({detail})" if detail else ""
+        return (
+            f"H.264 was not run: status is '{status}'{detail_bit}; no H.264 bitrate conditions "
+            "are reported."
+        )
+    overshoots: list[float] = []
+    for view in h264_axis.conditions:
+        for row in view.rows:
+            req = row.get("h264_requested_kbps")
+            actual = row.get("h264_actual_kbps")
+            if req is None or actual is None:
+                continue
+            overshoots.append(float(actual) - float(req))
+    largest = max(overshoots) if overshoots else 0.0
+    locked = data.lock.get("h264") or {}
+    pyav = locked.get("pyav_version")
+    libav = locked.get("libav_versions") or {}
+    libavcodec = libav.get("libavcodec") or libav.get("avcodec")
+    preset = locked.get("preset")
+    gop = locked.get("gop")
+    tune = locked.get("tune")
+    return (
+        "H.264 bitrate axis: frames are encoded and decoded inside the same control step; no "
+        "codec, transport, or jitter-buffer delay is simulated. The delay axis measures latency "
+        "separately and the effects are not additive. The stream is ABR, so measured kbps can "
+        f"differ from the request (largest overshoot in these rows: {largest:+.1f} kbps). "
+        f"Encoder identity: PyAV {pyav}, libavcodec {libavcodec}, preset={preset}, gop={gop}, "
+        f"tune={tune}."
+    )
+
+
 def report_limitations(data: ReportData) -> list[str]:
     n = len(data.rows)
     outcomes: dict[str, int] = {}
@@ -497,6 +630,9 @@ def report_limitations(data: ReportData) -> list[str]:
     int4_line = int4_note(data)
     if int4_line is not None:
         notes.append(int4_line)
+    h264_line = h264_note(data)
+    if h264_line is not None:
+        notes.append(h264_line)
     notes += [
         f"Baseline strength: {baseline_view(first).successes}/{baseline_view(first).eligible} "
         f"({pct(first.baseline_rate)}) against the project floor of {first.baseline_floor:g}. "
@@ -592,6 +728,23 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
             f"{int4_runtime.get('max_abs_error', 0):.3f}, mean abs "
             f"{int4_runtime.get('mean_abs_error', 0):.4f}</dd>"
         )
+    h264_locked = lock.get("h264")
+    h264_prov = ""
+    if isinstance(h264_locked, dict):
+        libav = h264_locked.get("libav_versions") or {}
+        h264_prov = (
+            f"<dt>H.264 encoder</dt><dd>status={esc(h264_locked.get('status'))}; "
+            f"PyAV {esc(h264_locked.get('pyav_version'))}; "
+            f"libavcodec {esc(libav.get('libavcodec') or libav.get('avcodec'))}; "
+            f"FFmpeg {esc(h264_locked.get('ffmpeg_version_line'))}</dd>"
+            f"<dt>H.264 settings</dt><dd>preset={esc(h264_locked.get('preset'))}, "
+            f"tune={esc(h264_locked.get('tune'))}, gop={esc(h264_locked.get('gop'))}, "
+            f"latency_mode={esc(h264_locked.get('latency_mode'))}, "
+            f"frame_rate_hz={esc(h264_locked.get('frame_rate_hz'))}, "
+            f"pixel_format={esc(h264_locked.get('pixel_format'))}, "
+            f"max_b_frames={esc(h264_locked.get('max_b_frames'))}, "
+            f"rc_lookahead={esc(h264_locked.get('rc_lookahead'))}</dd>"
+        )
     checks = "".join(
         f'<tr><td class="num">{"pass" if c.passed else "FAIL"}</td><td>{esc(c.name)}</td>'
         f"<td>{esc(c.detail)}</td></tr>"
@@ -609,6 +762,7 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         f"<dt>FP32 graph sha256</dt><dd><code>{esc(art['fp32_sha256'])}</code></dd>"
         f"<dt>INT8 QDQ graph sha256</dt><dd><code>{esc(art['int8_sha256'])}</code></dd>"
         f"{int4_prov}"
+        f"{h264_prov}"
         f"<dt>FP32 export validation</dt><dd>schema {esc(fp32_validation.get('schema_version'))}, "
         f"passed={esc(fp32_validation.get('passed'))}</dd>"
         f"<dt>INT8 recorded chunk error vs FP32</dt><dd>max abs {runtime.get('max_abs_error', 0):.3f}, "
@@ -775,6 +929,8 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
                 f"{md_cell(f'{status_glyph(axis, v)} {status_text(axis, v)}')} | "
                 f"{md_cell(paired_text_plain(v))} |"
             )
+        if axis.axis == "h264":
+            lines += ["", *h264_bytes_table_markdown(axis)]
         lines += [
             "",
             breakpoint_sentence(axis),

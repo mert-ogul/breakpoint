@@ -117,6 +117,49 @@ def first_success_step(steps: list[dict[str, Any]]) -> int | None:
     return None
 
 
+def _h264_compact_fields(episode: dict[str, Any]) -> dict[str, Any]:
+    """Sum H.264 camera stats into compact row fields; None when the episode is not H.264."""
+    empty = {
+        "h264_requested_kbps": None,
+        "h264_encoded_bytes": None,
+        "h264_frames": None,
+        "h264_actual_kbps": None,
+        "h264_holds": None,
+        "h264_keyframes": None,
+        "h264_first_frame_keyframe": None,
+    }
+    summary = episode.get("h264_summary")
+    if not isinstance(summary, dict):
+        return empty
+    cameras = summary.get("cameras")
+    if not isinstance(cameras, dict) or not cameras:
+        return empty
+    cams = [c for c in cameras.values() if isinstance(c, dict)]
+    if not cams:
+        return empty
+    encoded = sum(int(c.get("encoded_bytes_total") or 0) for c in cams)
+    holds = sum(
+        int(c.get("n_startup_holds") or 0) + int(c.get("n_last_frame_holds") or 0) for c in cams
+    )
+    keyframes = sum(int(c.get("n_keyframes") or 0) for c in cams)
+    # Per-camera frame counts must match; store that common count (equals n_control_steps).
+    frames = int(cams[0].get("n_frames_in") or 0)
+    requested = (summary.get("requested") or {}).get("bitrate_kbps")
+    if requested is None:
+        requested = cams[0].get("requested_bitrate_kbps")
+    fps = 50.0
+    actual = (encoded * 8.0 * fps / frames / 1000.0) if frames > 0 else None
+    return {
+        "h264_requested_kbps": float(requested) if requested is not None else None,
+        "h264_encoded_bytes": encoded,
+        "h264_frames": frames,
+        "h264_actual_kbps": actual,
+        "h264_holds": holds,
+        "h264_keyframes": keyframes,
+        "h264_first_frame_keyframe": all(c.get("first_frame_keyframe") is True for c in cams),
+    }
+
+
 def compact_episode_row(
     *,
     axis: str,
@@ -161,6 +204,7 @@ def compact_episode_row(
         "consumed_trace_indices": trace.get("consumed_trace_indices"),
         "consumed_delays_s": trace.get("consumed_delays_s"),
         "source_report": source,
+        **_h264_compact_fields(episode),
     }
 
 

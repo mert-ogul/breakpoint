@@ -7,6 +7,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -68,6 +70,51 @@ def test_compact_row_records_success_step_and_simulated_duration() -> None:
     assert row["consumed_trace_indices"] is None
     assert row["source_report"] == "outputs/x/run_report.json"
     assert "steps" not in row
+    assert row["h264_encoded_bytes"] is None
+    assert row["h264_frames"] is None
+
+
+def test_compact_row_h264_fields_sum_cameras() -> None:
+    module = load_script()
+    row = module.compact_episode_row(
+        axis="h264",
+        plan_id="v0.1_full_h264",
+        condition_id="h264_500kbps",
+        referenced=False,
+        source="s",
+        episode=episode(
+            image_mode="h264",
+            n_control_steps=10,
+            h264_summary={
+                "requested": {"bitrate_kbps": 500.0},
+                "cameras": {
+                    "top": {
+                        "n_frames_in": 10,
+                        "encoded_bytes_total": 1000,
+                        "n_startup_holds": 0,
+                        "n_last_frame_holds": 0,
+                        "n_keyframes": 1,
+                        "first_frame_keyframe": True,
+                    },
+                    "wrist": {
+                        "n_frames_in": 10,
+                        "encoded_bytes_total": 500,
+                        "n_startup_holds": 0,
+                        "n_last_frame_holds": 1,
+                        "n_keyframes": 2,
+                        "first_frame_keyframe": True,
+                    },
+                },
+            },
+        ),
+    )
+    assert row["h264_requested_kbps"] == 500.0
+    assert row["h264_encoded_bytes"] == 1500
+    assert row["h264_frames"] == 10
+    assert row["h264_holds"] == 1
+    assert row["h264_keyframes"] == 3
+    assert row["h264_first_frame_keyframe"] is True
+    assert row["h264_actual_kbps"] == pytest.approx(1500 * 8 * 50 / 10 / 1000)
 
 
 def test_compact_row_keeps_replay_window_and_consumed_delays() -> None:
@@ -115,11 +162,16 @@ def test_package_protocol_copies_int4_unsupported(tmp_path: Path) -> None:
         json.dumps({**payload, "detail": "int8 missing"}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    h264_payload = {**payload, "detail": "libx264 missing"}
+    (full / "h264_unsupported.json").write_text(
+        json.dumps(h264_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     out = tmp_path / "pkg"
     module.package_protocol(full, out)
     assert (out / "protocol" / "int4_unsupported.json").is_file()
     assert (out / "protocol" / "int8_unsupported.json").is_file()
     assert json.loads((out / "protocol" / "int4_unsupported.json").read_text()) == payload
+    assert json.loads((out / "protocol" / "h264_unsupported.json").read_text()) == h264_payload
 
 
 def test_package_validation_and_identities_include_int4_when_ok(tmp_path: Path) -> None:

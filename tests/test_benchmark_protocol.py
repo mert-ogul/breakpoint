@@ -16,12 +16,19 @@ from breakpoint_eval.benchmark_protocol import (
     build_full_axis_plans,
     build_smoke_plan,
     condition_is_shared_baseline,
+    condition_report_problem,
     freeze_protocol_lock,
     host_settings_from_config,
     load_benchmark_config,
+    resolve_h264_support,
     resolve_profile_by_identity,
 )
-from breakpoint_eval.experiment_plan import ExperimentAxis
+from breakpoint_eval.experiment_plan import (
+    ExperimentAxis,
+    ExperimentPlan,
+    build_seed_pairs,
+    h264_conditions,
+)
 from breakpoint_eval.latency_trace import (
     EndOfTraceBehavior,
     LatencyTraceReplayer,
@@ -45,6 +52,18 @@ def test_config_loads() -> None:
     assert cfg["trace_window"]["length"] == 32
     assert cfg["full"]["jpeg_qualities"][0] == "bypass"
     assert 100 not in cfg["full"]["jpeg_qualities"]
+    assert cfg["h264"] == {"gop": 30, "preset": "veryfast", "latency_mode": "quality_only"}
+    assert cfg["smoke"]["h264_bitrates_kbps"] == [100]
+    assert cfg["full"]["h264_bitrates_kbps"][0] == "bypass"
+
+
+def test_load_config_refuses_h264_deployment_mode(tmp_path: Path) -> None:
+    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    cfg["h264"]["latency_mode"] = "deployment"
+    path = tmp_path / "bad.json"
+    path.write_text(json.dumps(cfg), encoding="utf-8")
+    with pytest.raises(ValueError, match="quality_only"):
+        load_benchmark_config(path)
 
 
 def test_contiguous_window_starts_even_spread() -> None:
@@ -99,10 +118,33 @@ def test_window_rejects_block_resample_mix() -> None:
         )
 
 
-def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
+def _fake_h264_probe(*, available: bool):
+    from breakpoint_eval.h264_ffmpeg import FFmpegProbe
+
+    return FFmpegProbe(
+        available=available,
+        ffmpeg_path="/usr/bin/ffmpeg" if available else None,
+        version_line="ffmpeg version test",
+        version="test",
+        has_libx264=available,
+        has_h264_decoder=available,
+        pyav_available=available,
+        pyav_version="12.0.0" if available else None,
+        libav_versions={"libavcodec": (60, 0, 0)} if available else {},
+        validated_flags={},
+        unsupported_reason=None if available else "libx264 missing in test double",
+    )
+
+
+def test_smoke_and_full_isolation_and_variant_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cfg = load_benchmark_config(CONFIG_PATH)
     # Minimal fake artifacts object via building conditions without resolve.
+    from breakpoint_eval import h264_ffmpeg
     from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
+
+    monkeypatch.setattr(h264_ffmpeg, "probe_ffmpeg_h264", lambda: _fake_h264_probe(available=True))
 
     fake = ResolvedArtifacts(
         export_dir=tmp_path,
@@ -137,10 +179,13 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
     assert "latency_ms_640" in ids
     assert any("60x80" in c or c.endswith("60x80") for c in ids)
     assert "jpeg_q10" in ids
+    assert "h264_100kbps" in ids
+    assert "h264_bypass" not in ids
     assert "precision_onnx_fp32" in ids
     assert "precision_int8" in ids
     assert "precision_int4_weight_only" in ids
     assert any("INT4 status at plan build: ok" in n for n in smoke.notes)
+    assert any("H.264 status at plan build: ok" in n for n in smoke.notes)
 
     cfg_full = json.loads(json.dumps(cfg))
     cfg_full["full"]["device_profiles"] = []
@@ -150,6 +195,7 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
         ExperimentAxis.LATENCY_MS.value,
         ExperimentAxis.RESOLUTION.value,
         ExperimentAxis.JPEG.value,
+        ExperimentAxis.H264.value,
         ExperimentAxis.PRECISION.value,
     ]
     lat = plans[0]
@@ -164,10 +210,22 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
     jpeg = plans[2]
     assert jpeg.conditions[0].condition_id == "jpeg_bypass"
     assert all(c.params.get("jpeg_quality") != 100 for c in jpeg.conditions)
+    h264 = plans[3]
+    assert h264.plan_id == "v0.1_full_h264"
+    assert h264.conditions[0].condition_id == "h264_bypass"
+    assert condition_is_shared_baseline(h264.conditions[0])
+    assert [c.condition_id for c in h264.conditions] == [
+        "h264_bypass",
+        "h264_2000kbps",
+        "h264_1000kbps",
+        "h264_500kbps",
+        "h264_250kbps",
+        "h264_100kbps",
+    ]
     assert condition_is_shared_baseline(lat.conditions[0])
     assert condition_is_shared_baseline(res.conditions[0])
     assert condition_is_shared_baseline(jpeg.conditions[0])
-    prec = plans[3]
+    prec = plans[4]
     assert [c.condition_id for c in prec.conditions] == [
         "precision_onnx_fp32",
         "precision_int8",
@@ -194,10 +252,24 @@ def test_smoke_and_full_isolation_and_variant_selection(tmp_path: Path) -> None:
     smoke_ids = [c.condition_id for c in smoke_no_int8.conditions]
     assert "precision_int8" not in smoke_ids
     assert "precision_int4_weight_only" not in smoke_ids
+    assert "h264_100kbps" in smoke_ids
     full_no = build_full_axis_plans(cfg_full, fake_bad)
-    prec_no_ids = [c.condition_id for c in full_no[3].conditions]
+    prec_no_ids = [c.condition_id for c in full_no[4].conditions]
     assert prec_no_ids == ["precision_onnx_fp32"]
-    assert any("INT4 status at plan build: unsupported" in n for n in full_no[3].notes)
+    assert any("INT4 status at plan build: unsupported" in n for n in full_no[4].notes)
+
+    monkeypatch.setattr(h264_ffmpeg, "probe_ffmpeg_h264", lambda: _fake_h264_probe(available=False))
+    smoke_no_h264 = build_smoke_plan(cfg_smoke, fake)
+    assert "h264_100kbps" not in [c.condition_id for c in smoke_no_h264.conditions]
+    assert any("H.264 status at plan build: unsupported" in n for n in smoke_no_h264.notes)
+    full_no_h264 = build_full_axis_plans(cfg_full, fake)
+    assert [p.axis for p in full_no_h264] == [
+        ExperimentAxis.LATENCY_MS.value,
+        ExperimentAxis.RESOLUTION.value,
+        ExperimentAxis.JPEG.value,
+        ExperimentAxis.PRECISION.value,
+    ]
+    assert any("H.264 status at plan build: unsupported" in n for n in full_no_h264[2].notes)
 
 
 def test_freeze_protocol_lock_includes_int4_fields(tmp_path: Path) -> None:
@@ -372,6 +444,196 @@ def test_benchmark_profile_module_avoids_heavy_imports() -> None:
     assert after == before
     assert hasattr(mod, "resolve_validated_fp32_bundle")
     assert hasattr(mod, "run_benchmark_profile")
+
+
+def test_resolve_h264_support_ok_and_unsupported(monkeypatch: pytest.MonkeyPatch) -> None:
+    from breakpoint_eval import h264_ffmpeg
+
+    cfg = load_benchmark_config(CONFIG_PATH)
+    monkeypatch.setattr(h264_ffmpeg, "probe_ffmpeg_h264", lambda: _fake_h264_probe(available=True))
+    ok = resolve_h264_support(cfg)
+    assert ok["status"] == "ok"
+    assert ok["detail"] is None
+    assert ok["gop"] == 30
+    assert ok["preset"] == "veryfast"
+    assert ok["latency_mode"] == "quality_only"
+    assert ok["frame_rate_hz"] == 50.0
+    assert ok["tune"] == "zerolatency"
+    assert ok["pixel_format"] == "yuv420p"
+    assert ok["max_b_frames"] == 0
+    assert ok["rc_lookahead"] == 0
+    assert ok["pyav_version"] == "12.0.0"
+    assert ok["libav_versions"]["libavcodec"] == (60, 0, 0)
+    assert ok["ffmpeg_version_line"] == "ffmpeg version test"
+    assert ok["measurements_fabricated"] is False
+
+    monkeypatch.setattr(h264_ffmpeg, "probe_ffmpeg_h264", lambda: _fake_h264_probe(available=False))
+    bad = resolve_h264_support(cfg)
+    assert bad["status"] == "unsupported"
+    assert "libx264 missing" in (bad["detail"] or "")
+
+
+def test_freeze_lock_stores_h264_and_resume_refuses_libav_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from breakpoint_eval import h264_ffmpeg
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
+
+    cfg = load_benchmark_config(CONFIG_PATH)
+    host = host_settings_from_config(cfg)
+    monkeypatch.setattr(h264_ffmpeg, "probe_ffmpeg_h264", lambda: _fake_h264_probe(available=True))
+    support = resolve_h264_support(cfg)
+    arts = ResolvedArtifacts(
+        export_dir=tmp_path,
+        fp32_path=tmp_path / "a.onnx",
+        fp32_sha256="aaa",
+        fp32_recipe_id="r",
+        int8_path=None,
+        int8_sha256=None,
+        int8_status="missing",
+        int8_detail=None,
+        profiles={},
+        profile_identities={},
+    )
+    lock = freeze_protocol_lock(
+        config=cfg,
+        artifacts=arts,
+        source_revision={"kind": "git", "revision": "abc"},
+        host=host,
+        phase="smoke",
+        h264_support=support,
+    )
+    assert lock["h264"]["status"] == "ok"
+    assert lock["h264"]["libav_versions"]["libavcodec"] == (60, 0, 0)
+    changed = json.loads(json.dumps(lock))
+    changed["h264"]["libav_versions"] = {"libavcodec": (61, 0, 0)}
+    with pytest.raises(ValueError, match="resume refused"):
+        assert_lock_matches(lock, changed)
+
+
+def _h264_plan() -> ExperimentPlan:
+    return ExperimentPlan(
+        plan_id="h264_fixture",
+        candidate="act_aloha_transfer",
+        phase="exploratory",
+        n_episodes=1,
+        axis=ExperimentAxis.H264.value,
+        seed_pairs=build_seed_pairs(1, env_seed_start=5000, policy_seed_offset=10000),
+        conditions=h264_conditions((500,), frame_rate_hz=50.0, gop=30, preset="veryfast"),
+        baseline_condition_id=None,
+    )
+
+
+def _good_h264_camera() -> dict:
+    return {
+        "n_frames_in": 10,
+        "n_frames_decoded": 10,
+        "n_startup_holds": 0,
+        "n_last_frame_holds": 0,
+        "first_frame_keyframe": True,
+        "encoded_bytes_total": 1200,
+        "n_keyframes": 1,
+    }
+
+
+def _h264_report(plan: ExperimentPlan, *, camera_overrides: dict | None = None) -> dict:
+    cam = _good_h264_camera()
+    if camera_overrides:
+        cam.update(camera_overrides)
+    pair = plan.seed_pairs[0]
+    cond = plan.conditions[0]
+    return {
+        "provenance": {
+            "candidate": plan.candidate,
+            "env_created": True,
+            "env_seeds": [pair.env_seed],
+            "policy_rng_seeds": [pair.policy_rng_seed],
+            "latency_mode": "constant",
+            "onnx_runtime": {"variant_label": "onnx_fp32"},
+        },
+        "summary": {"n_episodes_total": 1, "n_runtime_error": 0},
+        "episodes": [
+            {
+                "episode_index": 0,
+                "seed": pair.env_seed,
+                "policy_rng_seed": pair.policy_rng_seed,
+                "outcome": "success",
+                "success": True,
+                "runtime_error": None,
+                "n_control_steps": 10,
+                "latency_mode": "constant",
+                "latency_s": 0.0,
+                "image_mode": "h264",
+                "h264_summary": {
+                    "latency_mode": "quality_only",
+                    "requested": {
+                        "bitrate_kbps": cond.params["h264_bitrate_kbps"],
+                        "gop": cond.params["h264_gop"],
+                        "preset": cond.params["h264_preset"],
+                        "frame_rate_hz": cond.params["frame_rate_hz"],
+                    },
+                    "cameras": {"top": cam},
+                },
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ("override", "match"),
+    [
+        ({"latency_mode": "deployment"}, "latency_mode is not quality_only"),
+        ({"requested_bitrate": 999.0}, "requested bitrate differs"),
+        ({"requested_gop": 15}, "requested gop differs"),
+        ({"requested_preset": "slow"}, "requested preset differs"),
+        ({"requested_fps": 25.0}, "requested frame_rate_hz differs"),
+        ({"n_frames_in": 9}, "n_frames_in"),
+        ({"n_frames_decoded": 9}, "n_frames_decoded"),
+        ({"n_startup_holds": 1}, "n_startup_holds"),
+        ({"n_last_frame_holds": 1}, "n_last_frame_holds"),
+        ({"first_frame_keyframe": False}, "first_frame_keyframe"),
+        ({"encoded_bytes_total": 0}, "encoded_bytes_total"),
+    ],
+)
+def test_condition_report_problem_h264_summary_fields(
+    tmp_path: Path, override: dict, match: str
+) -> None:
+    plan = _h264_plan()
+    report = _h264_report(plan)
+    ep = report["episodes"][0]
+    summary = ep["h264_summary"]
+    if "latency_mode" in override:
+        summary["latency_mode"] = override["latency_mode"]
+    if "requested_bitrate" in override:
+        summary["requested"]["bitrate_kbps"] = override["requested_bitrate"]
+    if "requested_gop" in override:
+        summary["requested"]["gop"] = override["requested_gop"]
+    if "requested_preset" in override:
+        summary["requested"]["preset"] = override["requested_preset"]
+    if "requested_fps" in override:
+        summary["requested"]["frame_rate_hz"] = override["requested_fps"]
+    for key in (
+        "n_frames_in",
+        "n_frames_decoded",
+        "n_startup_holds",
+        "n_last_frame_holds",
+        "first_frame_keyframe",
+        "encoded_bytes_total",
+    ):
+        if key in override:
+            summary["cameras"]["top"][key] = override[key]
+    path = tmp_path / "run_report.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+    problem = condition_report_problem(path, plan, plan.conditions[0])
+    assert problem is not None
+    assert match in problem
+
+
+def test_condition_report_problem_h264_ok(tmp_path: Path) -> None:
+    plan = _h264_plan()
+    path = tmp_path / "run_report.json"
+    path.write_text(json.dumps(_h264_report(plan)), encoding="utf-8")
+    assert condition_report_problem(path, plan, plan.conditions[0]) is None
 
 
 def test_scripts_help_and_dry_run() -> None:
