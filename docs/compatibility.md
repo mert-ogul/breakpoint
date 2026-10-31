@@ -6,7 +6,7 @@ This page lists the versions and platforms the benchmark was run on, the install
 
 | Role | Platform | Evidence |
 | --- | --- | --- |
-| Simulation, export, evaluation, laptop profile | macOS 14.6 arm64 (Apple M3), Python 3.11.17, CPU | The saved benchmark: 600 episode records, no runtime errors |
+| Simulation, export, evaluation, laptop profile | macOS 14.6 arm64 (Apple M3), Python 3.11.17, CPU | The saved benchmark: 810 episode records, no runtime errors |
 | Pi profile | Raspberry Pi on Linux aarch64 (kernel `6.18.50+rpt-rpi-2712`) | One saved profile, recorded while the firmware reported throttling. The board model string was not saved |
 | Offline tests | Ubuntu with Python 3.11 | CI ([CONTRIBUTING.md](../CONTRIBUTING.md)) |
 

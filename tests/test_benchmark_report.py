@@ -52,7 +52,7 @@ def test_saved_example_passes_every_check() -> None:
     assert failed == []
     baseline = data.axes[0].conditions[0]
     assert (baseline.successes, baseline.eligible) == (25, 30)
-    assert len(data.rows) == 600
+    assert len(data.rows) == 810
 
 
 def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> None:
@@ -389,10 +389,10 @@ def test_categorical_axes_are_not_described_as_crossings() -> None:
     data = report.load_validated_data(DATA)
     by_axis = {axis.axis: axis for axis in data.axes}
     assert not by_axis["precision"].ordered and not by_axis["device_profile"].ordered
-    assert by_axis["latency_ms"].ordered
+    assert by_axis["latency_ms"].ordered and by_axis["h264"].ordered
     lines = report.observations(data)
     ordered = [line for line in lines if "first grid point" in line]
-    assert len(ordered) == 2 and all("categorical" not in line for line in ordered)
+    assert len(ordered) == 3 and all("categorical" not in line for line in ordered)
     for title in ("Numeric precision", "Device latency replay"):
         line = next(x for x in lines if x.startswith(title))
         assert "categorical comparison" in line and "first" not in line
@@ -445,10 +445,11 @@ def test_saved_example_counts_are_unchanged() -> None:
         "latency_ms": [25, 25, 25, 23, 18, 14],
         "resolution": [25, 26, 22, 10],
         "jpeg": [25, 25, 26, 26, 25, 23],
-        "precision": [25, 24],
+        "h264": [25, 25, 26, 28, 19, 10],
+        "precision": [25, 24, 23],
         "device_profile": [25, 24, 9],
     }
-    assert len(data.rows) == 600 and data.n_runs == 18
+    assert len(data.rows) == 810 and data.n_runs == 24
     assert data.trace_window_length == 32
 
 
@@ -615,3 +616,13 @@ def test_int4_limitation_line_from_sidecar() -> None:
         validation_files={},
     )
     assert int4_note(old) is None
+
+
+def test_working_tree_porcelain_note() -> None:
+    from breakpoint_eval.benchmark_report import working_tree_porcelain_note
+
+    assert working_tree_porcelain_note("") == "clean"
+    assert working_tree_porcelain_note(None) == "clean"
+    assert working_tree_porcelain_note("\n") == "clean"
+    note = working_tree_porcelain_note(" M src/breakpoint_eval/experiment_plan.py\n")
+    assert note == "<code> M src/breakpoint_eval/experiment_plan.py</code>"

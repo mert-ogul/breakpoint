@@ -1,0 +1,191 @@
+[
+  {
+    "condition_id": "latency_ms_0",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_40",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_40/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_80",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_80/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_160",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_160/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_320",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_320/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_640",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_640/run_report.json"
+  },
+  {
+    "condition_id": "resolution_native",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "referenced_baseline",
+    "resolution": "referenced_baseline",
+    "source_report": "outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json"
+  },
+  {
+    "condition_id": "resolution_capture_240x320",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_240x320/run_report.json"
+  },
+  {
+    "condition_id": "resolution_capture_120x160",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_120x160/run_report.json"
+  },
+  {
+    "condition_id": "resolution_capture_60x80",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_60x80/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_bypass",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "referenced_baseline",
+    "resolution": "referenced_baseline",
+    "source_report": "outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q95",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q75",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q50",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q25",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q10",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json"
+  },
+  {
+    "condition_id": "h264_bypass",
+    "plan_id": "v0.1_full_h264",
+    "record_status": "referenced_baseline",
+    "resolution": "referenced_baseline",
+    "source_report": "outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json"
+  },
+  {
+    "condition_id": "h264_2000kbps",
+    "plan_id": "v0.1_full_h264",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_2000kbps/run_report.json"
+  },
+  {
+    "condition_id": "h264_1000kbps",
+    "plan_id": "v0.1_full_h264",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_1000kbps/run_report.json"
+  },
+  {
+    "condition_id": "h264_500kbps",
+    "plan_id": "v0.1_full_h264",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_500kbps/run_report.json"
+  },
+  {
+    "condition_id": "h264_250kbps",
+    "plan_id": "v0.1_full_h264",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_250kbps/run_report.json"
+  },
+  {
+    "condition_id": "h264_100kbps",
+    "plan_id": "v0.1_full_h264",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_100kbps/run_report.json"
+  },
+  {
+    "condition_id": "precision_onnx_fp32",
+    "plan_id": "v0.1_full_precision",
+    "record_status": "referenced_baseline",
+    "resolution": "referenced_baseline",
+    "source_report": "outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json"
+  },
+  {
+    "condition_id": "precision_int8",
+    "plan_id": "v0.1_full_precision",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int8/run_report.json"
+  },
+  {
+    "condition_id": "precision_int4_weight_only",
+    "plan_id": "v0.1_full_precision",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int4_weight_only/run_report.json"
+  },
+  {
+    "condition_id": "device_profile_laptop-m3_fp32",
+    "plan_id": "v0.1_full_device_profile",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_device_profile/conditions/device_profile_laptop-m3_fp32/run_report.json"
+  },
+  {
+    "condition_id": "device_profile_rpi5_fp32",
+    "plan_id": "v0.1_full_device_profile",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/act-transfer/full-v2/axes/v0.1_full_device_profile/conditions/device_profile_rpi5_fp32/run_report.json"
+  }
+]

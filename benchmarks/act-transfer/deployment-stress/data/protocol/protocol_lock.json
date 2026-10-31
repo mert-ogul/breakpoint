@@ -5,6 +5,10 @@
     "fp32_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/act_chunk_fp32.onnx",
     "fp32_recipe_id": "torch_onnx_export_fp32_opset17",
     "fp32_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba",
+    "int4_detail": null,
+    "int4_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/act_chunk_int4_matmul_nbits.onnx",
+    "int4_sha256": "c0cee50e137d0aa36ccb568cec2feea793ed328905adccefd2bc4010440f8d37",
+    "int4_status": "ok",
     "int8_detail": null,
     "int8_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/act_chunk_int8_qdq.onnx",
     "int8_sha256": "792e9adc992405676317200cfa199176280be1eff152800604af4af7dac3b035",
@@ -83,6 +87,58 @@
     }
   },
   "candidate": "act_aloha_transfer",
+  "h264": {
+    "detail": null,
+    "ffmpeg_version_line": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+    "frame_rate_hz": 50.0,
+    "gop": 30,
+    "latency_mode": "quality_only",
+    "libav_versions": {
+      "libavcodec": [
+        62,
+        28,
+        102
+      ],
+      "libavdevice": [
+        62,
+        3,
+        102
+      ],
+      "libavfilter": [
+        11,
+        14,
+        102
+      ],
+      "libavformat": [
+        62,
+        12,
+        102
+      ],
+      "libavutil": [
+        60,
+        26,
+        102
+      ],
+      "libswresample": [
+        6,
+        3,
+        102
+      ],
+      "libswscale": [
+        9,
+        5,
+        102
+      ]
+    },
+    "max_b_frames": 0,
+    "measurements_fabricated": false,
+    "pixel_format": "yuv420p",
+    "preset": "veryfast",
+    "pyav_version": "18.1.0",
+    "rc_lookahead": 0,
+    "status": "ok",
+    "tune": "zerolatency"
+  },
   "host": {
     "compute_device": "cpu",
     "inter_op_num_threads": 1,
@@ -98,6 +154,14 @@
       "rpi5"
     ],
     "env_seed_start": 5000,
+    "h264_bitrates_kbps": [
+      "bypass",
+      2000,
+      1000,
+      500,
+      250,
+      100
+    ],
     "isolate_axes": true,
     "jpeg_qualities": [
       "bypass",
@@ -122,7 +186,8 @@
     "policy_seed_offset": 10000,
     "precision_variants": [
       "onnx_fp32",
-      "int8"
+      "int8",
+      "int4_weight_only"
     ],
     "resolution_hw": [
       [
@@ -143,7 +208,8 @@
       ]
     ]
   },
-  "protocol": "v0.1",
+  "protocol_name": "act_deployment_stress",
+  "protocol_version": "0.1",
   "scheduler": {
     "chunk_arrival_policy": "discard_stale",
     "latency_end_of_trace": "fail",
@@ -154,8 +220,8 @@
     "archive_context": false,
     "dirty": true,
     "kind": "git",
-    "revision": "2754b60dc50d6dbf1ca76325ee40160a0b262a0a",
-    "status_porcelain": "?? .cursor/\n?? profiles/laptop-m3/\n?? profiles/rpi5/\n"
+    "revision": "f6bb61ab89f416726882da6bccd3d3ecd56fc228",
+    "status_porcelain": " M src/breakpoint_eval/experiment_plan.py\n"
   },
   "statistics": {
     "baseline_success_floor": 0.5,

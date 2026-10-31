@@ -317,9 +317,9 @@
     }
   },
   "commands": [
-    "ffmpeg -y -loglevel error -framerate 25/2 -i /Users/mertogul/Desktop/breakpoint-1/outputs/v1/media/composed_frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart /Users/mertogul/Desktop/breakpoint-1/benchmarks/act-transfer/v1/media/comparison.mp4",
-    "ffmpeg -y -loglevel error -framerate 25/2 -i /Users/mertogul/Desktop/breakpoint-1/outputs/v1/media/composed_frames/frame_%04d.png -vf palettegen=stats_mode=diff /Users/mertogul/Desktop/breakpoint-1/outputs/v1/media/composed_frames/palette.png",
-    "ffmpeg -y -loglevel error -framerate 25/2 -i /Users/mertogul/Desktop/breakpoint-1/outputs/v1/media/composed_frames/frame_%04d.png -i /Users/mertogul/Desktop/breakpoint-1/outputs/v1/media/composed_frames/palette.png -lavfi paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle -loop 0 /Users/mertogul/Desktop/breakpoint-1/benchmarks/act-transfer/v1/media/comparison.gif"
+    "ffmpeg -y -loglevel error -framerate 25/2 -i /Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/media/composed_frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart /Users/mertogul/Desktop/breakpoint-1/benchmarks/act-transfer/deployment-stress/media/comparison.mp4",
+    "ffmpeg -y -loglevel error -framerate 25/2 -i /Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/media/composed_frames/frame_%04d.png -vf palettegen=stats_mode=diff /Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/media/composed_frames/palette.png",
+    "ffmpeg -y -loglevel error -framerate 25/2 -i /Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/media/composed_frames/frame_%04d.png -i /Users/mertogul/Desktop/breakpoint-1/outputs/act-transfer/media/composed_frames/palette.png -lavfi paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle -loop 0 /Users/mertogul/Desktop/breakpoint-1/benchmarks/act-transfer/deployment-stress/media/comparison.gif"
   ],
   "presentation_choices": [
     "Footage is subsampled to every control_steps_per_output_frame-th simulation frame.",

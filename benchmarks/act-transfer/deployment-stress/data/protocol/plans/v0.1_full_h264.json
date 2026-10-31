@@ -1,0 +1,334 @@
+{
+  "axis": "h264",
+  "baseline_condition_id": "h264_bypass",
+  "candidate": "act_aloha_transfer",
+  "conditions": [
+    {
+      "axis": "h264",
+      "condition_id": "h264_bypass",
+      "label": "H.264 bypass (native uncompressed)",
+      "params": {
+        "bypass": true,
+        "h264_bitrate_kbps": null,
+        "h264_latency_mode": "quality_only",
+        "mode": "native"
+      }
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_2000kbps",
+      "label": "H.264 2000 kbps (quality_only)",
+      "params": {
+        "bypass": false,
+        "excludes_codec_transport_delay": true,
+        "frame_rate_hz": 50.0,
+        "h264_bitrate_kbps": 2000.0,
+        "h264_deployment_buffer_frames": 0,
+        "h264_gop": 30,
+        "h264_latency_mode": "quality_only",
+        "h264_preset": "veryfast",
+        "mode": "h264"
+      }
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_1000kbps",
+      "label": "H.264 1000 kbps (quality_only)",
+      "params": {
+        "bypass": false,
+        "excludes_codec_transport_delay": true,
+        "frame_rate_hz": 50.0,
+        "h264_bitrate_kbps": 1000.0,
+        "h264_deployment_buffer_frames": 0,
+        "h264_gop": 30,
+        "h264_latency_mode": "quality_only",
+        "h264_preset": "veryfast",
+        "mode": "h264"
+      }
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_500kbps",
+      "label": "H.264 500 kbps (quality_only)",
+      "params": {
+        "bypass": false,
+        "excludes_codec_transport_delay": true,
+        "frame_rate_hz": 50.0,
+        "h264_bitrate_kbps": 500.0,
+        "h264_deployment_buffer_frames": 0,
+        "h264_gop": 30,
+        "h264_latency_mode": "quality_only",
+        "h264_preset": "veryfast",
+        "mode": "h264"
+      }
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_250kbps",
+      "label": "H.264 250 kbps (quality_only)",
+      "params": {
+        "bypass": false,
+        "excludes_codec_transport_delay": true,
+        "frame_rate_hz": 50.0,
+        "h264_bitrate_kbps": 250.0,
+        "h264_deployment_buffer_frames": 0,
+        "h264_gop": 30,
+        "h264_latency_mode": "quality_only",
+        "h264_preset": "veryfast",
+        "mode": "h264"
+      }
+    },
+    {
+      "axis": "h264",
+      "condition_id": "h264_100kbps",
+      "label": "H.264 100 kbps (quality_only)",
+      "params": {
+        "bypass": false,
+        "excludes_codec_transport_delay": true,
+        "frame_rate_hz": 50.0,
+        "h264_bitrate_kbps": 100.0,
+        "h264_deployment_buffer_frames": 0,
+        "h264_gop": 30,
+        "h264_latency_mode": "quality_only",
+        "h264_preset": "veryfast",
+        "mode": "h264"
+      }
+    }
+  ],
+  "confirms_plan_id": null,
+  "conventions": {
+    "combined_only_after_isolated": true,
+    "effects_not_assumed_additive": true,
+    "grids_are_experimental_choices_not_known_thresholds": true,
+    "hundred_episodes_not_precise_boundary": true,
+    "n_episodes_full_default": 100,
+    "n_episodes_smoke": 5,
+    "no_optional_stopping_for_headline": true
+  },
+  "env_seeds": [
+    5000,
+    5001,
+    5002,
+    5003,
+    5004,
+    5005,
+    5006,
+    5007,
+    5008,
+    5009,
+    5010,
+    5011,
+    5012,
+    5013,
+    5014,
+    5015,
+    5016,
+    5017,
+    5018,
+    5019,
+    5020,
+    5021,
+    5022,
+    5023,
+    5024,
+    5025,
+    5026,
+    5027,
+    5028,
+    5029
+  ],
+  "isolation_notes": [
+    "H.264 causal stream quality-only at native resolution; FP32 and 0 ms delay.",
+    "No codec, transport, or decoding delay is simulated on this axis."
+  ],
+  "n_episodes": 30,
+  "notes": [
+    "Isolated H.264 bitrate axis; visual quality only."
+  ],
+  "phase": "exploratory",
+  "plan_id": "v0.1_full_h264",
+  "policy_rng_seeds": [
+    15000,
+    15001,
+    15002,
+    15003,
+    15004,
+    15005,
+    15006,
+    15007,
+    15008,
+    15009,
+    15010,
+    15011,
+    15012,
+    15013,
+    15014,
+    15015,
+    15016,
+    15017,
+    15018,
+    15019,
+    15020,
+    15021,
+    15022,
+    15023,
+    15024,
+    15025,
+    15026,
+    15027,
+    15028,
+    15029
+  ],
+  "seed_pairs": [
+    {
+      "env_seed": 5000,
+      "episode_index": 0,
+      "policy_rng_seed": 15000
+    },
+    {
+      "env_seed": 5001,
+      "episode_index": 1,
+      "policy_rng_seed": 15001
+    },
+    {
+      "env_seed": 5002,
+      "episode_index": 2,
+      "policy_rng_seed": 15002
+    },
+    {
+      "env_seed": 5003,
+      "episode_index": 3,
+      "policy_rng_seed": 15003
+    },
+    {
+      "env_seed": 5004,
+      "episode_index": 4,
+      "policy_rng_seed": 15004
+    },
+    {
+      "env_seed": 5005,
+      "episode_index": 5,
+      "policy_rng_seed": 15005
+    },
+    {
+      "env_seed": 5006,
+      "episode_index": 6,
+      "policy_rng_seed": 15006
+    },
+    {
+      "env_seed": 5007,
+      "episode_index": 7,
+      "policy_rng_seed": 15007
+    },
+    {
+      "env_seed": 5008,
+      "episode_index": 8,
+      "policy_rng_seed": 15008
+    },
+    {
+      "env_seed": 5009,
+      "episode_index": 9,
+      "policy_rng_seed": 15009
+    },
+    {
+      "env_seed": 5010,
+      "episode_index": 10,
+      "policy_rng_seed": 15010
+    },
+    {
+      "env_seed": 5011,
+      "episode_index": 11,
+      "policy_rng_seed": 15011
+    },
+    {
+      "env_seed": 5012,
+      "episode_index": 12,
+      "policy_rng_seed": 15012
+    },
+    {
+      "env_seed": 5013,
+      "episode_index": 13,
+      "policy_rng_seed": 15013
+    },
+    {
+      "env_seed": 5014,
+      "episode_index": 14,
+      "policy_rng_seed": 15014
+    },
+    {
+      "env_seed": 5015,
+      "episode_index": 15,
+      "policy_rng_seed": 15015
+    },
+    {
+      "env_seed": 5016,
+      "episode_index": 16,
+      "policy_rng_seed": 15016
+    },
+    {
+      "env_seed": 5017,
+      "episode_index": 17,
+      "policy_rng_seed": 15017
+    },
+    {
+      "env_seed": 5018,
+      "episode_index": 18,
+      "policy_rng_seed": 15018
+    },
+    {
+      "env_seed": 5019,
+      "episode_index": 19,
+      "policy_rng_seed": 15019
+    },
+    {
+      "env_seed": 5020,
+      "episode_index": 20,
+      "policy_rng_seed": 15020
+    },
+    {
+      "env_seed": 5021,
+      "episode_index": 21,
+      "policy_rng_seed": 15021
+    },
+    {
+      "env_seed": 5022,
+      "episode_index": 22,
+      "policy_rng_seed": 15022
+    },
+    {
+      "env_seed": 5023,
+      "episode_index": 23,
+      "policy_rng_seed": 15023
+    },
+    {
+      "env_seed": 5024,
+      "episode_index": 24,
+      "policy_rng_seed": 15024
+    },
+    {
+      "env_seed": 5025,
+      "episode_index": 25,
+      "policy_rng_seed": 15025
+    },
+    {
+      "env_seed": 5026,
+      "episode_index": 26,
+      "policy_rng_seed": 15026
+    },
+    {
+      "env_seed": 5027,
+      "episode_index": 27,
+      "policy_rng_seed": 15027
+    },
+    {
+      "env_seed": 5028,
+      "episode_index": 28,
+      "policy_rng_seed": 15028
+    },
+    {
+      "env_seed": 5029,
+      "episode_index": 29,
+      "policy_rng_seed": 15029
+    }
+  ]
+}

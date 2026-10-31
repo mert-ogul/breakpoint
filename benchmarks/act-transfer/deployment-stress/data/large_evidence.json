@@ -3,245 +3,329 @@
     {
       "bytes": 13178146,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "bde25e7bfdad17d352c7d81e721d33c7b4d2f2fbae20b8b1ce42f6a5ddbcb94d"
     },
     {
       "bytes": 8451500,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_0/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_0/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "ffb36f076782fc92f403d3d22776de90048eb37a571c24129f5ba275fdf44a24"
     },
     {
       "bytes": 13183136,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_40/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_40/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "acf546ce3d1ed69d28f3039158a05556c627d891b1664531dfb023685e52f552"
     },
     {
       "bytes": 8459226,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_40/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_40/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "21779e4dbf7ceee67554f9464fc0eba2f62e16523508bd311d59bb52f1305561"
     },
     {
       "bytes": 13168756,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_80/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_80/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "912d8ef6a58a87077f3b8f30b79ffdb968d9cd1bc41514d048dd6b5482ee8180"
     },
     {
       "bytes": 8446592,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_80/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_80/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "90c46299334fd117df13ae737142d1a26925783b642cf1319025d8faad0a7571"
     },
     {
       "bytes": 13448571,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_160/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_160/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "06b61d2f5be3e54a8d06e6960c7ccf0964a1f9ec531f02c5eea841adc7c104b5"
     },
     {
       "bytes": 8620878,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_160/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_160/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "83f3e59a8586eb7d82fb491ba7c0e3f930e0b783bea643734431cf14e18a072b"
     },
     {
       "bytes": 14056733,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_320/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_320/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "d4795ef6008b7ab96d67a71efad26a36a449008cf4dea02fd7cb43e7bdd15653"
     },
     {
       "bytes": 8999748,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_320/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_320/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "81080859a022df6e06be9358bca0ce2b748eb548018481116569af069a950274"
     },
     {
       "bytes": 14555483,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_640/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_640/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "d1fa21803e5dc387c8f6b730eb972b3da72e0ecc7a6d2047cd3ac0c2c355d7f4"
     },
     {
       "bytes": 9296332,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_latency/conditions/latency_ms_640/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_latency/conditions/latency_ms_640/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "a62e2c749ae38982b4a75a888ac325ef2062c381781e3abd9c81a680ca5ab6a2"
     },
     {
       "bytes": 13178146,
       "in_repository": false,
-      "path": "outputs/v1/full/shared_baselines/default_fp32_native_L0/run_report.json",
+      "path": "outputs/act-transfer/full-v2/shared_baselines/default_fp32_native_L0/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "bde25e7bfdad17d352c7d81e721d33c7b4d2f2fbae20b8b1ce42f6a5ddbcb94d"
     },
     {
       "bytes": 12884158,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_240x320/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_240x320/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "b9da7225ec94bc99f4d95d371968e9a8a162e84d865d0a6792f831b14aa7bd3f"
     },
     {
       "bytes": 8263444,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_240x320/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_240x320/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "dcfd94316e518a51c56965a3fb0f49de85fc627ccce516328eedcfcf2fc8c3e2"
     },
     {
       "bytes": 12825444,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_120x160/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_120x160/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "553c419b7e1e9e9eed2cc61576fd143db9876226c520c2b473a1d395dccb2007"
     },
     {
       "bytes": 8226042,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_120x160/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_120x160/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "786f1abe7e31e885c61f773ee4c3073fabecf6964b92afec443c5d8484b36ec8"
     },
     {
       "bytes": 15202324,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_60x80/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_60x80/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "d00c596d2e64b76bafb28c62ba6ad041d0d65e49687a3e9343efdb546ea25cd5"
     },
     {
       "bytes": 9756826,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_resolution/conditions/resolution_capture_60x80/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_resolution/conditions/resolution_capture_60x80/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "6c8c3eea93759e2ab3b80afd4f5d6de3fb2a4fb714201c00e5d387670812b1e0"
     },
     {
       "bytes": 13252014,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "14006d5b2319c119fce67fbdd7f3c8886733580d67fe02ef88eab7c48f2be6d6"
     },
     {
       "bytes": 8500720,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q95/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "ab6e3910dbec607f7892857edeaab57c147435814a7f55753453aca5c46c1cdc"
     },
     {
       "bytes": 12940378,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "77872489a0d515ff9c1ff7747013ac13cdba9ce89eabd444963a674e343d7baa"
     },
     {
       "bytes": 8300162,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q75/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "1a1016fa5689a3ba28d54a3145796bcfa97b930b5baf449a7a0753050aad560e"
     },
     {
       "bytes": 13017202,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "2ba75258509ac80ebab587f7bf4f95c7c2142d475cbd723c03d860aa34847a9c"
     },
     {
       "bytes": 8350426,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q50/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "ad55ebee4008362206198d785b962d004ab1b9b374a1a11ca8583e728c75f51f"
     },
     {
       "bytes": 12866786,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "fb47372964bd5f06215dcf850305747bea0f9bafad1ce28cb4253b32c544bfba"
     },
     {
       "bytes": 8253132,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q25/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "70bc6c9a68c0c27707dec843c4de5f4fec00a8b8f9fe14ee35719ce624ff801c"
     },
     {
       "bytes": 12876336,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "88100f32a55a8b589069f8e6674105e9eb78e25098f5e081b022b283cd8e03c9"
     },
     {
       "bytes": 8259030,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_jpeg/conditions/jpeg_q10/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "0a8a89df27b2fe8b1315fb48ad4dad34ca44ad7f7b2ddeb4cbcfd4e2b103c9fb"
     },
     {
+      "bytes": 21372095,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_2000kbps/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "7e19f1791090458bc29046e4b609a1cecf24ab5b06b36390767f373315513cbc"
+    },
+    {
+      "bytes": 12151006,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_2000kbps/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "7b0d3c0afc47e6db2c06deefb908dd9cae51b4ca9672a30f3f990089fa6b1559"
+    },
+    {
+      "bytes": 21024148,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_1000kbps/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "e2f1ccd5b49516b8e62abb8e79028d1f35492c0ddc5aae9887e5f130c0b6931c"
+    },
+    {
+      "bytes": 11954175,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_1000kbps/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "00744a674eccdc2cb61fb56ab16931f2aaeebbaf6c198a5f3a587eb1a74c778d"
+    },
+    {
+      "bytes": 19564887,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_500kbps/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "c5ca76de16fb463f6a1f997287364de5165b27c44eeca05732cc370f897e0c80"
+    },
+    {
+      "bytes": 11121341,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_500kbps/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "5c43ddcf89e4b1bae660d2857b789cc4569d84bbbc329b82c536f91d6cdad52f"
+    },
+    {
+      "bytes": 22039653,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_250kbps/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "f4eb9e8a1c6171e3aeee9087270dccb5f7cc567b9e7069cb513c850b7d72e4c9"
+    },
+    {
+      "bytes": 12529484,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_250kbps/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "44bd2bf9b721fa1f9bf6438c43a3949affa013461cd0223a886523b261449093"
+    },
+    {
+      "bytes": 24246517,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_100kbps/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "a76d88f40d0146d1d33d5859ca2b90d2d27e5edd17eb733e634f89ef93aed240"
+    },
+    {
+      "bytes": 13786991,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_h264/conditions/h264_100kbps/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "3f569a820a81db9d5cf8b3aca8b00f5571cb57c502043285b25e87c5ddb75c37"
+    },
+    {
       "bytes": 12861815,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_precision/conditions/precision_int8/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int8/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "9c87360e5092a619e1503ce4480c193cb8bdf4e761886004501147a9f62ecd8d"
     },
     {
       "bytes": 8208897,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_precision/conditions/precision_int8/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int8/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "90ba97817d12339988f1aa5847728d2d122d37cdb7152024f715245fca507541"
     },
     {
+      "bytes": 13495883,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int4_weight_only/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "32db7860390b5b2aa8594e7483992f12dedb0c192ddac398f6b012acab92fdd4"
+    },
+    {
+      "bytes": 8654016,
+      "in_repository": false,
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_precision/conditions/precision_int4_weight_only/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "18aea221f2ffa76b49b22183642d5dfa16f5aea0d8943af14e24ed0399e181bc"
+    },
+    {
       "bytes": 13461061,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_device_profile/conditions/device_profile_laptop-m3_fp32/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_device_profile/conditions/device_profile_laptop-m3_fp32/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "ed3e570837a7e05643fc297e2e94533bdae8c5bf1bfe4312a735a1eddedda0f4"
     },
     {
       "bytes": 8678708,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_device_profile/conditions/device_profile_laptop-m3_fp32/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_device_profile/conditions/device_profile_laptop-m3_fp32/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "729320c8361e2cf184c5a6175c754762d69215d9255525d1a6765405b50b4e8d"
     },
     {
       "bytes": 15506216,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_device_profile/conditions/device_profile_rpi5_fp32/run_report.json",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_device_profile/conditions/device_profile_rpi5_fp32/run_report.json",
       "role": "canonical_control_step_log",
       "sha256": "1228da9498c62f617549a5d09ec96e3821ff66b6179b319c021f10f0b9afbe9c"
     },
     {
       "bytes": 9938871,
       "in_repository": false,
-      "path": "outputs/v1/full/axes/v0.1_full_device_profile/conditions/device_profile_rpi5_fp32/episodes.jsonl",
+      "path": "outputs/act-transfer/full-v2/axes/v0.1_full_device_profile/conditions/device_profile_rpi5_fp32/episodes.jsonl",
       "role": "duplicate_of_run_report_episodes",
       "sha256": "1a26e75ff01d89926b98056b512b55d679de7503c6bdcad62c2ac1e28ebb35ff"
     },
@@ -258,6 +342,13 @@
       "path": "artifacts/export/act-v1/act_chunk_int8_qdq.onnx",
       "role": "model_or_corpus_artifact",
       "sha256": "792e9adc992405676317200cfa199176280be1eff152800604af4af7dac3b035"
+    },
+    {
+      "bytes": 64542704,
+      "in_repository": false,
+      "path": "artifacts/export/act-v1/act_chunk_int4_matmul_nbits.onnx",
+      "role": "model_or_corpus_artifact",
+      "sha256": "c0cee50e137d0aa36ccb568cec2feea793ed328905adccefd2bc4010440f8d37"
     },
     {
       "bytes": 4070290,

@@ -1,0 +1,222 @@
+{
+  "schema_version": 2,
+  "variant_label": "int4_weight_only",
+  "passed": true,
+  "not_passed_reasons": [],
+  "binding": {
+    "model_sha256": "c0cee50e137d0aa36ccb568cec2feea793ed328905adccefd2bc4010440f8d37",
+    "corpus_eval_sha256": "ce5cd7ce7967f6f0d0e0cb97683e140faa03b1868f79211c9b5acd089833f621",
+    "hub_revision": "9e93545744656e57d20f8b2d631d5d72544002ce",
+    "candidate": "act_aloha_transfer",
+    "recipe_id": "onnxruntime_matmul_nbits_weight_only_int4_rtn",
+    "variant_label": "int4_weight_only",
+    "parent_fp32_sha256": "27bf9278030e4d2357f64aa55174f5718ac43c8202c07a22ceac2eef7ecc2eba"
+  },
+  "runtime_checks": {
+    "passed": true,
+    "shapes_ok": true,
+    "finite_ok": true,
+    "max_abs_error": 0.1459382176399231,
+    "mean_abs_error": 0.006009796475399936,
+    "action_unit_mean_abs_error": 0.006009796475399936,
+    "fp32_allclose_required": false,
+    "task_success_required": false,
+    "not_passed_reasons": []
+  },
+  "quantization_coverage": {
+    "float_conv_nodes": [
+      "/model/backbone/conv1/Conv",
+      "/model/backbone/layer1/layer1.0/conv1/Conv",
+      "/model/backbone/layer1/layer1.0/conv2/Conv",
+      "/model/backbone/layer1/layer1.1/conv1/Conv",
+      "/model/backbone/layer1/layer1.1/conv2/Conv",
+      "/model/backbone/layer2/layer2.0/conv1/Conv",
+      "/model/backbone/layer2/layer2.0/conv2/Conv",
+      "/model/backbone/layer2/layer2.0/downsample/downsample.0/Conv",
+      "/model/backbone/layer2/layer2.1/conv1/Conv",
+      "/model/backbone/layer2/layer2.1/conv2/Conv",
+      "/model/backbone/layer3/layer3.0/conv1/Conv",
+      "/model/backbone/layer3/layer3.0/conv2/Conv",
+      "/model/backbone/layer3/layer3.0/downsample/downsample.0/Conv",
+      "/model/backbone/layer3/layer3.1/conv1/Conv",
+      "/model/backbone/layer3/layer3.1/conv2/Conv",
+      "/model/backbone/layer4/layer4.0/conv1/Conv",
+      "/model/backbone/layer4/layer4.0/conv2/Conv",
+      "/model/backbone/layer4/layer4.0/downsample/downsample.0/Conv",
+      "/model/backbone/layer4/layer4.1/conv1/Conv",
+      "/model/backbone/layer4/layer4.1/conv2/Conv",
+      "/model/encoder_img_feat_input_proj/Conv"
+    ],
+    "float_gemm_nodes": [
+      "/model/encoder_latent_input_proj/Gemm",
+      "/model/encoder_robot_state_input_proj/Gemm",
+      "/model/encoder/layers.0/self_attn/Gemm",
+      "/model/encoder/layers.1/self_attn/Gemm",
+      "/model/encoder/layers.2/self_attn/Gemm",
+      "/model/encoder/layers.3/self_attn/Gemm",
+      "/model/decoder/layers.0/self_attn/Gemm",
+      "/model/decoder/layers.0/multihead_attn/Gemm"
+    ],
+    "float_matmul_nodes": [
+      {
+        "name": "/model/encoder/layers.0/self_attn/MatMul_3",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.0/self_attn/MatMul_4",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.1/self_attn/MatMul_3",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.1/self_attn/MatMul_4",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.2/self_attn/MatMul_3",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.2/self_attn/MatMul_4",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.3/self_attn/MatMul_3",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/encoder/layers.3/self_attn/MatMul_4",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/decoder/layers.0/self_attn/MatMul_3",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/decoder/layers.0/self_attn/MatMul_4",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/decoder/layers.0/multihead_attn/MatMul_3",
+        "reason": "weight is not a constant initializer"
+      },
+      {
+        "name": "/model/decoder/layers.0/multihead_attn/MatMul_4",
+        "reason": "weight is not a constant initializer"
+      }
+    ],
+    "full_model_int4_claim": false,
+    "has_matmul_nbits": true,
+    "has_qdq": false,
+    "matmul_nbits_nodes": 29,
+    "matmul_nodes_const_weight": 29,
+    "matmul_nodes_total": 41,
+    "op_counts": {
+      "Add": 77,
+      "Cast": 1,
+      "Concat": 10,
+      "Constant": 1304,
+      "Conv": 21,
+      "Cos": 2,
+      "CumSum": 2,
+      "Div": 6,
+      "Gather": 1,
+      "Gemm": 8,
+      "Identity": 1,
+      "LayerNormalization": 12,
+      "MatMul": 12,
+      "MatMulNBits": 29,
+      "MaxPool": 1,
+      "Mul": 29,
+      "Relu": 22,
+      "Reshape": 34,
+      "Shape": 2,
+      "Sin": 2,
+      "Slice": 9,
+      "Softmax": 6,
+      "Split": 3,
+      "Squeeze": 602,
+      "Sub": 2,
+      "Transpose": 28,
+      "Unsqueeze": 611
+    },
+    "quant_related_ops": {
+      "MatMulNBits": 29
+    },
+    "quantized_nodes": [
+      "/model/encoder/layers.0/self_attn/MatMul",
+      "/model/encoder/layers.0/self_attn/MatMul_1",
+      "/model/encoder/layers.0/self_attn/MatMul_2",
+      "/model/encoder/layers.0/linear1/MatMul",
+      "/model/encoder/layers.0/linear2/MatMul",
+      "/model/encoder/layers.1/self_attn/MatMul",
+      "/model/encoder/layers.1/self_attn/MatMul_1",
+      "/model/encoder/layers.1/self_attn/MatMul_2",
+      "/model/encoder/layers.1/linear1/MatMul",
+      "/model/encoder/layers.1/linear2/MatMul",
+      "/model/encoder/layers.2/self_attn/MatMul",
+      "/model/encoder/layers.2/self_attn/MatMul_1",
+      "/model/encoder/layers.2/self_attn/MatMul_2",
+      "/model/encoder/layers.2/linear1/MatMul",
+      "/model/encoder/layers.2/linear2/MatMul",
+      "/model/encoder/layers.3/self_attn/MatMul",
+      "/model/encoder/layers.3/self_attn/MatMul_1",
+      "/model/encoder/layers.3/self_attn/MatMul_2",
+      "/model/encoder/layers.3/linear1/MatMul",
+      "/model/encoder/layers.3/linear2/MatMul",
+      "/model/decoder/layers.0/self_attn/MatMul",
+      "/model/decoder/layers.0/self_attn/MatMul_1",
+      "/model/decoder/layers.0/self_attn/MatMul_2",
+      "/model/decoder/layers.0/multihead_attn/MatMul",
+      "/model/decoder/layers.0/multihead_attn/MatMul_1",
+      "/model/decoder/layers.0/multihead_attn/MatMul_2",
+      "/model/decoder/layers.0/linear1/MatMul",
+      "/model/decoder/layers.0/linear2/MatMul",
+      "/model/action_head/MatMul"
+    ],
+    "recipe": {
+      "accuracy_level": 0,
+      "algorithm": "RTN",
+      "bits": 4,
+      "block_size": 128,
+      "op_types_to_quantize": [
+        "MatMul"
+      ],
+      "quant_format": "QOperator",
+      "symmetric": true
+    },
+    "remaining_float_conv": 21,
+    "remaining_float_gemm": 8,
+    "remaining_float_matmul": 12,
+    "weight_params_int4": 21109760,
+    "weight_params_int4_fraction": 0.6164908834826577,
+    "weight_params_total": 34241804
+  },
+  "numeric_errors": {
+    "vs_onnx_fp32": {
+      "max_abs_error": 0.1459382176399231,
+      "mean_abs_error": 0.006009796475399936,
+      "action_unit_mean_abs_error": 0.006009796475399936,
+      "shapes_ok": true,
+      "finite_ok": true,
+      "fp32_allclose_enforced": false
+    },
+    "vs_pytorch_fp32": {
+      "max_abs_error": 0.14593809843063354,
+      "mean_abs_error": 0.006009797675629111,
+      "action_unit_mean_abs_error": 0.006009797675629111,
+      "shapes_ok": true,
+      "finite_ok": true,
+      "fp32_allclose_enforced": false
+    }
+  },
+  "task_success_required": false,
+  "fp32_allclose_required": false,
+  "fp32_validation_sidecar_authorizes_int4": false,
+  "full_model_int4_claim": false,
+  "native_int4_execution_claim": false,
+  "source_export_manifest_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/act-v1/export_manifest.json",
+  "note": "INT4 validation is separate from FP32. Requires runnable MatMulNBits weight-only graph with finite matching shapes vs the FP32 parent and recorded quantization coverage. Does not require FP32-level allclose or task success; not a native INT4 activation execution claim."
+}

@@ -60,13 +60,14 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         zero_latency_sim="yes",
         onnx_fp32="yes",
         onnx_int8="yes",
-        onnx_int4="unverified",
+        onnx_int4="yes",
         device_profile="yes",
         notes=(
             "loaded evidence under artifacts/feasibility_act_transfer/. "
-            "deployment stress benchmark packaged in benchmarks/act-transfer/deployment-stress: 600 CPU episodes "
+            "deployment stress benchmark packaged in benchmarks/act-transfer/deployment-stress: 810 CPU episodes "
             "(seeds 5000-5029), ONNX FP32 baseline 25/30, static QDQ INT8 24/30, "
-            "constant delay, resolution, JPEG, and laptop-m3 / rpi5 latency replay. "
+            "INT4 weight-only 23/30, constant delay, resolution, JPEG, H.264 bitrate, "
+            "and laptop-m3 / rpi5 latency replay. "
             "Card-scale reproduction not claimed. The rpi5 profile was captured under "
             "reported throttling. Do not reuse timings for other candidates. "
             "No hardware experiments claimed."

@@ -710,6 +710,15 @@ def observations(data: ReportData) -> list[str]:
     return lines
 
 
+def working_tree_porcelain_note(status_porcelain: Any) -> str:
+    """HTML for the code-revision parenthetical from git status --porcelain."""
+    text = "" if status_porcelain is None else str(status_porcelain)
+    lines = [line.rstrip("\n") for line in text.splitlines() if line.strip()]
+    if not lines:
+        return "clean"
+    return ", ".join(f"<code>{esc(line)}</code>" for line in lines)
+
+
 def provenance_html(data: ReportData, out_dir: Path) -> str:
     art = data.lock["artifacts"]
     lock = data.lock
@@ -755,6 +764,7 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         f"<td>{esc(e['role'])}</td><td><code>{e['sha256'][:16]}&hellip;</code></td></tr>"
         for e in data.large_evidence
     )
+    tree_note = working_tree_porcelain_note(lock["source_revision"].get("status_porcelain"))
     return (
         '<h2 id="provenance">Provenance</h2>'
         "<details><summary>Model, runtime, and protocol identities</summary><dl>"
@@ -772,8 +782,7 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         f"{lock['host']['intra_op_num_threads']}, inter-op {lock['host']['inter_op_num_threads']}; "
         f"simulation host device <code>{esc(lock['host']['compute_device'])}</code></dd>"
         f"<dt>Code revision at run time</dt><dd><code>{esc(lock['source_revision']['revision'])}"
-        f"</code>, working tree dirty={esc(lock['source_revision']['dirty'])} (untracked files "
-        "only: <code>.cursor/</code>, <code>profiles/</code>)</dd>"
+        f"</code>, working tree dirty={esc(lock['source_revision']['dirty'])} ({tree_note})</dd>"
         f"<dt>Chunk arrival</dt><dd><code>{esc(lock['scheduler']['chunk_arrival_policy'])}</code>"
         "; one inference in flight; delay applied once per fresh chunk on simulated time</dd>"
         f"<dt>Seeds</dt><dd>env {seed_range(data)}; policy RNG = env seed + "
