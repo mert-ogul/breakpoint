@@ -317,7 +317,7 @@ def verify_manifest(data_dir: Path) -> tuple[Check, str]:
             bad.append(entry["path"])
     manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     detail = f"{len(entries)} files hashed" if not bad else f"mismatch: {bad[:5]}"
-    return Check("packaged files match manifest sha256", not bad, detail), manifest_sha
+    return Check("Packaged files match the manifest digests", not bad, detail), manifest_sha
 
 
 def load_rows(data_dir: Path) -> list[dict[str, Any]]:
@@ -680,7 +680,7 @@ def validate_summaries(axes: list[AxisView]) -> list[Check]:
                 mismatches.append(f"{view.condition_id}: n_pairs")
         checks.append(
             Check(
-                f"{axis.plan_id}: saved summary counts and Wilson intervals equal episode records",
+                f"{axis.plan_id} saved summary matches episode records",
                 not mismatches,
                 "; ".join(mismatches) or f"{len(axis.conditions)} conditions",
             )
@@ -709,14 +709,14 @@ def validate_rows(
             )
     checks.append(
         Check(
-            "episode rows: planned seeds, policy RNG seeds, success flag vs outcome",
+            "Episode rows match planned seeds and success flags",
             not problems,
             "; ".join(problems[:5]) or f"{len(rows)} rows",
         )
     )
     checks.append(
         Check(
-            "no runtime errors or policy failures in any episode",
+            "No runtime errors or policy failures in any episode",
             all(
                 r["outcome"] in {"success", "terminated_no_success", "time_limit_truncation"}
                 for r in rows
@@ -726,7 +726,7 @@ def validate_rows(
     )
     checks.append(
         Check(
-            "displayed counts: every axis lists each planned condition once",
+            "Every axis lists each planned condition once",
             all(len({v.condition_id for v in a.conditions}) == len(a.conditions) for a in axes),
             f"{sum(len(a.conditions) for a in axes)} condition rows",
         )
@@ -745,7 +745,7 @@ def validate_baseline_reuse(rows: list[dict[str, Any]], shared: SharedBaseline) 
         {(r["condition_id"], r["seed"]) for r in referenced if own.get(r["seed"]) != r["outcome"]}
     )
     return Check(
-        f"shared baseline outcomes equal the {shared.condition_id} condition seed by seed",
+        f"Shared baseline outcomes match {shared.condition_id} seed by seed",
         not differing,
         f"{len(referenced)} referenced rows; differing: {differing[:5]}",
     )
@@ -779,7 +779,7 @@ def validate_replay(
                 problems.append(f"{cond}#{row['episode_index']}: consumed count != inference calls")
     checks.append(
         Check(
-            "device replay: windows follow the locked design and consumed delays equal profile samples",
+            "Device replay windows and consumed delays match the profile samples",
             not problems,
             "; ".join(problems[:5]) or f"{len(profiles)} profiles",
         )
@@ -795,7 +795,7 @@ def validate_constant_latency(rows: list[dict[str, Any]]) -> Check:
         and abs(r["constant_latency_s"] * 1000 - float(r["condition_id"].rsplit("_", 1)[1])) > 1e-6
     ]
     return Check(
-        "latency axis: recorded constant delay equals the condition label",
+        "Latency axis recorded delay matches the condition label",
         not bad,
         "; ".join(bad[:5]) or "all episodes",
     )
@@ -805,7 +805,7 @@ def validate_identities(lock: dict[str, Any], profiles: list[ProfileView]) -> Ch
     fp32 = lock["artifacts"]["fp32_sha256"]
     bad = [p.device for p in profiles if p.model_sha256 != fp32]
     return Check(
-        "device profiles were measured on the locked FP32 graph",
+        "Device profiles were measured on the locked FP32 graph",
         not bad,
         f"fp32 sha256 {fp32[:12]}",
     )
@@ -828,9 +828,9 @@ def validate_int4_episodes(rows: list[dict[str, Any]]) -> Check | None:
     ]
     n_calls = sum(int(r.get("n_inference_calls") or 0) for r in int4_rows)
     return Check(
-        "INT4 episodes complete with no policy_failed (finite closed-loop outputs)",
+        "INT4 episodes all completed",
         not bad,
-        f"{n_calls} INT4 inference calls" if not bad else f"bad: {bad[:5]}; {n_calls} calls",
+        f"{n_calls} inference calls" if not bad else f"bad: {bad[:5]}; {n_calls} calls",
     )
 
 
@@ -860,7 +860,7 @@ def validate_h264_rows(rows: list[dict[str, Any]]) -> Check | None:
         if row.get("h264_first_frame_keyframe") is not True:
             problems.append(f"{label}: first_frame_keyframe is not true")
     return Check(
-        "H.264 rows: frames=n_control_steps; zero holds; first-frame keyframe",
+        "H.264 rows match frame counts, holds, and first keyframe",
         not problems,
         "; ".join(problems[:5]) or f"{len(h264_rows)} H.264 episodes",
     )

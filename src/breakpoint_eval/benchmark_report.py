@@ -72,7 +72,42 @@ def ms(seconds: float) -> str:
 
 def seed_range(data: ReportData) -> str:
     seeds = sorted({r["seed"] for r in data.rows})
-    return f"{seeds[0]}\u2013{seeds[-1]}"
+    return f"{seeds[0]} to {seeds[-1]}"
+
+
+def format_sig(value: float, digits: int = 3) -> str:
+    """Format a float with the given significant figures."""
+    return f"{float(value):.{digits}g}"
+
+
+def format_libav_version(value: Any) -> str:
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        return ".".join(str(int(x)) for x in value[:3])
+    return str(value)
+
+
+REPORT_TITLE = "ACT cube transfer under stress"
+
+
+def evaluated_paragraph() -> str:
+    return (
+        "One pretrained ACT policy (`lerobot/act_aloha_sim_transfer_cube_human`) on the ALOHA "
+        "TransferCube task, run as ONNX Runtime on CPU in simulation. No physical robot is involved."
+    )
+
+
+def exploratory_paragraph(data: ReportData) -> str:
+    return (
+        f"Exploratory run with {episodes_per_condition(data)} paired episodes per condition; "
+        "not confirmed with fresh seeds."
+    )
+
+
+def header_counts_sentence(data: ReportData) -> str:
+    return (
+        f"{len(data.rows)} episode records, {episodes_per_condition(data)} paired episodes per "
+        f"condition, env seeds {seed_range(data)}."
+    )
 
 
 def episodes_per_condition(data: ReportData) -> int:
@@ -128,7 +163,7 @@ def matrix_html(axis: AxisView) -> str:
         body.append(f'<tr><th scope="row">{esc(plain_label(view.condition_id))}</th>{tds}</tr>')
     return (
         '<div class="scroll"><table class="matrix"><caption>Per-seed outcomes. Columns are the '
-        f"last two digits of env seeds {seeds[0]}\u2013{seeds[-1]}.</caption>"
+        f"last two digits of env seeds {seeds[0]} to {seeds[-1]}.</caption>"
         f'<thead><tr><th scope="col">condition</th>{head}</tr></thead><tbody>{"".join(body)}'
         "</tbody></table></div>"
         f'<p class="legend">{GLYPH_SUCCESS} success &nbsp; {GLYPH_FAIL} no success (same as '
@@ -143,18 +178,10 @@ def status_text(axis: AxisView, view: ConditionView) -> str:
         return "baseline"
     if axis.suppressed_reason:
         return "not assessed"
-    parts = ["below threshold" if view.below_threshold else "not below threshold"]
+    text = "below" if view.below_threshold else "not below"
     if view.threshold_inside_interval:
-        parts.append("interval spans threshold")
-    return "; ".join(parts)
-
-
-def status_glyph(axis: AxisView, view: ConditionView) -> str:
-    if view.is_baseline:
-        return "\u25c6"
-    if axis.suppressed_reason:
-        return "\u2013"
-    return GLYPH_LOST if view.below_threshold else "\u25cb"
+        return f"{text} (interval spans threshold)"
+    return text
 
 
 def paired_text(view: ConditionView, separator: str = " &middot; ") -> str:
@@ -196,8 +223,7 @@ def condition_table_html(axis: AxisView, n_episodes: int) -> str:
             f'<td class="num">{view.successes}/{view.eligible}</td>'
             f'<td class="num">{pct(view.successes / view.eligible)}</td>'
             f'<td class="num">{wilson_text(view)}</td>'
-            f'<td><span class="mark {cls}" aria-hidden="true">{status_glyph(axis, view)}</span> '
-            f"{esc(status_text(axis, view))}</td></tr>"
+            f"<td>{esc(status_text(axis, view))}</td></tr>"
         )
     return (
         f'<div class="scroll"><table class="data"><caption>Successes out of {n_episodes} paired '
@@ -229,54 +255,35 @@ def paired_table_html(axis: AxisView) -> str:
 
 def breakpoint_sentence(axis: AxisView) -> str:
     if axis.suppressed_reason:
-        return (
-            f"Threshold comparison not reported: {axis.suppressed_reason}. Counts and intervals "
-            "are shown without a below-threshold judgement."
-        )
-    below = [plain_label(v.condition_id) for v in axis.conditions if v.below_threshold]
-    derived = (
-        "No saved experiment summary exists for this axis; counts, intervals, and paired "
-        "tables are derived by this report from the episode records. "
-        if axis.derived
-        else ""
-    )
+        return f"Threshold comparison not reported: {axis.suppressed_reason}."
+    below_views = [v for v in axis.conditions if v.below_threshold]
+    below = [plain_label(v.condition_id) for v in below_views]
+    names = [plain_label(v.condition_id) for v in axis.conditions if not v.is_baseline]
     if not axis.ordered:
-        return (
-            f"{derived}Categorical comparison against the baseline: the conditions have no "
-            "order, so no breakpoint is estimated. "
-            + (
-                f"Point estimate below threshold: {', '.join(below)}."
-                if below
-                else "No condition's point estimate is below the threshold."
+        joined = ", ".join(names[:-1]) + (f" and {names[-1]}" if len(names) > 1 else names[0])
+        if below:
+            return (
+                f"{joined} are compared one by one with the baseline; "
+                f"{', '.join(below)} {'is' if len(below) == 1 else 'are'} below the threshold."
             )
-        )
+        return f"{joined} are compared one by one with the baseline; none is below the threshold."
     if axis.derived:
-        return derived + (
-            f"First grid point below threshold: {below[0]}."
-            if below
-            else "No condition is below the threshold."
-        )
+        if not below:
+            return "No tested point is below the threshold."
+        return f"First tested point below threshold: {below[0]}."
     bp = axis.saved_breakpoint
     if bp is None:
         return axis.saved_note or ""
     if bp["status"] == "observed_interval":
         interval = bp["observed_interval"]
-        recovery = bp.get("recovery_condition_ids") or []
         return (
-            f"Saved summary: on this exploratory grid the first point below threshold is "
-            f"{plain_label(bp['first_below'])}; the observed crossing lies between "
-            f"{plain_label(interval['above_condition_id'])} and "
-            f"{plain_label(interval['below_condition_id'])}. "
-            + (
-                f"Later points recover above it: {', '.join(plain_label(r) for r in recovery)}. "
-                if recovery
-                else ""
-            )
-            + (axis.saved_note or "")
+            f"First tested point below threshold: {plain_label(bp['first_below'])} "
+            f"(between {plain_label(interval['above_condition_id'])} and "
+            f"{plain_label(interval['below_condition_id'])})."
         )
     if bp["status"] == "not_reached_within_tested_range":
-        return "Saved summary: no condition fell below the threshold within the tested range."
-    return f"Saved summary breakpoint status: {bp['status']}."
+        return "No tested point is below the threshold."
+    return f"Breakpoint status: {bp['status']}."
 
 
 def unresolved_conditions(axis: AxisView) -> list[ConditionView]:
@@ -343,25 +350,26 @@ def h264_bytes_table_html(axis: AxisView) -> str:
         if stats is None:
             body.append(
                 f'<tr><th scope="row">{esc(display_label(view))}</th>'
-                '<td colspan="4">no encoded-byte records (bypass / referenced baseline)</td></tr>'
+                '<td class="num">n/a</td><td class="num">n/a</td>'
+                '<td class="num">n/a</td><td class="num">n/a</td></tr>'
             )
             continue
         measured = (
             f"{stats['measured_kbps_median']:.1f} "
-            f"({stats['measured_kbps_min']:.1f}\u2013{stats['measured_kbps_max']:.1f})"
+            f"({stats['measured_kbps_min']:.1f} to {stats['measured_kbps_max']:.1f})"
         )
         body.append(
             f'<tr><th scope="row">{esc(display_label(view))}</th>'
             f'<td class="num">{esc(stats["requested_kbps"])}</td>'
             f'<td class="num">{esc(measured)}</td>'
             f'<td class="num">{stats["mean_encoded_bytes_per_frame"]:.1f}</td>'
-            f'<td class="num">{stats["total_encoded_mb"]:.3f}</td></tr>'
+            f'<td class="num">{stats["total_encoded_mb"]:.1f}</td></tr>'
         )
     return (
         '<div class="scroll"><table class="data"><caption>Encoded bytes from the causal libx264 '
         "stream (summed over cameras). Measured kbps is ABR at 50 fps.</caption>"
         '<thead><tr><th scope="col">Condition</th><th scope="col">Requested kbps</th>'
-        '<th scope="col">Measured kbps (median, min\u2013max)</th>'
+        '<th scope="col">Measured kbps (median, min to max)</th>'
         '<th scope="col">Mean encoded bytes / frame</th>'
         '<th scope="col">Total encoded MB</th></tr></thead>'
         f"<tbody>{''.join(body)}</tbody></table></div>"
@@ -370,42 +378,30 @@ def h264_bytes_table_html(axis: AxisView) -> str:
 
 def h264_bytes_table_markdown(axis: AxisView) -> list[str]:
     lines = [
-        "| Condition | Requested kbps | Measured kbps (median, min-max) | "
+        "| Condition | Requested kbps | Measured kbps (median, min to max) | "
         "Mean encoded bytes / frame | Total encoded MB |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
     for view in axis.conditions:
         stats = h264_condition_byte_stats(view.rows)
         if stats is None:
-            lines.append(f"| {md_cell(display_label(view))} | — | — | — | — |")
+            lines.append(f"| {md_cell(display_label(view))} | n/a | n/a | n/a | n/a |")
             continue
         measured = (
             f"{stats['measured_kbps_median']:.1f} "
-            f"({stats['measured_kbps_min']:.1f}-{stats['measured_kbps_max']:.1f})"
+            f"({stats['measured_kbps_min']:.1f} to {stats['measured_kbps_max']:.1f})"
         )
         lines.append(
             f"| {md_cell(display_label(view))} | {stats['requested_kbps']} | "
             f"{md_cell(measured)} | {stats['mean_encoded_bytes_per_frame']:.1f} | "
-            f"{stats['total_encoded_mb']:.3f} |"
+            f"{stats['total_encoded_mb']:.1f} |"
         )
     return lines
 
 
 def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: str) -> str:
     n = episodes_per_condition(data)
-    unresolved = unresolved_conditions(axis)
     notes = "".join(f"<li>{esc(note)}</li>" for note in axis.isolation_notes)
-    if unresolved:
-        unresolved_text = (
-            f"Wilson interval includes the threshold (unresolved at n={n}; an interval overlap, "
-            "not a paired significance test): "
-            + ", ".join(esc(plain_label(v.condition_id)) for v in unresolved)
-            + "."
-        )
-    elif axis.suppressed_reason:
-        unresolved_text = "Threshold comparison not reported for this axis."
-    else:
-        unresolved_text = "No condition's Wilson interval includes the threshold."
     links = [
         ("Episode records (all axes, compact JSONL)", "episodes/episodes.jsonl"),
         (f"Plan: {axis.plan_id}", f"protocol/plans/{axis.plan_id}.json"),
@@ -433,7 +429,6 @@ def axis_panel_html(data: ReportData, axis: AxisView, out_dir: Path, plots_rel: 
         f"{condition_table_html(axis, n)}"
         f"{h264_bytes}"
         f"<p>{esc(breakpoint_sentence(axis))}</p>"
-        f"<p>{unresolved_text}</p>"
         "<details><summary>Paired outcomes by seed</summary>"
         f"{paired_table_html(axis)}{matrix_html(axis)}</details>"
         "<details><summary>Evidence and condition IDs</summary>"
@@ -456,7 +451,7 @@ def telemetry_html(profile: ProfileView) -> str:
     if not t:
         return "<p>No throttling or temperature telemetry was recorded for this laptop profile.</p>"
     return (
-        '<p class="callout caution"><strong>Pi thermal state during profiling.</strong> '
+        "<p>Pi thermal state during profiling. "
         f"Of {t['n_samples']} telemetry samples, {t['throttled_now']} reported throttling active, "
         f"{t['arm_frequency_capped_now']} reported ARM frequency capped, "
         f"{t['soft_temperature_limit_now']} reported the soft temperature limit active, and "
@@ -521,13 +516,11 @@ def timing_panel_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
 
 
 def int8_note(data: ReportData, int8_status: str) -> str:
-    ran = any(r["condition_id"] == "precision_int8" for r in data.rows)
-    if int8_status == "ok" and ran:
+    int8_rows = [r for r in data.rows if r["condition_id"] == "precision_int8"]
+    if int8_status == "ok" and int8_rows:
         return (
-            f"Unsupported conditions: none skipped. INT8 export status is '{int8_status}' and "
-            "the INT8 graph ran in every planned episode. The INT8 graph has no FP32 "
-            "numerical-parity requirement; see the provenance section for its recorded chunk "
-            "error."
+            f"INT8 QDQ ran in all {len(int8_rows)} planned episodes; its validation does not "
+            "require FP32 parity."
         )
     return (
         f"INT8 export status is '{int8_status}'; no INT8 condition was run and no INT8 "
@@ -561,12 +554,10 @@ def int4_note(data: ReportData) -> str | None:
         except KeyError as exc:
             raise ReportDataError(f"INT4 sidecar missing required key {exc.args[0]!r}") from exc
         return (
-            f"INT4 weight-only: {nbits} of {total} MatMul nodes are stored as 4-bit blocks "
-            f"({fraction:.1%} of weight parameters); Conv, Gemm, and activation-by-activation "
-            f"MatMul stay FP32. Weights are dequantized and computed in float "
-            f"(accuracy_level={accuracy_level}). Recorded chunk error versus ONNX FP32: "
-            f"max abs {max_abs}, mean abs {mean_abs}. This is not a full-model INT4 result "
-            "and no INT4 device timing exists."
+            f"INT4 weight-only: {nbits} of {total} MatMul nodes as 4-bit "
+            f"({fraction:.1%} of weights, accuracy_level={accuracy_level}); "
+            f"max abs error {format_sig(float(max_abs))}, mean abs {format_sig(float(mean_abs))}. "
+            "Not a full-model INT4 result; no INT4 device timing."
         )
     detail = art.get("int4_detail")
     detail_bit = f" ({detail})" if detail else ""
@@ -620,12 +611,10 @@ def h264_note(data: ReportData) -> str | None:
     gop = locked.get("gop")
     tune = locked.get("tune")
     return (
-        "H.264 bitrate axis: frames are encoded and decoded inside the same control step; no "
-        "codec, transport, or jitter-buffer delay is simulated. The delay axis measures latency "
-        "separately and the effects are not additive. The stream is ABR, so measured kbps can "
-        f"differ from the request (largest overshoot in these rows: {largest:+.1f} kbps). "
-        f"Encoder identity: PyAV {pyav}, libavcodec {libavcodec}, preset={preset}, gop={gop}, "
-        f"tune={tune}."
+        "H.264: same-step encode/decode, visual quality only, ABR "
+        f"(largest overshoot {largest:+.1f} kbps). "
+        f"PyAV {pyav}, libavcodec {format_libav_version(libavcodec)}, "
+        f"preset={preset}, gop={gop}, tune={tune}."
     )
 
 
@@ -649,16 +638,13 @@ def report_limitations(data: ReportData) -> list[str]:
     h264_line = h264_note(data)
     if h264_line is not None:
         notes.append(h264_line)
+    base = baseline_view(first)
+    relation = "above" if first.baseline_rate >= first.baseline_floor else "below"
     notes += [
-        f"Baseline strength: {baseline_view(first).successes}/{baseline_view(first).eligible} "
-        f"({pct(first.baseline_rate)}) against the project floor of {first.baseline_floor:g}. "
-        + (
-            "The baseline is not weak by that floor."
-            if first.baseline_rate >= first.baseline_floor
-            else "The baseline is below the floor; threshold comparisons are not reported."
-        ),
-        f"Sample size: {episodes_per_condition(data)} paired episodes per condition. Intervals "
-        "are wide; the run is exploratory and does not locate an exact boundary.",
+        f"Baseline {base.successes}/{base.eligible} ({pct(first.baseline_rate)}), "
+        f"{relation} the {first.baseline_floor:g} floor.",
+        f"Sample size: {episodes_per_condition(data)} paired episodes per condition. "
+        "A grid point below the threshold is not an interpolated exact boundary.",
     ]
     unresolved = [
         f"{a.title}: {', '.join(plain_label(v.condition_id) for v in unresolved_conditions(a))}"
@@ -666,9 +652,10 @@ def report_limitations(data: ReportData) -> list[str]:
         if unresolved_conditions(a)
     ]
     notes.append(
-        "Unresolved threshold comparisons (Wilson interval includes the threshold; the threshold "
-        "is estimated from the same baseline, so this overlap is not a paired significance "
-        "test): " + ("; ".join(unresolved) if unresolved else "none") + "."
+        '"Interval spans threshold" means the Wilson interval overlaps the threshold; that is '
+        "an interval overlap, not a paired significance test. Conditions: "
+        + ("; ".join(unresolved) if unresolved else "none")
+        + "."
     )
     suppressed = [f"{a.title}: {a.suppressed_reason}" for a in data.axes if a.suppressed_reason]
     if suppressed:
@@ -704,25 +691,30 @@ def observations(data: ReportData) -> list[str]:
             below = [v for v in axis.conditions if v.below_threshold]
             if below:
                 first = below[0]
-                tag = " (interval includes threshold)" if first.threshold_inside_interval else ""
                 lines.append(
-                    f"{axis.title}: first grid point below {axis.ratio:g} x baseline is "
-                    f"{plain_label(first.condition_id)} at "
-                    f"{first.successes}/{first.eligible}{tag}."
+                    f"{axis.title}: first tested point below threshold is "
+                    f"{plain_label(first.condition_id)} at {first.successes}/{first.eligible}."
                 )
             else:
-                lines.append(f"{axis.title}: no condition fell below {axis.ratio:g} x baseline.")
+                lines.append(f"{axis.title}: no tested point is below the threshold.")
         else:
-            verdicts = [
-                f"{plain_label(v.condition_id)} {v.successes}/{v.eligible} "
-                f"{'below' if v.below_threshold else 'not below'}"
+            names = [plain_label(v.condition_id) for v in axis.conditions if not v.is_baseline]
+            below = [
+                plain_label(v.condition_id)
                 for v in axis.conditions
-                if not v.is_baseline
+                if not v.is_baseline and v.below_threshold
             ]
-            lines.append(
-                f"{axis.title} (categorical comparison, no ordering) against "
-                f"{axis.ratio:g} x baseline: {'; '.join(verdicts)}."
-            )
+            joined = ", ".join(names[:-1]) + (f" and {names[-1]}" if len(names) > 1 else names[0])
+            if below:
+                lines.append(
+                    f"{axis.title}: {joined} are compared one by one with the baseline; "
+                    f"{', '.join(below)} {'is' if len(below) == 1 else 'are'} below the threshold."
+                )
+            else:
+                lines.append(
+                    f"{axis.title}: {joined} are compared one by one with the baseline; "
+                    "none is below the threshold."
+                )
     return lines
 
 
@@ -750,8 +742,8 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
             f"<dt>INT4 weight-only graph sha256</dt><dd><code>{esc(art.get('int4_sha256'))}"
             "</code></dd>"
             f"<dt>INT4 recorded chunk error vs FP32</dt><dd>max abs "
-            f"{int4_runtime.get('max_abs_error', 0):.3f}, mean abs "
-            f"{int4_runtime.get('mean_abs_error', 0):.4f}</dd>"
+            f"{format_sig(float(int4_runtime.get('max_abs_error', 0)))}, mean abs "
+            f"{format_sig(float(int4_runtime.get('mean_abs_error', 0)))}</dd>"
         )
     h264_locked = lock.get("h264")
     h264_prov = ""
@@ -760,7 +752,7 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         h264_prov = (
             f"<dt>H.264 encoder</dt><dd>status={esc(h264_locked.get('status'))}; "
             f"PyAV {esc(h264_locked.get('pyav_version'))}; "
-            f"libavcodec {esc(libav.get('libavcodec') or libav.get('avcodec'))}; "
+            f"libavcodec {esc(format_libav_version(libav.get('libavcodec') or libav.get('avcodec')))}; "
             f"FFmpeg {esc(h264_locked.get('ffmpeg_version_line'))}</dd>"
             f"<dt>H.264 settings</dt><dd>preset={esc(h264_locked.get('preset'))}, "
             f"tune={esc(h264_locked.get('tune'))}, gop={esc(h264_locked.get('gop'))}, "
@@ -791,9 +783,10 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         f"{h264_prov}"
         f"<dt>FP32 export validation</dt><dd>schema {esc(fp32_validation.get('schema_version'))}, "
         f"passed={esc(fp32_validation.get('passed'))}</dd>"
-        f"<dt>INT8 recorded chunk error vs FP32</dt><dd>max abs {runtime.get('max_abs_error', 0):.3f}, "
-        f"mean abs {runtime.get('mean_abs_error', 0):.4f} (no FP32 allclose required; "
-        "full-model INT8 not claimed)</dd>"
+        f"<dt>INT8 recorded chunk error vs FP32</dt><dd>max abs "
+        f"{format_sig(float(runtime.get('max_abs_error', 0)))}, "
+        f"mean abs {format_sig(float(runtime.get('mean_abs_error', 0)))} "
+        "(no FP32 allclose required; full-model INT8 not claimed)</dd>"
         f"<dt>ONNX Runtime</dt><dd>{esc(', '.join(lock['host']['ort_providers']))}; intra-op "
         f"{lock['host']['intra_op_num_threads']}, inter-op {lock['host']['inter_op_num_threads']}; "
         f"simulation host device <code>{esc(lock['host']['compute_device'])}</code></dd>"
@@ -842,22 +835,6 @@ def tab_css(axes_ids: list[str]) -> str:
     return "".join(rules)
 
 
-def changed_items(data: ReportData) -> list[str]:
-    return [
-        f"{axis.title}: {', '.join(display_label(v) for v in axis.conditions)}"
-        for axis in data.axes
-    ]
-
-
-def limitation_statement(data: ReportData) -> str:
-    return (
-        f"Exploratory simulation run with {episodes_per_condition(data)} paired episodes per "
-        "condition. Intervals are wide, the results have not been confirmed with fresh seeds, "
-        "and a grid point below the threshold is not an exact boundary. The rpi5 replay "
-        "reflects one throttled Pi state."
-    )
-
-
 def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     tabs = [(a.axis, a.title) for a in data.axes] + [("timing", "Device timing")]
     radios = "".join(
@@ -867,32 +844,25 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     labels = "".join(f'<label for="tab-{key}">{esc(title)}</label>' for key, title in tabs)
     panels = "".join(axis_panel_html(data, a, out_dir, plots_rel) for a in data.axes)
     panels += timing_panel_html(data, out_dir, plots_rel)
-    changed = "".join(f"<li>{esc(line)}</li>" for line in changed_items(data))
     obs = "".join(f"<li>{esc(line)}</li>" for line in observations(data))
     notes = "".join(f"<li>{esc(line)}</li>" for line in report_limitations(data))
     n_conditions = sum(len(a.conditions) for a in data.axes)
-    summary = (
-        f"{len(data.rows)} episode records &middot; {episodes_per_condition(data)} paired "
-        f"episodes per condition &middot; env seeds {seed_range(data)}"
+    evaluated = evaluated_paragraph().replace(
+        "`lerobot/act_aloha_sim_transfer_cube_human`",
+        "<code>lerobot/act_aloha_sim_transfer_cube_human</code>",
     )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         '<meta name="color-scheme" content="light dark">'
-        "<title>ACT deployment stress benchmark: cube transfer</title>"
+        f"<title>{esc(REPORT_TITLE)}</title>"
         f"<style>{CSS}{tab_css([k for k, _ in tabs])}</style></head><body><main>"
-        '<header><p class="eyebrow">Breakpoint &middot; ACT deployment stress benchmark &middot; exploratory</p>'
-        "<h1>ACT cube transfer under isolated stress</h1>"
-        f'<p class="facts">{summary}</p></header>'
+        f"<header><h1>{esc(REPORT_TITLE)}</h1>"
+        f"<p>{esc(header_counts_sentence(data))}</p></header>"
         '<section aria-labelledby="h-summary"><h2 id="h-summary">Summary</h2>'
-        '<dl class="summary"><dt>What was evaluated</dt><dd>One pretrained ACT policy '
-        "(<code>lerobot/act_aloha_sim_transfer_cube_human</code>) on the ALOHA TransferCube "
-        "task in simulation, run as ONNX Runtime on CPU. No physical robot is involved.</dd>"
-        "<dt>What changed</dt><dd>One stress at a time, everything else at baseline."
-        f'<ul class="plain">{changed}</ul></dd>'
-        "<dt>What the evidence shows</dt><dd>Paired seeds, so every condition faces the same "
-        f'episodes as the baseline.<ul class="plain">{obs}</ul></dd></dl>'
-        f'<p class="callout">{esc(limitation_statement(data))}</p>'
+        f"<p>{evaluated}</p>"
+        f"<p>{esc(exploratory_paragraph(data))}</p>"
+        f'<ul class="plain">{obs}</ul>'
         "<details><summary>Validation, errors and caveats</summary>"
         f'<ul class="plain caveats">{notes}</ul>'
         f"<p>{data.n_runs} simulated runs back {n_conditions} condition rows; the shared "
@@ -909,27 +879,17 @@ def render_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
 
 def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
     lines = [
-        "# ACT deployment stress benchmark: cube transfer under isolated stress",
+        f"# {REPORT_TITLE}",
         "",
-        f"{len(data.rows)} episode records, {episodes_per_condition(data)} paired episodes per "
-        f"condition, env seeds {seed_range(data)}. Exploratory run.",
+        header_counts_sentence(data),
         "",
         "## Summary",
         "",
-        "**What was evaluated.** One pretrained ACT policy "
-        "(`lerobot/act_aloha_sim_transfer_cube_human`) on the ALOHA TransferCube task in "
-        "simulation, run as ONNX Runtime on CPU. No physical robot is involved.",
+        evaluated_paragraph(),
         "",
-        "**What changed.** One stress at a time, everything else at baseline:",
-        "",
-        *[f"- {line}" for line in changed_items(data)],
-        "",
-        "**What the evidence shows.** Paired seeds: every condition faces the same episodes as "
-        "the baseline.",
+        exploratory_paragraph(data),
         "",
         *[f"- {line}" for line in observations(data)],
-        "",
-        f"> {limitation_statement(data)}",
         "",
         "## Validation, errors and caveats",
         "",
@@ -951,7 +911,7 @@ def render_markdown(data: ReportData, out_dir: Path, plots_rel: str) -> str:
             lines.append(
                 f"| {md_cell(display_label(v))} | {v.successes}/{v.eligible} | "
                 f"{pct(v.successes / v.eligible)} | {md_cell(wilson_text(v))} | "
-                f"{md_cell(f'{status_glyph(axis, v)} {status_text(axis, v)}')} | "
+                f"{md_cell(status_text(axis, v))} | "
                 f"{md_cell(paired_text_plain(v))} |"
             )
         if axis.axis == "h264":

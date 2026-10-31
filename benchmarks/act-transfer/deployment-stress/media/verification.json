@@ -301,7 +301,7 @@
       "r_frame_rate": "25/2",
       "nb_read_frames": "116",
       "duration_s": 9.28,
-      "bytes": 413227
+      "bytes": 410938
     },
     "gif": {
       "frames": 116,
@@ -313,7 +313,7 @@
         1280,
         640
       ],
-      "bytes": 3264444
+      "bytes": 3383557
     }
   },
   "commands": [

@@ -75,6 +75,8 @@ def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> 
             assert entry["planned"] == len(group)
     html = (out / "index.html").read_text()
     assert "14/30" in html and "Validation, errors and caveats" in html
+    assert "ACT cube transfer under stress" in html
+    assert "eyebrow" not in html and "callout" not in html
     assert (out / "plots" / "success_latency_ms.svg").is_file()
     assert (out / "plots" / "success_latency_ms.png").is_file()
 
@@ -91,7 +93,7 @@ def test_changed_episode_record_is_refused(tmp_path: Path) -> None:
     lines[0] = json.dumps(row, sort_keys=True)
     episodes.write_text("\n".join(lines) + "\n")
     refresh_manifest(copy)
-    with pytest.raises(ReportValidationError, match="saved summary counts"):
+    with pytest.raises(ReportValidationError, match="saved summary matches episode records"):
         render_benchmark_report(copy, tmp_path / "report")
     assert not (tmp_path / "report" / "index.html").exists()
 
@@ -372,7 +374,7 @@ def test_weak_baseline_suppresses_threshold_language(tmp_path: Path) -> None:
     data = weak_baseline_data(tmp_path)
     assert all(axis.suppressed_reason for axis in data.axes)
     text = "\n".join(report.observations(data))
-    assert "first grid point" not in text and "below 0.8 x baseline" not in text
+    assert "first tested point" not in text and "below 0.8 x baseline" not in text
     assert text.count("threshold comparison not reported") == len(data.axes)
     for axis in data.axes:
         assert "not reported" in report.breakpoint_sentence(axis)
@@ -380,7 +382,7 @@ def test_weak_baseline_suppresses_threshold_language(tmp_path: Path) -> None:
         assert all(
             report.status_text(axis, v) in {"baseline", "not assessed"} for v in axis.conditions
         )
-    assert "below the floor" in "\n".join(report.report_limitations(data))
+    assert "below the 0.5 floor" in "\n".join(report.report_limitations(data))
 
 
 def test_categorical_axes_are_not_described_as_crossings() -> None:
@@ -391,15 +393,16 @@ def test_categorical_axes_are_not_described_as_crossings() -> None:
     assert not by_axis["precision"].ordered and not by_axis["device_profile"].ordered
     assert by_axis["latency_ms"].ordered and by_axis["h264"].ordered
     lines = report.observations(data)
-    ordered = [line for line in lines if "first grid point" in line]
-    assert len(ordered) == 3 and all("categorical" not in line for line in ordered)
+    ordered = [line for line in lines if "first tested point" in line]
+    assert len(ordered) == 3 and all("one by one" not in line for line in ordered)
     for title in ("Numeric precision", "Device latency replay"):
         line = next(x for x in lines if x.startswith(title))
-        assert "categorical comparison" in line and "first" not in line
+        assert "compared one by one" in line and "first tested" not in line
     for axis in (by_axis["precision"], by_axis["device_profile"]):
         sentence = report.breakpoint_sentence(axis)
-        assert "Categorical comparison" in sentence and "no breakpoint is estimated" in sentence
-    assert "exploratory grid" in report.breakpoint_sentence(by_axis["latency_ms"])
+        assert "compared one by one with the baseline" in sentence
+    assert "First tested point below threshold" in report.breakpoint_sentence(by_axis["latency_ms"])
+    assert "between" in report.breakpoint_sentence(by_axis["latency_ms"])
 
 
 def table_widths(markdown: str) -> list[list[int]]:
@@ -554,9 +557,9 @@ def test_h264_bytes_table_and_validate_rows() -> None:
     assert "Requested kbps" in md
     check = validate_h264_rows(rows)
     assert check is not None and check.passed
-    assert "frames=n_control_steps" in check.name
-    assert "zero holds" in check.name
-    assert "first-frame keyframe" in check.name
+    assert "frame counts" in check.name
+    assert "holds" in check.name
+    assert "first keyframe" in check.name
 
     bad = dict(rows[0])
     bad["h264_holds"] = 1
@@ -592,10 +595,10 @@ def test_int4_limitation_line_from_sidecar() -> None:
     assert "29 of 41 MatMul nodes" in line
     assert "61.6%" in line
     assert "accuracy_level=0" in line
-    assert "0.1459382176399231" in line
-    assert "0.006009796475399936" in line
-    assert "not a full-model INT4 result" in line
-    assert "no INT4 device timing exists" in line
+    assert "0.146" in line
+    assert "0.00601" in line
+    assert "Not a full-model INT4 result" in line
+    assert "no INT4 device timing" in line
 
     missing = SimpleNamespace(
         lock={

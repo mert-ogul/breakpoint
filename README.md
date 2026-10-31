@@ -41,12 +41,12 @@ Pretrained policy `lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on C
 | Device latency replay | laptop-m3 replay: 24, rpi5 replay: 9 |
 
 - Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
-- Constant added delay: first grid point below 0.8 x baseline is 320 ms at 18/30 (interval includes threshold).
-- Camera resolution: first grid point below 0.8 x baseline is 60x80 at 10/30.
-- JPEG quality: no condition fell below 0.8 x baseline.
-- H.264 bitrate: first grid point below 0.8 x baseline is 250 kbps at 19/30 (interval includes threshold).
-- Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below; INT4 weight-only 23/30 not below.
-- Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
+- Constant added delay: first tested point below threshold is 320 ms at 18/30.
+- Camera resolution: first tested point below threshold is 60x80 at 10/30.
+- JPEG quality: no tested point is below the threshold.
+- H.264 bitrate: first tested point below threshold is 250 kbps at 19/30.
+- Numeric precision: INT8 QDQ and INT4 weight-only are compared one by one with the baseline; none is below the threshold.
+- Device latency replay: laptop-m3 replay and rpi5 replay are compared one by one with the baseline; rpi5 replay is below the threshold.
 <!-- results:end -->
 
 These are observed grid points, not exact boundaries. The [full report](benchmarks/act-transfer/deployment-stress/report/report.md) has intervals, per-seed paired outcomes, latency traces and provenance. Evidence layout and result-specific limitations are in the [benchmark README](benchmarks/act-transfer/deployment-stress/README.md).

@@ -134,8 +134,8 @@ def test_compose_frames_aligns_by_simulation_time_and_holds(tmp_path: Path) -> N
     short = make_recording(8, {"is_success": True})
     long = make_recording(16, {"truncated": True})
     panels = [
-        PanelSpec("BASELINE", "a", (37, 99, 235), short, "Success", 0.16),
-        PanelSpec("STRESS", "b", (180, 83, 9), long, "Timeout", 0.32),
+        PanelSpec("Baseline, 0 ms delay", "a", (23, 33, 31), short, "Success", 0.16),
+        PanelSpec("+640 ms delay", "b", (217, 82, 41), long, "Timeout", 0.32),
     ]
     info = compose_frames(
         panels, ["one", "two"], width=640, fps=12.5, hold_frames=3, out_dir=tmp_path

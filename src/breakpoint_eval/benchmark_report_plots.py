@@ -13,13 +13,20 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from breakpoint_eval.benchmark_report_data import AxisView, ConditionView, ProfileView  # noqa: E402
+from breakpoint_eval.benchmark_report_style import (  # noqa: E402
+    ACCENT,
+    DARK_BG,
+    DARK_FG,
+    DARK_MUTED,
+    DARK_RULE,
+    INK,
+    LIGHT_BG,
+    LIGHT_MUTED,
+    LIGHT_RULE,
+)
 
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_report_plots")
 
-CHARCOAL = "#111827"
-OFF_WHITE = "#F8FAFC"
-BASELINE_BLUE = "#2563EB"
-STRESS_AMBER = "#B45309"
 SANS_FAMILIES = ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"]
 
 
@@ -30,11 +37,13 @@ class Theme:
     foreground: str
     muted: str
     rule: str
+    baseline: str
+    stress: str
 
 
 THEMES = (
-    Theme("light", OFF_WHITE, CHARCOAL, "#4B5563", "#CBD5E1"),
-    Theme("dark", CHARCOAL, OFF_WHITE, "#9CA3AF", "#374151"),
+    Theme("light", LIGHT_BG, INK, LIGHT_MUTED, LIGHT_RULE, INK, ACCENT),
+    Theme("dark", DARK_BG, DARK_FG, DARK_MUTED, DARK_RULE, DARK_FG, ACCENT),
 )
 
 
@@ -108,7 +117,7 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
     for x, view in enumerate(axis.conditions):
         rate = view.successes / view.eligible
         yerr = [[rate - view.wilson["low"]], [view.wilson["high"] - rate]]
-        color = BASELINE_BLUE if view.is_baseline else STRESS_AMBER
+        color = theme.baseline if view.is_baseline else theme.stress
         ax.errorbar(x, rate, yerr=yerr, fmt="none", ecolor=color, elinewidth=1.4, capsize=4)
         ax.plot(
             x,
@@ -143,37 +152,37 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
             [],
             [],
             marker="o",
-            color=BASELINE_BLUE,
+            color=theme.baseline,
             linestyle="none",
             markersize=8,
-            label="baseline",
+            label="Baseline",
         ),
         plt.Line2D(
             [],
             [],
             marker="s",
-            color=STRESS_AMBER,
+            color=theme.stress,
             markerfacecolor=theme.background,
             markeredgewidth=1.6,
             linestyle="none",
             markersize=8,
-            label="stress, not below threshold",
+            label="Stress, not below threshold",
         ),
         plt.Line2D(
             [],
             [],
             marker="s",
-            color=STRESS_AMBER,
+            color=theme.stress,
             linestyle="none",
             markersize=8,
-            label="stress, below threshold",
+            label="Stress, below threshold",
         ),
         plt.Line2D(
             [],
             [],
             color=theme.muted,
             linestyle=(0, (4, 3)),
-            label=f"threshold: {axis.ratio:g} x baseline = {100 * axis.threshold_rate:.1f}%",
+            label=f"Threshold: {axis.ratio:g} x baseline = {100 * axis.threshold_rate:.1f}%",
         ),
         plt.Line2D(
             [],
@@ -182,7 +191,7 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
             color=theme.muted,
             linestyle="none",
             markersize=11,
-            label="bar: Wilson 95% interval",
+            label="Bar: Wilson 95% interval",
         ),
     ]
     ax.legend(
@@ -208,7 +217,7 @@ def trace_figure(profile: ProfileView, theme: Theme) -> plt.Figure:
     ax.plot(np.arange(length), ms, color=theme.muted, linewidth=0.7)
     consumed = np.asarray(profile.consumed_indices)
     ax.plot(
-        consumed, ms[consumed], linestyle="none", marker="s", markersize=3.6, color=STRESS_AMBER
+        consumed, ms[consumed], linestyle="none", marker="s", markersize=3.6, color=theme.stress
     )
     median_ms = profile.full_stats["median_s"] * 1000.0
     ax.axhline(median_ms, color=theme.foreground, linestyle=(0, (4, 3)), linewidth=0.9)
@@ -220,43 +229,43 @@ def trace_figure(profile: ProfileView, theme: Theme) -> plt.Figure:
                 (start, 0),
                 32,
                 1,
-                color=STRESS_AMBER,
+                color=theme.stress,
                 alpha=0.28 if k % 2 == 0 else 0.5,
                 linewidth=0,
             )
         )
     for index in consumed:
-        strip.add_patch(plt.Rectangle((index, 0), 1, 1, color=STRESS_AMBER, linewidth=0))
+        strip.add_patch(plt.Rectangle((index, 0), 1, 1, color=theme.stress, linewidth=0))
     strip.set_ylim(0, 1)
     strip.set_yticks([])
     strip.spines["left"].set_visible(False)
     strip.set_xlim(0, length)
     strip.set_xlabel("profile sample index (after 50 discarded warmups)")
     handles = [
-        plt.Line2D([], [], color=theme.muted, linewidth=1.2, label="measured calls, in order"),
+        plt.Line2D([], [], color=theme.muted, linewidth=1.2, label="Measured calls, in order"),
         plt.Line2D(
             [],
             [],
             color=theme.foreground,
             linestyle=(0, (4, 3)),
-            label=f"full-profile median {median_ms:.1f} ms",
+            label=f"Full-profile median {median_ms:.1f} ms",
         ),
         plt.Line2D(
             [],
             [],
-            color=STRESS_AMBER,
+            color=theme.stress,
             marker="s",
             linestyle="none",
             markersize=4,
-            label="samples consumed by episodes",
+            label="Samples consumed by episodes",
         ),
         plt.Rectangle(
             (0, 0),
             1,
             1,
-            color=STRESS_AMBER,
+            color=theme.stress,
             alpha=0.4,
-            label="strip: 32-sample replay window per episode",
+            label="Strip: 32-sample replay window per episode",
         ),
     ]
     fig.legend(handles=handles, loc="lower center", ncol=1, frameon=False, fontsize=8.5)
