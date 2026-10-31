@@ -501,7 +501,7 @@ def test_h264_bytes_table_and_validate_rows() -> None:
             "h264_requested_kbps": 500.0,
             "h264_encoded_bytes": 1250,
             "h264_frames": 10,
-            "h264_actual_kbps": measured_h264_kbps(1250, 10),
+            "h264_actual_kbps": measured_h264_kbps(1250, 10, frame_rate_hz=50.0),
             "h264_holds": 0,
             "h264_first_frame_keyframe": True,
         },
@@ -513,7 +513,7 @@ def test_h264_bytes_table_and_validate_rows() -> None:
             "h264_requested_kbps": 500.0,
             "h264_encoded_bytes": 1000,
             "h264_frames": 10,
-            "h264_actual_kbps": measured_h264_kbps(1000, 10),
+            "h264_actual_kbps": measured_h264_kbps(1000, 10, frame_rate_hz=50.0),
             "h264_holds": 0,
             "h264_first_frame_keyframe": True,
         },
@@ -554,9 +554,12 @@ def test_h264_bytes_table_and_validate_rows() -> None:
     assert "Requested kbps" in md
     check = validate_h264_rows(rows)
     assert check is not None and check.passed
+    assert "frames=n_control_steps" in check.name
+    assert "zero holds" in check.name
+    assert "first-frame keyframe" in check.name
 
     bad = dict(rows[0])
-    bad["h264_actual_kbps"] = 1.0
+    bad["h264_holds"] = 1
     bad_check = validate_h264_rows([bad])
     assert bad_check is not None and not bad_check.passed
 

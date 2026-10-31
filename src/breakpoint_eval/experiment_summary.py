@@ -1,7 +1,7 @@
 """Summarize multi-condition experiment run records (Wilson + paired bootstrap).
 
-Implements the rules in docs/methodology.md. Does not invent missing runs or
-interpolate exact boundaries.
+Implements the rules in docs/methodology.md. Missing runs stay missing; exact
+boundaries are not interpolated.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import numpy as np
 from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.experiment_plan import ExperimentPlan, load_experiment_plan
 
-# Project conventions (not safety criteria) — methodology.md
+# Project conventions (not safety criteria); see methodology.md
 DEFAULT_BREAKPOINT_RATIO = 0.8
 DEFAULT_BASELINE_SUCCESS_FLOOR = 0.5
 DEFAULT_WILSON_Z = 1.959963984540054  # ~95%
@@ -205,7 +205,7 @@ def ordered_value_for_condition(
 
 
 def severity_sort_key(record: ConditionRecord, axis: str) -> tuple[int, float]:
-    """Order mild → severe for numeric axes. Higher latency / lower scale / lower JPEG = more severe."""
+    """Order mild to severe for numeric axes. Higher latency / lower scale / lower JPEG = more severe."""
     if record.ordered_value is None:
         return (0, 0.0)
     v = record.ordered_value
@@ -348,7 +348,7 @@ def summarize_ordered_breakpoint(
     baseline_weak = p_b is None or p_b < baseline_success_floor
     incomplete_any = baseline.incomplete or any(r.incomplete for r in records)
 
-    # Sort mild → severe for numeric axes.
+    # Sort mild to severe for numeric axes.
     ordered = sorted(records, key=lambda r: severity_sort_key(r, axis))
     points: list[dict[str, Any]] = []
     for rec in ordered:
@@ -525,7 +525,7 @@ def summarize_experiment(
     bootstrap_seed: int = DEFAULT_BOOTSTRAP_SEED,
     n_bootstrap: int = DEFAULT_BOOTSTRAP_SAMPLES,
 ) -> dict[str, Any]:
-    """Build a summary from a plan + mapping condition_id → run_report.json."""
+    """Build a summary from a plan and a condition_id to run_report.json mapping."""
     env_seeds = [s.env_seed for s in plan.seed_pairs]
     records: list[ConditionRecord] = []
     for cond in plan.conditions:

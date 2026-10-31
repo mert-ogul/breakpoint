@@ -13,6 +13,7 @@ import html
 import json
 import logging
 import os
+import statistics
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from breakpoint_eval.benchmark_report_data import (
     ConditionView,
     ProfileView,
     ReportData,
+    ReportDataError,
     load_report_data,
 )
 from breakpoint_eval.benchmark_report_plots import render_all_plots, short_label
@@ -312,19 +314,24 @@ def h264_condition_byte_stats(rows: list[dict[str, Any]]) -> dict[str, Any] | No
     measured = [
         float(r["h264_actual_kbps"]) for r in usable if r.get("h264_actual_kbps") is not None
     ]
-    encoded = [int(r["h264_encoded_bytes"]) for r in usable]
-    frames = [int(r["h264_frames"]) for r in usable if r.get("h264_frames")]
+    bytes_per_frame: list[float] = []
+    encoded_total = 0
+    for row in usable:
+        encoded = int(row["h264_encoded_bytes"])
+        encoded_total += encoded
+        frames = row.get("h264_frames")
+        if frames:
+            bytes_per_frame.append(encoded / int(frames))
     requested = usable[0].get("h264_requested_kbps")
-    mean_bpf = (
-        sum(e / f for e, f in zip(encoded, frames, strict=True)) / len(frames) if frames else None
-    )
     return {
         "requested_kbps": requested,
-        "measured_kbps_median": sorted(measured)[len(measured) // 2] if measured else None,
+        "measured_kbps_median": statistics.median(measured) if measured else None,
         "measured_kbps_min": min(measured) if measured else None,
         "measured_kbps_max": max(measured) if measured else None,
-        "mean_encoded_bytes_per_frame": mean_bpf,
-        "total_encoded_mb": sum(encoded) / 1_000_000.0,
+        "mean_encoded_bytes_per_frame": (
+            sum(bytes_per_frame) / len(bytes_per_frame) if bytes_per_frame else None
+        ),
+        "total_encoded_mb": encoded_total / 1_000_000.0,
         "n_episodes": len(usable),
     }
 
@@ -536,16 +543,23 @@ def int4_note(data: ReportData) -> str | None:
     status = art["int4_status"]
     ran = any(r["condition_id"] == "precision_int4_weight_only" for r in data.rows)
     if status == "ok" and ran:
-        sidecar = data.validation_files.get(EXPORT_VALIDATION_INT4_NAME, {})
-        coverage = sidecar.get("quantization_coverage") or {}
-        runtime = sidecar.get("runtime_checks") or {}
-        recipe = coverage.get("recipe") or {}
-        nbits = coverage["matmul_nbits_nodes"]
-        total = coverage["matmul_nodes_total"]
-        fraction = coverage["weight_params_int4_fraction"]
-        accuracy_level = recipe["accuracy_level"]
-        max_abs = runtime["max_abs_error"]
-        mean_abs = runtime["mean_abs_error"]
+        if EXPORT_VALIDATION_INT4_NAME not in data.validation_files:
+            raise ReportDataError(
+                f"INT4 ran but {EXPORT_VALIDATION_INT4_NAME} is missing from validation_files"
+            )
+        sidecar = data.validation_files[EXPORT_VALIDATION_INT4_NAME]
+        try:
+            coverage = sidecar["quantization_coverage"]
+            runtime = sidecar["runtime_checks"]
+            recipe = coverage["recipe"]
+            nbits = coverage["matmul_nbits_nodes"]
+            total = coverage["matmul_nodes_total"]
+            fraction = coverage["weight_params_int4_fraction"]
+            accuracy_level = recipe["accuracy_level"]
+            max_abs = runtime["max_abs_error"]
+            mean_abs = runtime["mean_abs_error"]
+        except KeyError as exc:
+            raise ReportDataError(f"INT4 sidecar missing required key {exc.args[0]!r}") from exc
         return (
             f"INT4 weight-only: {nbits} of {total} MatMul nodes are stored as 4-bit blocks "
             f"({fraction:.1%} of weight parameters); Conv, Gemm, and activation-by-activation "
@@ -568,9 +582,11 @@ def _h264_unsupported_record(data: ReportData) -> dict[str, Any] | None:
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    return payload if isinstance(payload, dict) else None
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReportDataError(f"malformed protocol/h264_unsupported.json: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ReportDataError("protocol/h264_unsupported.json must be a JSON object")
+    return payload
 
 
 def h264_note(data: ReportData) -> str | None:

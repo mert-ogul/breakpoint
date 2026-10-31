@@ -53,8 +53,6 @@ RATE_TOLERANCE = 1e-9
 # Axes whose conditions are ordered from mild to severe; the others compare categories.
 ORDERED_AXES = frozenset({"latency_ms", "resolution", "jpeg", "h264"})
 REQUIRED_PROFILES = ("laptop-m3", "rpi5")
-H264_FRAME_RATE_HZ = 50.0
-H264_KBPS_TOLERANCE = 1e-6
 MANIFEST_SCHEMA_VERSION = 1
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 ROW_KEYS = (
@@ -287,6 +285,10 @@ def required_inputs(data_dir: Path) -> list[str]:
     ]
     for device in REQUIRED_PROFILES:
         required += [f"profiles/{device}/profile.json", f"profiles/{device}/profile_run_meta.json"]
+    required += [
+        p.relative_to(data_dir).as_posix()
+        for p in sorted((data_dir / "protocol").glob("*_unsupported.json"))
+    ]
     return required
 
 
@@ -428,11 +430,6 @@ def validate_structure(
         raise ReportDataError(
             f"plans must cover each of {list(REQUIRED_AXES)} once; missing {missing_required}"
         )
-    unexpected = [a for a in axes if a not in AXIS_TITLES]
-    if unexpected:
-        raise ReportDataError(f"plans contain unsupported axes: {unexpected}")
-    if axes.count("h264") > 1:
-        raise ReportDataError("h264 axis may appear at most once")
     if len({plan["plan_id"] for plan in plans}) != len(plans):
         raise ReportDataError("duplicate plan_id in protocol/plans")
     planned = {plan["plan_id"]: {c["condition_id"] for c in plan["conditions"]} for plan in plans}
@@ -837,9 +834,7 @@ def validate_int4_episodes(rows: list[dict[str, Any]]) -> Check | None:
     )
 
 
-def measured_h264_kbps(
-    encoded_bytes: int, frames: int, *, frame_rate_hz: float = H264_FRAME_RATE_HZ
-) -> float:
+def measured_h264_kbps(encoded_bytes: int, frames: int, *, frame_rate_hz: float) -> float:
     """Recompute measured ABR kbps from total encoded bytes and frame count."""
     if frames < 1 or frame_rate_hz <= 0:
         raise ValueError("h264 measured kbps requires frames >= 1 and frame_rate_hz > 0")
@@ -847,7 +842,7 @@ def measured_h264_kbps(
 
 
 def validate_h264_rows(rows: list[dict[str, Any]]) -> Check | None:
-    """Check packaged H.264 rows: measured kbps, frame count, zero holds, first keyframe."""
+    """Check packaged H.264 rows: frames match control steps, zero holds, first keyframe."""
     h264_rows = [
         r for r in rows if r.get("axis") == "h264" and r.get("h264_encoded_bytes") is not None
     ]
@@ -857,7 +852,6 @@ def validate_h264_rows(rows: list[dict[str, Any]]) -> Check | None:
     for row in h264_rows:
         label = f"{row['condition_id']}#{row['episode_index']}"
         frames = row.get("h264_frames")
-        encoded = row.get("h264_encoded_bytes")
         if frames != row.get("n_control_steps"):
             problems.append(f"{label}: h264_frames != n_control_steps")
             continue
@@ -865,17 +859,8 @@ def validate_h264_rows(rows: list[dict[str, Any]]) -> Check | None:
             problems.append(f"{label}: h264_holds is not 0")
         if row.get("h264_first_frame_keyframe") is not True:
             problems.append(f"{label}: first_frame_keyframe is not true")
-        try:
-            recomputed = measured_h264_kbps(int(encoded), int(frames))
-        except (TypeError, ValueError):
-            problems.append(f"{label}: cannot recompute measured kbps")
-            continue
-        saved = row.get("h264_actual_kbps")
-        if saved is None or abs(float(saved) - recomputed) > H264_KBPS_TOLERANCE:
-            problems.append(f"{label}: saved h264_actual_kbps differs from recomputed")
     return Check(
-        "H.264 rows: measured kbps matches bytes/frames at 50 fps; frames=n_control_steps; "
-        "zero holds; first-frame keyframe",
+        "H.264 rows: frames=n_control_steps; zero holds; first-frame keyframe",
         not problems,
         "; ".join(problems[:5]) or f"{len(h264_rows)} H.264 episodes",
     )

@@ -1,4 +1,4 @@
-"""Device profiling helpers (onnx/numpy only — no simulator or Torch)."""
+"""Device profiling helpers (onnx/numpy only; no simulator or Torch)."""
 
 from __future__ import annotations
 
@@ -146,7 +146,7 @@ class TelemetrySampler:
         while not self._stop.is_set():
             try:
                 self.samples.append(sample_pi_telemetry())
-            except Exception as exc:  # noqa: BLE001 — record, do not invent
+            except Exception as exc:  # noqa: BLE001  record the failure
                 self.failures.append(
                     {"wall_utc": _utc_now(), "error": f"{type(exc).__name__}: {exc}"}
                 )

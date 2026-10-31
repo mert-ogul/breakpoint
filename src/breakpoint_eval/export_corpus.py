@@ -308,7 +308,7 @@ def capture_simulator_rollout_corpus(
                     "planned_steps_reached": sorted(recorded),
                 }
             )
-    except Exception as exc:  # noqa: BLE001 — record capture failure without fabricating
+    except Exception as exc:  # noqa: BLE001  record capture failure
         meta["capture_error"] = f"{type(exc).__name__}: {exc}"
         LOGGER.warning("Simulator rollout corpus capture failed: %s", meta["capture_error"])
         return [], meta

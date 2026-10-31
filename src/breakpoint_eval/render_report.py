@@ -170,7 +170,7 @@ def _plot_success_bars(
             yerr_high.append(max(0.0, hi - r))
     fig, ax = plt.subplots(figsize=(8, 3.2))
     ax.bar(xs, [0.0 if np.isnan(y) else y for y in ys], color="#4a5568")
-    # Only draw error bars where rates exist — never invent zeros for missing.
+    # Only draw error bars where rates exist; missing rates stay missing.
     for i, r in enumerate(rates):
         if r is None:
             ax.text(i, 0.02, "missing", ha="center", va="bottom", fontsize=8, color="#a00")
@@ -626,7 +626,7 @@ def render_report(run_dir: Path) -> ReportBundle:
         rates = [p.get("success_rate") for p in points]
         lows = [(p.get("wilson_95") or {}).get("low") for p in points]
         highs = [(p.get("wilson_95") or {}).get("high") for p in points]
-        # Do not replace missing rates with 0 — plotting helper marks them.
+        # Missing rates stay missing; the plotting helper marks them.
         try:
             p = _plot_success_bars(
                 plots_dir / "success_by_condition.png",
@@ -689,7 +689,7 @@ def render_report(run_dir: Path) -> ReportBundle:
     root_html.write_text(html_text, encoding="utf-8")
 
     # Copy plot references stay under report/plots; root HTML uses report/plots/ via img src.
-    # Root HTML currently uses plots/ relative — write a root-level html that points to report/plots.
+    # Root HTML currently uses plots/ relative; write a root-level html that points to report/plots.
     root_html.write_text(html_text.replace('src="plots/', 'src="report/plots/'), encoding="utf-8")
 
     index = {

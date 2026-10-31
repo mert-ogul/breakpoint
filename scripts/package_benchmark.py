@@ -30,10 +30,7 @@ from breakpoint_eval.benchmark_protocol import (  # noqa: E402
     condition_incomplete_reason,
     resolve_profile_by_identity,
 )
-from breakpoint_eval.benchmark_report_data import (  # noqa: E402
-    H264_FRAME_RATE_HZ,
-    measured_h264_kbps,
-)
+from breakpoint_eval.benchmark_report_data import measured_h264_kbps  # noqa: E402
 from breakpoint_eval.experiment_plan import ExperimentPlan, load_experiment_plan  # noqa: E402
 from breakpoint_eval.file_digest import sha256_file  # noqa: E402
 from breakpoint_eval.latency_trace import load_latency_profile  # noqa: E402
@@ -147,11 +144,15 @@ def _h264_compact_fields(episode: dict[str, Any]) -> dict[str, Any]:
         int(c.get("n_startup_holds") or 0) + int(c.get("n_last_frame_holds") or 0) for c in cams
     )
     keyframes = sum(int(c.get("n_keyframes") or 0) for c in cams)
-    requested = (summary.get("requested") or {}).get("bitrate_kbps")
+    requested_block = summary.get("requested") or {}
+    requested = requested_block.get("bitrate_kbps")
     if requested is None:
         requested = cams[0].get("requested_bitrate_kbps")
+    frame_rate_hz = requested_block.get("frame_rate_hz")
+    if frames > 0 and frame_rate_hz is None:
+        raise ValueError("h264_summary.requested.frame_rate_hz is required to measure ABR kbps")
     actual = (
-        measured_h264_kbps(encoded, frames, frame_rate_hz=H264_FRAME_RATE_HZ)
+        measured_h264_kbps(encoded, frames, frame_rate_hz=float(frame_rate_hz))
         if frames > 0
         else None
     )

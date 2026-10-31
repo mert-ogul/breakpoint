@@ -52,7 +52,12 @@ def test_config_loads() -> None:
     assert cfg["trace_window"]["length"] == 32
     assert cfg["full"]["jpeg_qualities"][0] == "bypass"
     assert 100 not in cfg["full"]["jpeg_qualities"]
-    assert cfg["h264"] == {"gop": 30, "preset": "veryfast", "latency_mode": "quality_only"}
+    assert cfg["h264"] == {
+        "gop": 30,
+        "preset": "veryfast",
+        "latency_mode": "quality_only",
+        "frame_rate_hz": 50,
+    }
     assert cfg["smoke"]["h264_bitrates_kbps"] == [100]
     assert cfg["full"]["h264_bitrates_kbps"][0] == "bypass"
 

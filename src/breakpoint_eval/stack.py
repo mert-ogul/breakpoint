@@ -127,7 +127,7 @@ def ensure_lerobot_checkout(repo_root: Path) -> Path:
     Reuses an existing pin without re-fetching. Never force-checkouts over
     local modifications; refuses when the tree is dirty and at the wrong commit.
     An incomplete clone (``.git`` present but package tree missing, e.g. after a
-    git-lfs checkout failure) is removed and replaced — that is not user work.
+    git-lfs checkout failure) is removed and replaced; that is not user work.
     """
     dest = repo_root / "vendor" / "lerobot"
     dest.parent.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-"""Quantization recipes for exported ACT ONNX. No silent recipe switching."""
+"""Quantization recipes for exported ACT ONNX."""
 
 from __future__ import annotations
 
@@ -28,6 +28,60 @@ from breakpoint_eval.export_corpus import CorpusSample, load_corpus
 LOGGER = logging.getLogger("breakpoint_eval.export_quantize")
 
 _INT4_GRAPH_NAME = "act_chunk_int4_matmul_nbits.onnx"
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write JSON via a temp file in the same directory, then os.replace."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f"{path.stem}_",
+        suffix=".json",
+        dir=str(path.parent),
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        write_json(tmp_path, payload)
+        os.replace(tmp_path, path)
+    except Exception:
+        if tmp_path.is_file():
+            tmp_path.unlink()
+        raise
+
+
+def _corpus_parity_vs_reference(
+    ref_path: Path,
+    *,
+    candidate_chunks: list[np.ndarray],
+    eval_samples: list[CorpusSample],
+    sample_ids: list[str],
+    reference_label: str,
+    candidate_label: str,
+    missing_keys_message: str | None = None,
+) -> dict[str, Any]:
+    """Load a reference .npz, require every sample_id, return parity as a dict."""
+    from breakpoint_eval.export_parity import evaluate_corpus_parity
+
+    ref = np.load(ref_path)
+    missing = [sid for sid in sample_ids if sid not in ref.files]
+    if missing:
+        if missing_keys_message is None:
+            raise ValueError(
+                f"{ref_path.name} missing sample_id keys required by evaluation corpus: "
+                f"{missing[:5]}"
+            )
+        raise ValueError(f"{missing_keys_message}{missing[:5]}")
+    reference_chunks = [np.asarray(ref[sid], dtype=np.float32) for sid in sample_ids]
+    return evaluate_corpus_parity(
+        reference_chunks=reference_chunks,
+        candidate_chunks=candidate_chunks,
+        seeds=[s.seed for s in eval_samples],
+        sample_ids=sample_ids,
+        reference_label=reference_label,
+        candidate_label=candidate_label,
+        enforce_fp32_gates=False,
+    ).to_dict()
 
 
 class _CorpusCalibrationReader:
@@ -225,7 +279,7 @@ def quantize_int8_static_qdq(
     calibration_sha256: str,
     providers: list[str] | None = None,
 ) -> VariantArtifact:
-    """Static QDQ INT8 with MinMax calibration. Does not fall back to another recipe."""
+    """Static QDQ INT8 with MinMax calibration."""
     require_onnx()
     providers = providers or ["CPUExecutionProvider"]
     recipe = RECIPE_ORT_INT8_STATIC_QDQ
@@ -293,7 +347,7 @@ def quantize_int8_static_qdq(
                 "graph_sha256": graph["sha256"],
             },
         )
-    except Exception as exc:  # noqa: BLE001 — capability boundary
+    except Exception as exc:  # noqa: BLE001  capability boundary
         LOGGER.exception("INT8 static quantization failed")
         return VariantArtifact(
             label="int8",
@@ -312,13 +366,27 @@ def quantize_int4_weight_only(
     providers: list[str] | None = None,
     probe_sample: CorpusSample | None = None,
 ) -> VariantArtifact:
-    """ORT MatMulNBits weight-only INT4 (RTN). No silent recipe fallback."""
+    """ORT MatMulNBits weight-only INT4 (RTN)."""
     providers = providers or ["CPUExecutionProvider"]
     recipe = RECIPE_ORT_INT4_MATMUL_NBITS
     block_size = 128
     bits = 4
     symmetric = True
     op_types_to_quantize = ("MatMul",)
+
+    def _failed_artifact(status: str, detail: str) -> VariantArtifact:
+        return VariantArtifact(
+            label="int4_weight_only",
+            recipe_id=recipe,
+            path=None,
+            status=status,
+            detail=detail,
+            runtime={
+                **_runtime_meta(providers),
+                "native_int4_execution_claim": False,
+            },
+        )
+
     try:
         require_onnx()
         import onnx
@@ -415,30 +483,10 @@ def quantize_int4_weight_only(
         )
     except ImportError as exc:
         LOGGER.exception("INT4 weight-only quantization unavailable")
-        return VariantArtifact(
-            label="int4_weight_only",
-            recipe_id=recipe,
-            path=None,
-            status="unsupported",
-            detail=f"{type(exc).__name__}: {exc}",
-            runtime={
-                **_runtime_meta(providers),
-                "native_int4_execution_claim": False,
-            },
-        )
-    except Exception as exc:  # noqa: BLE001 — capability boundary
+        return _failed_artifact("unsupported", f"{type(exc).__name__}: {exc}")
+    except Exception as exc:  # noqa: BLE001  capability boundary
         LOGGER.exception("INT4 weight-only quantization failed")
-        return VariantArtifact(
-            label="int4_weight_only",
-            recipe_id=recipe,
-            path=None,
-            status="errored",
-            detail=f"{type(exc).__name__}: {exc}",
-            runtime={
-                **_runtime_meta(providers),
-                "native_int4_execution_claim": False,
-            },
-        )
+        return _failed_artifact("errored", f"{type(exc).__name__}: {exc}")
 
 
 def try_fp16_convert(
@@ -518,8 +566,8 @@ def add_int4_variant(
     *,
     providers: tuple[str, ...] | list[str] = ("CPUExecutionProvider",),
 ) -> Path:
-    """Add MatMulNBits INT4 beside an existing validated FP32 export; no overwrite."""
-    from breakpoint_eval.export_parity import evaluate_corpus_parity, run_ort_chunks
+    """Add MatMulNBits INT4 beside an existing validated FP32 export."""
+    from breakpoint_eval.export_parity import run_ort_chunks
     from breakpoint_eval.export_runtime import resolve_onnx_runtime
     from breakpoint_eval.export_validation import write_int4_validation_from_export
 
@@ -596,46 +644,30 @@ def add_int4_variant(
                 f"missing eval_chunks_onnx_fp32.npz in {export_dir}; "
                 "required for INT4 vs ONNX FP32 corpus comparison"
             )
-        onnx_ref = np.load(onnx_ref_path)
-        missing = [sid for sid in actual_ids if sid not in onnx_ref.files]
-        if missing:
-            raise ValueError(
-                "eval_chunks_onnx_fp32.npz missing sample_id keys required by evaluation corpus: "
-                f"{missing[:5]}"
-            )
         int4_sess = OrtActChunkSession(Path(int4.path), providers=provider_list)
         int4_chunks = run_ort_chunks(int4_sess, eval_samples)
-        ref_onnx = [np.asarray(onnx_ref[sid], dtype=np.float32) for sid in actual_ids]
-        comparisons["int4_weight_only_vs_onnx_fp32"] = evaluate_corpus_parity(
-            reference_chunks=ref_onnx,
+        comparisons["int4_weight_only_vs_onnx_fp32"] = _corpus_parity_vs_reference(
+            onnx_ref_path,
             candidate_chunks=int4_chunks,
-            seeds=[s.seed for s in eval_samples],
+            eval_samples=eval_samples,
             sample_ids=actual_ids,
             reference_label="onnx_fp32",
             candidate_label="int4_weight_only",
-            enforce_fp32_gates=False,
-        ).to_dict()
+        )
         pytorch_ref_path = export_dir / "eval_chunks_pytorch_fp32.npz"
         if pytorch_ref_path.is_file():
-            pytorch_ref = np.load(pytorch_ref_path)
-            missing_pt = [sid for sid in actual_ids if sid not in pytorch_ref.files]
-            if missing_pt:
-                raise ValueError(
-                    f"eval_chunks_pytorch_fp32.npz missing sample_id keys: {missing_pt[:5]}"
-                )
-            ref_pt = [np.asarray(pytorch_ref[sid], dtype=np.float32) for sid in actual_ids]
-            comparisons["int4_weight_only_vs_pytorch_fp32"] = evaluate_corpus_parity(
-                reference_chunks=ref_pt,
+            comparisons["int4_weight_only_vs_pytorch_fp32"] = _corpus_parity_vs_reference(
+                pytorch_ref_path,
                 candidate_chunks=int4_chunks,
-                seeds=[s.seed for s in eval_samples],
+                eval_samples=eval_samples,
                 sample_ids=actual_ids,
                 reference_label="pytorch_fp32",
                 candidate_label="int4_weight_only",
-                enforce_fp32_gates=False,
-            ).to_dict()
+                missing_keys_message="eval_chunks_pytorch_fp32.npz missing sample_id keys: ",
+            )
     elif int4.status != "ok":
         LOGGER.warning(
-            "INT4 variant status=%s detail=%s (no silent recipe fallback)",
+            "INT4 variant status=%s detail=%s",
             int4.status,
             int4.detail,
         )
@@ -643,20 +675,6 @@ def add_int4_variant(
     updated = dict(manifest)
     updated["variants"] = list(variants) + [int4.to_dict()]
     updated["comparisons"] = comparisons
-
-    fd, tmp_name = tempfile.mkstemp(
-        prefix="export_manifest_",
-        suffix=".json",
-        dir=str(export_dir),
-    )
-    os.close(fd)
-    tmp_path = Path(tmp_name)
-    try:
-        write_json(tmp_path, updated)
-        os.replace(tmp_path, manifest_path)
-    except Exception:
-        if tmp_path.is_file():
-            tmp_path.unlink()
-        raise
+    _atomic_write_json(manifest_path, updated)
 
     return write_int4_validation_from_export(export_dir)

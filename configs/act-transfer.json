@@ -60,7 +60,8 @@
   "h264": {
     "gop": 30,
     "preset": "veryfast",
-    "latency_mode": "quality_only"
+    "latency_mode": "quality_only",
+    "frame_rate_hz": 50
   },
   "smoke": {
     "phase": "smoke",

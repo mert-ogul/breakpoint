@@ -298,7 +298,7 @@ def run_closed_loop_diagnosis(req: ClosedLoopDiagnosisRequest) -> Path:
         source_validation = dict(source.get("export_validation") or {})
         source_closed_loop = dict(source.get("closed_loop_onnx_fp32_vs_pytorch") or {})
 
-    # Bind diagnosis to on-disk identity only (never invent missing hub/recipe fields).
+    # Bind diagnosis to on-disk identity only; missing hub/recipe fields stay missing.
     artifact_binding: dict[str, Any] = {
         "model_sha256": model_sha256,
         "onnx_path": str(onnx_path),

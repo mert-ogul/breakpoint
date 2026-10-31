@@ -42,8 +42,8 @@ class CandidateSupport:
         return asdict(self)
 
 
-# Evidence-backed status only. Never invent success rates, hardware runs, or
-# copy timings across rows. No physical-robot experiments are claimed.
+# Evidence-backed status only. Success rates and hardware runs come from loaded
+# evidence; timings are not copied across rows. No physical-robot experiments are claimed.
 SUPPORT_MATRIX: dict[str, CandidateSupport] = {
     "act_aloha_transfer": CandidateSupport(
         candidate="act_aloha_transfer",
@@ -63,7 +63,6 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         onnx_int4="yes",
         device_profile="yes",
         notes=(
-            "loaded evidence under artifacts/feasibility_act_transfer/. "
             "deployment stress benchmark packaged in benchmarks/act-transfer/deployment-stress: 810 CPU episodes "
             "(seeds 5000-5029), ONNX FP32 baseline 25/30, static QDQ INT8 24/30, "
             "INT4 weight-only 23/30, constant delay, resolution, JPEG, H.264 bitrate, "

@@ -3,8 +3,7 @@
 Full action generation includes the Python noise-scheduler loop. Exporting only
 the denoising network is not a complete policy-inference graph; that case must be
 labeled as mixed runtime. When ONNX export is unsupported, PyTorch simulation
-axes remain available and ONNX/device/precision combinations are marked
-unsupported — never filled with ACT timings.
+axes remain available and ONNX/device/precision combinations are marked unsupported.
 """
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
 """Versioned ACT export validation (schema v2).
 
 Separates:
-  1. numerical_parity — same-input open-loop corpus + fresh-chunk shadow checks
-  2. closed_loop_task_outcomes — completed baseline rollouts with recorded outcomes
-  3. independent_trajectory — action/length similarity diagnostics (not a pass gate)
+  1. numerical_parity: same-input open-loop corpus + fresh-chunk shadow checks
+  2. closed_loop_task_outcomes: completed baseline rollouts with recorded outcomes
+  3. independent_trajectory: action/length similarity diagnostics (not a pass gate)
 
 Independent trajectory equality is recorded but does not fail deployment validation.
 """
@@ -299,7 +299,7 @@ def evaluate_closed_loop_task_outcomes(
 def evaluate_independent_trajectory_diagnostic(
     seed_reports: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Action/length similarity across independent resets — diagnostic only."""
+    """Action/length similarity across independent resets; diagnostic only."""
     seeds = []
     all_similar = True
     for report in seed_reports:
@@ -487,8 +487,10 @@ def assert_validation_v2_acceptable(
         raise ValueError("export_validation corpus is not suitable as deployment evidence")
 
 
-def evaluate_int8_runtime_checks(parity_report: dict[str, Any] | None) -> dict[str, Any]:
-    """INT8 requires finite outputs and matching shapes; not FP32 allclose."""
+def _evaluate_quant_runtime_checks(
+    parity_report: dict[str, Any] | None, *, reason_prefix: str
+) -> dict[str, Any]:
+    """Finite outputs and matching shapes for a quantized variant (no FP32 allclose)."""
     reasons: list[str] = []
     if not parity_report:
         return {
@@ -496,14 +498,14 @@ def evaluate_int8_runtime_checks(parity_report: dict[str, Any] | None) -> dict[s
             "shapes_ok": False,
             "finite_ok": False,
             "fp32_allclose_required": False,
-            "not_passed_reasons": ["int8_parity_report_missing"],
+            "not_passed_reasons": [f"{reason_prefix}_parity_report_missing"],
         }
     shapes_ok = parity_report.get("shapes_ok") is True
     finite_ok = parity_report.get("finite_ok") is True
     if not shapes_ok:
-        reasons.append("int8_shape_mismatch_or_missing")
+        reasons.append(f"{reason_prefix}_shape_mismatch_or_missing")
     if not finite_ok:
-        reasons.append("int8_nonfinite_or_missing")
+        reasons.append(f"{reason_prefix}_nonfinite_or_missing")
     return {
         "passed": shapes_ok and finite_ok,
         "shapes_ok": shapes_ok,
@@ -515,6 +517,11 @@ def evaluate_int8_runtime_checks(parity_report: dict[str, Any] | None) -> dict[s
         "task_success_required": False,
         "not_passed_reasons": reasons,
     }
+
+
+def evaluate_int8_runtime_checks(parity_report: dict[str, Any] | None) -> dict[str, Any]:
+    """INT8 requires finite outputs and matching shapes; not FP32 allclose."""
+    return _evaluate_quant_runtime_checks(parity_report, reason_prefix="int8")
 
 
 def build_int8_validation_v2(
@@ -567,18 +574,7 @@ def build_int8_validation_v2(
         },
         "runtime_checks": runtime,
         "quantization_coverage": quantization_coverage or {},
-        "numeric_errors": {
-            "vs_onnx_fp32": {
-                "max_abs_error": (parity_vs_fp32 or {}).get("max_abs_error"),
-                "mean_abs_error": (parity_vs_fp32 or {}).get("mean_abs_error"),
-                "action_unit_mean_abs_error": (parity_vs_fp32 or {}).get(
-                    "action_unit_mean_abs_error"
-                ),
-                "shapes_ok": (parity_vs_fp32 or {}).get("shapes_ok"),
-                "finite_ok": (parity_vs_fp32 or {}).get("finite_ok"),
-                "fp32_allclose_enforced": False,
-            }
-        },
+        "numeric_errors": {"vs_onnx_fp32": _parity_numeric_block(parity_vs_fp32)},
         "task_success_required": False,
         "fp32_allclose_required": False,
         "fp32_validation_sidecar_authorizes_int8": False,
@@ -638,32 +634,88 @@ def assert_int8_validation_acceptable(
 
 def evaluate_int4_runtime_checks(parity_report: dict[str, Any] | None) -> dict[str, Any]:
     """INT4 requires finite outputs and matching shapes; not FP32 allclose."""
-    reasons: list[str] = []
-    if not parity_report:
-        return {
-            "passed": False,
-            "shapes_ok": False,
-            "finite_ok": False,
-            "fp32_allclose_required": False,
-            "not_passed_reasons": ["int4_parity_report_missing"],
-        }
-    shapes_ok = parity_report.get("shapes_ok") is True
-    finite_ok = parity_report.get("finite_ok") is True
-    if not shapes_ok:
-        reasons.append("int4_shape_mismatch_or_missing")
-    if not finite_ok:
-        reasons.append("int4_nonfinite_or_missing")
+    return _evaluate_quant_runtime_checks(parity_report, reason_prefix="int4")
+
+
+def _parity_numeric_block(parity: dict[str, Any] | None) -> dict[str, Any]:
     return {
-        "passed": shapes_ok and finite_ok,
-        "shapes_ok": shapes_ok,
-        "finite_ok": finite_ok,
-        "max_abs_error": parity_report.get("max_abs_error"),
-        "mean_abs_error": parity_report.get("mean_abs_error"),
-        "action_unit_mean_abs_error": parity_report.get("action_unit_mean_abs_error"),
-        "fp32_allclose_required": False,
-        "task_success_required": False,
-        "not_passed_reasons": reasons,
+        "max_abs_error": (parity or {}).get("max_abs_error"),
+        "mean_abs_error": (parity or {}).get("mean_abs_error"),
+        "action_unit_mean_abs_error": (parity or {}).get("action_unit_mean_abs_error"),
+        "shapes_ok": (parity or {}).get("shapes_ok"),
+        "finite_ok": (parity or {}).get("finite_ok"),
+        "fp32_allclose_enforced": False,
     }
+
+
+def _resolve_parent_fp32_sha(export_dir: Path, fp32: dict[str, Any], *, for_label: str) -> str:
+    parent_sha = str((fp32.get("graph") or {}).get("sha256") or "")
+    if not parent_sha and fp32.get("path"):
+        parent_path = Path(fp32["path"])
+        if not parent_path.is_file():
+            parent_path = export_dir / Path(fp32["path"]).name
+        if parent_path.is_file():
+            parent_sha = sha256_file(parent_path)
+    if not parent_sha:
+        raise ValueError(f"cannot resolve parent FP32 sha256 for {for_label} validation")
+    return parent_sha
+
+
+def _variant_file_sha(
+    export_dir: Path,
+    variant: dict[str, Any],
+    *,
+    label: str,
+    display_name: str,
+) -> tuple[str, str]:
+    """Return (status, model_sha256), verifying the on-disk hash when status is ok."""
+    status = str(variant.get("status") or "errored")
+    model_sha = str((variant.get("graph") or {}).get("sha256") or "")
+    if status != "ok":
+        return status, model_sha
+    model_path_value = variant.get("path")
+    if not model_path_value:
+        raise ValueError(f"{label} status=ok but path missing")
+    model_path = Path(model_path_value)
+    if not model_path.is_file():
+        model_path = export_dir / Path(model_path_value).name
+    if not model_path.is_file():
+        raise FileNotFoundError(f"{display_name} ONNX not found: {model_path_value}")
+    file_sha = sha256_file(model_path)
+    if model_sha and model_sha != file_sha:
+        raise ValueError(
+            f"{display_name} manifest graph sha256 {model_sha} does not match file {file_sha}"
+        )
+    return status, file_sha
+
+
+def _load_quant_export_context(
+    export_dir: Path,
+    *,
+    variant_label: str,
+    display_name: str,
+) -> tuple[Path, dict[str, Any], dict[str, Any], str, str, str]:
+    """Load manifest, parent FP32 sha, and variant status/sha.
+
+    Returns (manifest_path, manifest, variant, parent_sha, status, variant_sha).
+    """
+    export_dir = Path(export_dir).resolve()
+    manifest_path = export_dir / "export_manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"missing export_manifest.json in {export_dir}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    variants = manifest.get("variants") or []
+    fp32 = next((v for v in variants if v.get("label") == "onnx_fp32"), None)
+    variant = next((v for v in variants if v.get("label") == variant_label), None)
+    if fp32 is None:
+        raise ValueError("export manifest missing onnx_fp32 variant")
+    if variant is None:
+        raise ValueError(f"export manifest missing {variant_label} variant")
+    parent_sha = _resolve_parent_fp32_sha(export_dir, fp32, for_label=display_name)
+    status, variant_sha = _variant_file_sha(
+        export_dir, variant, label=variant_label, display_name=display_name
+    )
+    return manifest_path, manifest, variant, parent_sha, status, variant_sha
 
 
 def build_int4_validation_v2(
@@ -715,26 +767,8 @@ def build_int4_validation_v2(
         "runtime_checks": runtime,
         "quantization_coverage": quantization_coverage or {},
         "numeric_errors": {
-            "vs_onnx_fp32": {
-                "max_abs_error": (parity_vs_onnx_fp32 or {}).get("max_abs_error"),
-                "mean_abs_error": (parity_vs_onnx_fp32 or {}).get("mean_abs_error"),
-                "action_unit_mean_abs_error": (parity_vs_onnx_fp32 or {}).get(
-                    "action_unit_mean_abs_error"
-                ),
-                "shapes_ok": (parity_vs_onnx_fp32 or {}).get("shapes_ok"),
-                "finite_ok": (parity_vs_onnx_fp32 or {}).get("finite_ok"),
-                "fp32_allclose_enforced": False,
-            },
-            "vs_pytorch_fp32": {
-                "max_abs_error": (parity_vs_pytorch_fp32 or {}).get("max_abs_error"),
-                "mean_abs_error": (parity_vs_pytorch_fp32 or {}).get("mean_abs_error"),
-                "action_unit_mean_abs_error": (parity_vs_pytorch_fp32 or {}).get(
-                    "action_unit_mean_abs_error"
-                ),
-                "shapes_ok": (parity_vs_pytorch_fp32 or {}).get("shapes_ok"),
-                "finite_ok": (parity_vs_pytorch_fp32 or {}).get("finite_ok"),
-                "fp32_allclose_enforced": False,
-            },
+            "vs_onnx_fp32": _parity_numeric_block(parity_vs_onnx_fp32),
+            "vs_pytorch_fp32": _parity_numeric_block(parity_vs_pytorch_fp32),
         },
         "task_success_required": False,
         "fp32_allclose_required": False,
@@ -802,46 +836,11 @@ def write_int4_validation_from_export(
     *,
     output_path: Path | None = None,
 ) -> Path:
-    """Write INT4 sidecar from export manifest comparisons (no FP32 hash reuse)."""
+    """Write INT4 sidecar from export manifest comparisons."""
     export_dir = Path(export_dir).resolve()
-    manifest_path = export_dir / "export_manifest.json"
-    if not manifest_path.is_file():
-        raise FileNotFoundError(f"missing export_manifest.json in {export_dir}")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    variants = manifest.get("variants") or []
-    fp32 = next((v for v in variants if v.get("label") == "onnx_fp32"), None)
-    int4 = next((v for v in variants if v.get("label") == "int4_weight_only"), None)
-    if fp32 is None:
-        raise ValueError("export manifest missing onnx_fp32 variant")
-    if int4 is None:
-        raise ValueError("export manifest missing int4_weight_only variant")
-    parent_sha = str((fp32.get("graph") or {}).get("sha256") or "")
-    if not parent_sha and fp32.get("path"):
-        parent_path = Path(fp32["path"])
-        if not parent_path.is_file():
-            parent_path = export_dir / Path(fp32["path"]).name
-        if parent_path.is_file():
-            parent_sha = sha256_file(parent_path)
-    if not parent_sha:
-        raise ValueError("cannot resolve parent FP32 sha256 for INT4 validation")
-
-    status = str(int4.get("status") or "errored")
-    int4_path = int4.get("path")
-    int4_sha = str((int4.get("graph") or {}).get("sha256") or "")
-    if status == "ok":
-        if not int4_path:
-            raise ValueError("int4_weight_only status=ok but path missing")
-        model_path = Path(int4_path)
-        if not model_path.is_file():
-            model_path = export_dir / Path(int4_path).name
-        if not model_path.is_file():
-            raise FileNotFoundError(f"INT4 ONNX not found: {int4_path}")
-        file_sha = sha256_file(model_path)
-        if int4_sha and int4_sha != file_sha:
-            raise ValueError(
-                f"INT4 manifest graph sha256 {int4_sha} does not match file {file_sha}"
-            )
-        int4_sha = file_sha
+    manifest_path, manifest, int4, parent_sha, status, int4_sha = _load_quant_export_context(
+        export_dir, variant_label="int4_weight_only", display_name="INT4"
+    )
     candidate = str(manifest.get("candidate") or "")
     hub_revision = str(manifest.get("hub_revision") or "")
     recipe_id = str(int4.get("recipe_id") or "")
@@ -1024,46 +1023,11 @@ def write_int8_validation_from_export(
     *,
     output_path: Path | None = None,
 ) -> Path:
-    """Write INT8 sidecar from export manifest comparisons (no FP32 hash reuse)."""
+    """Write INT8 sidecar from export manifest comparisons."""
     export_dir = Path(export_dir).resolve()
-    manifest_path = export_dir / "export_manifest.json"
-    if not manifest_path.is_file():
-        raise FileNotFoundError(f"missing export_manifest.json in {export_dir}")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    variants = manifest.get("variants") or []
-    fp32 = next((v for v in variants if v.get("label") == "onnx_fp32"), None)
-    int8 = next((v for v in variants if v.get("label") == "int8"), None)
-    if fp32 is None:
-        raise ValueError("export manifest missing onnx_fp32 variant")
-    if int8 is None:
-        raise ValueError("export manifest missing int8 variant")
-    parent_sha = str((fp32.get("graph") or {}).get("sha256") or "")
-    if not parent_sha and fp32.get("path"):
-        parent_path = Path(fp32["path"])
-        if not parent_path.is_file():
-            parent_path = export_dir / Path(fp32["path"]).name
-        if parent_path.is_file():
-            parent_sha = sha256_file(parent_path)
-    if not parent_sha:
-        raise ValueError("cannot resolve parent FP32 sha256 for INT8 validation")
-
-    status = str(int8.get("status") or "errored")
-    int8_path = int8.get("path")
-    int8_sha = str((int8.get("graph") or {}).get("sha256") or "")
-    if status == "ok":
-        if not int8_path:
-            raise ValueError("int8 status=ok but path missing")
-        model_path = Path(int8_path)
-        if not model_path.is_file():
-            model_path = export_dir / Path(int8_path).name
-        if not model_path.is_file():
-            raise FileNotFoundError(f"INT8 ONNX not found: {int8_path}")
-        file_sha = sha256_file(model_path)
-        if int8_sha and int8_sha != file_sha:
-            raise ValueError(
-                f"INT8 manifest graph sha256 {int8_sha} does not match file {file_sha}"
-            )
-        int8_sha = file_sha
+    manifest_path, manifest, int8, parent_sha, status, int8_sha = _load_quant_export_context(
+        export_dir, variant_label="int8", display_name="INT8"
+    )
     calib = (manifest.get("corpus") or {}).get("calibration") or {}
     calib_sha = str(calib.get("sha256") or "")
     candidate = str(manifest.get("candidate") or "")
