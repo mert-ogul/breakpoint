@@ -176,17 +176,17 @@ L 137.585625 36.800779
    </g>
    <g id="line2d_15">
     <defs>
-     <path id="mb28198ac88" d="M 4 0 
+     <path id="m5a38648a8d" d="M 4 0 
 L -4 -0 
 " style="stroke: #17211f"/>
     </defs>
     <g clip-path="url(#pf2805d2afb)">
-     <use xlink:href="#mb28198ac88" x="137.585625" y="81.266045" style="fill: #1f77b4; stroke: #17211f"/>
+     <use xlink:href="#m5a38648a8d" x="137.585625" y="81.266045" style="fill: #17211f; stroke: #17211f"/>
     </g>
    </g>
    <g id="line2d_16">
     <g clip-path="url(#pf2805d2afb)">
-     <use xlink:href="#mb28198ac88" x="137.585625" y="36.800779" style="fill: #1f77b4; stroke: #17211f"/>
+     <use xlink:href="#m5a38648a8d" x="137.585625" y="36.800779" style="fill: #17211f; stroke: #17211f"/>
     </g>
    </g>
    <g id="line2d_17">
@@ -214,17 +214,17 @@ L 272.445 40.477251
    </g>
    <g id="line2d_18">
     <defs>
-     <path id="ma403d8acb5" d="M 4 0 
+     <path id="m9e6dd6429b" d="M 4 0 
 L -4 -0 
 " style="stroke: #d95229"/>
     </defs>
     <g clip-path="url(#pf2805d2afb)">
-     <use xlink:href="#ma403d8acb5" x="272.445" y="87.608929" style="fill: #1f77b4; stroke: #d95229"/>
+     <use xlink:href="#m9e6dd6429b" x="272.445" y="87.608929" style="fill: #d95229; stroke: #d95229"/>
     </g>
    </g>
    <g id="line2d_19">
     <g clip-path="url(#pf2805d2afb)">
-     <use xlink:href="#ma403d8acb5" x="272.445" y="40.477251" style="fill: #1f77b4; stroke: #d95229"/>
+     <use xlink:href="#m9e6dd6429b" x="272.445" y="40.477251" style="fill: #d95229; stroke: #d95229"/>
     </g>
    </g>
    <g id="line2d_20">
@@ -247,12 +247,12 @@ L 407.304375 112.731472
    </g>
    <g id="line2d_21">
     <g clip-path="url(#pf2805d2afb)">
-     <use xlink:href="#ma403d8acb5" x="407.304375" y="165.64505" style="fill: #1f77b4; stroke: #d95229"/>
+     <use xlink:href="#m9e6dd6429b" x="407.304375" y="165.64505" style="fill: #d95229; stroke: #d95229"/>
     </g>
    </g>
    <g id="line2d_22">
     <g clip-path="url(#pf2805d2afb)">
-     <use xlink:href="#ma403d8acb5" x="407.304375" y="112.731472" style="fill: #1f77b4; stroke: #d95229"/>
+     <use xlink:href="#m9e6dd6429b" x="407.304375" y="112.731472" style="fill: #d95229; stroke: #d95229"/>
     </g>
    </g>
    <g id="line2d_23">

@@ -1,4 +1,4 @@
-# ACT deployment stress benchmark: saved results
+# Saved results of the ACT deployment stress benchmark
 
 Saved results of the exploratory run: ACT on ALOHA TransferCube, simulation only. The report is at [`report/report.md`](report/report.md). `report/index.html` is the interactive version; open it from a local copy. To rebuild it from this data, follow the [README quickstart](../../../README.md#render-the-saved-report). To repeat the run, see [docs/reproduce.md](../../../docs/reproduce.md). The rules behind the numbers are in [docs/methodology.md](../../../docs/methodology.md).
 

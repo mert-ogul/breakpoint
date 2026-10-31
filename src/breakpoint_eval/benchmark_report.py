@@ -116,12 +116,12 @@ def episodes_per_condition(data: ReportData) -> int:
 
 def cell_glyph(baseline_success: bool | None, success: bool) -> tuple[str, str]:
     if baseline_success is None:
-        return (GLYPH_SUCCESS if success else GLYPH_FAIL), "base"
+        return (GLYPH_SUCCESS if success else GLYPH_FAIL), ""
     if baseline_success and not success:
         return GLYPH_LOST, "lost"
     if not baseline_success and success:
         return GLYPH_GAINED, "gained"
-    return (GLYPH_SUCCESS if success else GLYPH_FAIL), "same"
+    return (GLYPH_SUCCESS if success else GLYPH_FAIL), ""
 
 
 def plain_label(condition_id: str) -> str:
@@ -156,11 +156,14 @@ def matrix_html(axis: AxisView) -> str:
     head = "".join(f'<th scope="col" title="seed {s}">{s % 100:02d}</th>' for s in seeds)
     body = []
     for view, cells in rows:
-        tds = "".join(
-            f'<td class="{kind}" title="seed {seed}: {esc(outcome)}">{glyph}</td>'
-            for glyph, kind, seed, outcome in cells
+        cell_bits = []
+        for glyph, kind, seed, outcome in cells:
+            cls = f' class="{kind}"' if kind else ""
+            cell_bits.append(f'<td{cls} title="seed {seed}: {esc(outcome)}">{glyph}</td>')
+        body.append(
+            f'<tr><th scope="row">{esc(plain_label(view.condition_id))}</th>'
+            f"{''.join(cell_bits)}</tr>"
         )
-        body.append(f'<tr><th scope="row">{esc(plain_label(view.condition_id))}</th>{tds}</tr>')
     return (
         '<div class="scroll"><table class="matrix"><caption>Per-seed outcomes. Columns are the '
         f"last two digits of env seeds {seeds[0]} to {seeds[-1]}.</caption>"
@@ -217,16 +220,16 @@ def contrast_text(view: ConditionView) -> str:
 def condition_table_html(axis: AxisView, n_episodes: int) -> str:
     rows = []
     for view in axis.conditions:
-        cls = "baseline" if view.is_baseline else "stress"
+        row_open = '<tr class="baseline">' if view.is_baseline else "<tr>"
         rows.append(
-            f'<tr class="{cls}"><th scope="row">{esc(display_label(view))}</th>'
+            f'{row_open}<th scope="row">{esc(display_label(view))}</th>'
             f'<td class="num">{view.successes}/{view.eligible}</td>'
             f'<td class="num">{pct(view.successes / view.eligible)}</td>'
             f'<td class="num">{wilson_text(view)}</td>'
             f"<td>{esc(status_text(axis, view))}</td></tr>"
         )
     return (
-        f'<div class="scroll"><table class="data"><caption>Successes out of {n_episodes} paired '
+        f'<div class="scroll"><table><caption>Successes out of {n_episodes} paired '
         f"episodes per condition, with the Wilson 95% interval. Threshold: {axis.ratio:g} "
         f"&times; baseline rate = {pct(axis.threshold_rate)}.</caption>"
         '<thead><tr><th scope="col">Condition</th><th scope="col">Successes</th>'
@@ -244,7 +247,7 @@ def paired_table_html(axis: AxisView) -> str:
         for v in axis.conditions
     )
     return (
-        '<div class="scroll"><table class="data"><caption>Seeds compared with the baseline, and '
+        '<div class="scroll"><table><caption>Seeds compared with the baseline, and '
         "the paired bootstrap 95% interval (pointwise) for "
         f"p &minus; {axis.ratio:g}&middot;p<sub>base</sub>.</caption>"
         '<thead><tr><th scope="col">Condition</th><th scope="col">Paired with baseline seeds'
@@ -263,10 +266,10 @@ def breakpoint_sentence(axis: AxisView) -> str:
         joined = ", ".join(names[:-1]) + (f" and {names[-1]}" if len(names) > 1 else names[0])
         if below:
             return (
-                f"{joined} are compared one by one with the baseline; "
+                f"Categorical comparison, no ordering: {joined}; "
                 f"{', '.join(below)} {'is' if len(below) == 1 else 'are'} below the threshold."
             )
-        return f"{joined} are compared one by one with the baseline; none is below the threshold."
+        return f"Categorical comparison, no ordering: {joined}; none is below the threshold."
     if axis.derived:
         if not below:
             return "No tested point is below the threshold."
@@ -366,7 +369,7 @@ def h264_bytes_table_html(axis: AxisView) -> str:
             f'<td class="num">{stats["total_encoded_mb"]:.1f}</td></tr>'
         )
     return (
-        '<div class="scroll"><table class="data"><caption>Encoded bytes from the causal libx264 '
+        '<div class="scroll"><table><caption>Encoded bytes from the causal libx264 '
         "stream (summed over cameras). Measured kbps is ABR at 50 fps.</caption>"
         '<thead><tr><th scope="col">Condition</th><th scope="col">Requested kbps</th>'
         '<th scope="col">Measured kbps (median, min to max)</th>'
@@ -472,7 +475,7 @@ def timing_panel_html(data: ReportData, out_dir: Path, plots_rel: str) -> str:
         blocks.append(
             f"<h3>{esc(label)}</h3>"
             f"{picture_html(f'latency_trace_{label}', f'Latency over sample index for {label}', plots_rel)}"
-            '<div class="scroll"><table class="data"><caption>Latency statistics, milliseconds'
+            '<div class="scroll"><table><caption>Latency statistics, milliseconds'
             '</caption><thead><tr><th scope="col">Set</th><th scope="col">n</th>'
             '<th scope="col">min</th><th scope="col">median</th><th scope="col">p95</th>'
             '<th scope="col">p99</th><th scope="col">max</th><th scope="col">Meaning</th></tr>'
@@ -691,30 +694,25 @@ def observations(data: ReportData) -> list[str]:
             below = [v for v in axis.conditions if v.below_threshold]
             if below:
                 first = below[0]
+                tag = " (interval includes threshold)" if first.threshold_inside_interval else ""
                 lines.append(
                     f"{axis.title}: first tested point below threshold is "
-                    f"{plain_label(first.condition_id)} at {first.successes}/{first.eligible}."
+                    f"{plain_label(first.condition_id)} at "
+                    f"{first.successes}/{first.eligible}{tag}."
                 )
             else:
                 lines.append(f"{axis.title}: no tested point is below the threshold.")
         else:
-            names = [plain_label(v.condition_id) for v in axis.conditions if not v.is_baseline]
-            below = [
-                plain_label(v.condition_id)
+            verdicts = [
+                f"{plain_label(v.condition_id)} {v.successes}/{v.eligible} "
+                f"{'below' if v.below_threshold else 'not below'}"
                 for v in axis.conditions
-                if not v.is_baseline and v.below_threshold
+                if not v.is_baseline
             ]
-            joined = ", ".join(names[:-1]) + (f" and {names[-1]}" if len(names) > 1 else names[0])
-            if below:
-                lines.append(
-                    f"{axis.title}: {joined} are compared one by one with the baseline; "
-                    f"{', '.join(below)} {'is' if len(below) == 1 else 'are'} below the threshold."
-                )
-            else:
-                lines.append(
-                    f"{axis.title}: {joined} are compared one by one with the baseline; "
-                    "none is below the threshold."
-                )
+            lines.append(
+                f"{axis.title} (categorical comparison, no ordering) against "
+                f"{axis.ratio:g} x baseline: {'; '.join(verdicts)}."
+            )
     return lines
 
 
@@ -802,13 +800,13 @@ def provenance_html(data: ReportData, out_dir: Path) -> str:
         f"{lock['statistics']['breakpoint_ratio']:g}, baseline floor "
         f"{lock['statistics']['baseline_success_floor']:g}</dd></dl></details>"
         "<details><summary>Checks run by this report</summary>"
-        '<div class="scroll"><table class="data"><thead><tr><th scope="col">Result</th>'
+        '<div class="scroll"><table><thead><tr><th scope="col">Result</th>'
         '<th scope="col">Check</th><th scope="col">Detail</th></tr></thead>'
         f"<tbody>{checks}</tbody></table></div></details>"
         "<details><summary>Large evidence kept outside the repository</summary>"
         "<p>Not packaged. The raw control-step logs stay in the local run directory; the "
         "SHA-256 values identify them.</p>"
-        '<div class="scroll"><table class="data"><thead><tr><th scope="col">Path</th>'
+        '<div class="scroll"><table><thead><tr><th scope="col">Path</th>'
         '<th scope="col">Bytes</th><th scope="col">Role</th><th scope="col">sha256</th></tr>'
         f"</thead><tbody>{large}</tbody></table></div></details>"
         "<details><summary>Historical paths</summary><p>The verbatim protocol, summary, and "

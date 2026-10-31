@@ -60,7 +60,7 @@ Breakpoint fetches the pinned commit without git-lfs. A directory `vendor/lerobo
 
 The current Hub `main` configs need a newer LeRobot than the pinned commit. Use the pinned revision `9e935457…` above. Do not substitute `pip install lerobot` or a generic Transformers loader.
 
-### Linux: the dev install pulls CUDA wheels
+### The dev install pulls CUDA wheels on Linux
 
 Install the CPU wheels first: see [CONTRIBUTING.md](../CONTRIBUTING.md).
 

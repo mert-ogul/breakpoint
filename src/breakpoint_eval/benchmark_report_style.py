@@ -24,7 +24,6 @@ def hex_to_rgb(value: str) -> tuple[int, int, int]:
 
 INK_RGB = hex_to_rgb(INK)
 ACCENT_RGB = hex_to_rgb(ACCENT)
-LIGHT_BG_RGB = hex_to_rgb(LIGHT_BG)
 DARK_FG_RGB = hex_to_rgb(DARK_FG)
 MUTED_RGB = hex_to_rgb(DARK_MUTED)
 
@@ -68,9 +67,10 @@ td.num{{text-align:right;white-space:nowrap}}
 th code{{display:block;color:var(--muted);font-weight:400}}
 tr.baseline th,tr.baseline td{{background:var(--baseline-tint)}}
 img{{display:block;max-width:100%;height:auto;margin:1.25rem 0}}
-table.matrix{{width:auto;font-family:var(--mono);font-size:.8rem}}
+table.matrix{{width:auto;font-size:.8rem}}
 table.matrix th,table.matrix td{{padding:.2rem .3rem;text-align:center;border-bottom:1px solid var(--rule)}}
 table.matrix th[scope=row]{{text-align:left;white-space:nowrap;padding-right:.8rem}}
+table.matrix td{{font-family:var(--mono)}}
 table.matrix td.lost{{background:var(--stress-tint);color:var(--stress);font-weight:700}}
 table.matrix td.gained{{background:var(--gained-bg);color:var(--baseline);font-weight:700}}
 .legend{{font-size:.85rem;color:var(--muted)}}

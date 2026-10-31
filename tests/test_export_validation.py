@@ -475,6 +475,8 @@ def test_write_int8_and_int4_sidecars_stable_from_fixture(tmp_path: Path) -> Non
     )
     assert second_int8 == first_int8
     assert second_int4 == first_int4
+    assert set(first_int8) == set(second_int8)
+    assert set(first_int4) == set(second_int4)
 
     fp32_sha = sha256_file(export_dir / "act_chunk_fp32.onnx")
     int8_sha = sha256_file(export_dir / "act_chunk_int8.onnx")
@@ -526,5 +528,7 @@ def test_write_int8_and_int4_sidecars_stable_from_fixture(tmp_path: Path) -> Non
         variant_status="ok",
         source_export_manifest_path=str(export_dir / "export_manifest.json"),
     )
+    assert set(first_int8) == set(expected_int8)
+    assert set(first_int4) == set(expected_int4)
     assert first_int8 == expected_int8
     assert first_int4 == expected_int4

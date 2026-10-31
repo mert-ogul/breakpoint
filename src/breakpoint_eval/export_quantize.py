@@ -467,10 +467,7 @@ def quantize_int4_weight_only(
             recipe_id=recipe,
             path=str(output_path),
             status="ok",
-            detail=(
-                "Weight-only MatMulNBits INT4; activations remain float. "
-                "Not native INT4 activation execution; do not invent INT4 hardware timings."
-            ),
+            detail="Weight-only MatMulNBits INT4; weights only; activations stay float32.",
             graph=graph,
             effective_weight_precision="int4 (MatMulNBits block_size=128, symmetric)",
             effective_activation_precision="float32",

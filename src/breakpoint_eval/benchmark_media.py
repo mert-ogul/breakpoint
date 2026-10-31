@@ -366,8 +366,7 @@ def compose_frames(
             draw.text((x, sy + layout.status_h // 2), clock, font=mono, fill=MUTED, anchor="lm")
             reached = k * CONTROL_PERIOD_S >= panel.event_time_s - 1e-9
             if reached:
-                glyph = "\u2713" if panel.event_label == "Success" else "\u2715"
-                label = f"{glyph} {panel.event_label.upper()} {panel.event_time_s:.2f} s"
+                label = f"{panel.event_label.upper()} {panel.event_time_s:.2f} s"
                 draw.text(
                     (x + layout.panel_w, sy + layout.status_h // 2),
                     label,
@@ -550,9 +549,8 @@ def social_preview(panels: list[PanelSpec], footer_lines: list[str], out_path: P
     for i, panel in enumerate(panels):
         x = 90 + i * (panel_w + 20)
         draw.rectangle([x, top - 34, x + panel_w, top], fill=panel.color)
-        glyph = "\u2713" if panel.event_label == "Success" else "\u2715"
         label = (
-            f"{panel.title}  {panel.detail.replace(' inference', '')}  |  {glyph} "
+            f"{panel.title}  {panel.detail.replace(' inference', '')}  |  "
             f"{panel.event_label} {panel.event_time_s:.2f} s"
         )
         draw.text((x + 10, top - 17), label, font=chip, fill=OFF_WHITE, anchor="lm")

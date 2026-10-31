@@ -9,12 +9,12 @@ One pretrained ACT policy (`lerobot/act_aloha_sim_transfer_cube_human`) on the A
 Exploratory run with 30 paired episodes per condition; not confirmed with fresh seeds.
 
 - Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
-- Constant added delay: first tested point below threshold is 320 ms at 18/30.
+- Constant added delay: first tested point below threshold is 320 ms at 18/30 (interval includes threshold).
 - Camera resolution: first tested point below threshold is 60x80 at 10/30.
 - JPEG quality: no tested point is below the threshold.
-- H.264 bitrate: first tested point below threshold is 250 kbps at 19/30.
-- Numeric precision: INT8 QDQ and INT4 weight-only are compared one by one with the baseline; none is below the threshold.
-- Device latency replay: laptop-m3 replay and rpi5 replay are compared one by one with the baseline; rpi5 replay is below the threshold.
+- H.264 bitrate: first tested point below threshold is 250 kbps at 19/30 (interval includes threshold).
+- Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below; INT4 weight-only 23/30 not below.
+- Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
 
 ## Validation, errors and caveats
 
@@ -157,7 +157,7 @@ Stress variable: ONNX graph variant.
 | INT8 QDQ | 24/30 | 80.0% | 62.7% to 90.5% | not below (interval spans threshold) | lost 4; gained 3; both succeeded 21; neither 2 |
 | INT4 weight-only | 23/30 | 76.7% | 59.1% to 88.2% | not below (interval spans threshold) | lost 3; gained 1; both succeeded 22; neither 4 |
 
-INT8 QDQ and INT4 weight-only are compared one by one with the baseline; none is below the threshold.
+Categorical comparison, no ordering: INT8 QDQ and INT4 weight-only; none is below the threshold.
 
 Per-seed outcomes (● success, ○ none, ▼ lost, ▲ gained):
 
@@ -179,7 +179,7 @@ Stress variable: measured ONNX Runtime chunk latency replayed from a device prof
 | laptop-m3 replay | 24/30 | 80.0% | 62.7% to 90.5% | not below (interval spans threshold) | lost 2; gained 1; both succeeded 23; neither 4 |
 | rpi5 replay | 9/30 | 30.0% | 16.7% to 47.9% | below | lost 17; gained 1; both succeeded 8; neither 4 |
 
-laptop-m3 replay and rpi5 replay are compared one by one with the baseline; rpi5 replay is below the threshold.
+Categorical comparison, no ordering: laptop-m3 replay and rpi5 replay; rpi5 replay is below the threshold.
 
 Per-seed outcomes (● success, ○ none, ▼ lost, ▲ gained):
 
@@ -226,7 +226,7 @@ rpi5 replay       ▼▼▼▼●▼▼○●○▼●●▼▼●▼▼▼○�
 - pass: Latency axis recorded delay matches the condition label (all episodes)
 - pass: Device replay windows and consumed delays match the profile samples (2 profiles)
 - pass: Device profiles were measured on the locked FP32 graph (fp32 sha256 27bf9278030e)
-- pass: INT4 episodes all completed (106 inference calls)
+- pass: INT4 episodes all completed (106 INT4 inference calls)
 - pass: H.264 rows match frame counts, holds, and first keyframe (150 H.264 episodes)
 
 ## Condition IDs

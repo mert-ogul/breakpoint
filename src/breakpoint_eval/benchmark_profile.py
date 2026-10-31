@@ -158,7 +158,7 @@ class TelemetrySampler:
             "n_samples": len(self.samples),
             "samples": self.samples,
             "failures": self.failures,
-            "note": "Sampled outside ORT timed region; missing observations not fabricated",
+            "note": "Sampled outside ORT timed region; missing observations unknown",
         }
 
 

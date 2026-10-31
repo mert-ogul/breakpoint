@@ -346,9 +346,9 @@
   ],
   "files": [
     {
-      "bytes": 113595,
+      "bytes": 104536,
       "path": "index.html",
-      "sha256": "73951a42797be50ee0857c56d6ef7003b86ae6c7a87d130fa2fc699e505f65c5"
+      "sha256": "a05535b92c256729ba7e543837d932320095c80fa697b7a2e130de4fd7214f47"
     },
     {
       "bytes": 76921,
@@ -383,7 +383,7 @@
     {
       "bytes": 15964,
       "path": "plots/success_device_profile.dark.svg",
-      "sha256": "bcb38e3dbc4b10bbf562e48630c4a552366916173bb49ccb9433a9b27b8ca994"
+      "sha256": "a589a507be6d883e50d6035adc343fcb5f47089cfce7a73a2252f49e331f2002"
     },
     {
       "bytes": 60548,
@@ -393,12 +393,12 @@
     {
       "bytes": 15964,
       "path": "plots/success_device_profile.svg",
-      "sha256": "a5622de310e0e9e1852936f281bd28be950ba03ab276071ac6cfb10c93219383"
+      "sha256": "c5126ad7b94e51191f8362d681d018df77c4e198521c64ac5655200459d1531a"
     },
     {
       "bytes": 20664,
       "path": "plots/success_h264.dark.svg",
-      "sha256": "cd4f52d0c271bff3717bcf22e006395b6d4bb7d2e3a3c33bd399b9d8c4599fe3"
+      "sha256": "02439d3d5bbe203bafac0d7ade4e15017b766fdd5ddf5bbe64c47513d03e4e0c"
     },
     {
       "bytes": 66210,
@@ -408,12 +408,12 @@
     {
       "bytes": 20664,
       "path": "plots/success_h264.svg",
-      "sha256": "bf81ef01c2fa495c750ab902f35b37336cfd45bea8677697458997e3f0683baf"
+      "sha256": "8ebd1cc28270c7f9eb7c924ff74c70e3b6df6cfbd05a59c87494ef1c978da70e"
     },
     {
       "bytes": 20405,
       "path": "plots/success_jpeg.dark.svg",
-      "sha256": "772fc300b69b8445e117378425227ee5163c3059a6807b824ba69be98e72c53b"
+      "sha256": "85cdef18bc228df6da8c5e19833b86448d0699280a927195c930442f8f700b52"
     },
     {
       "bytes": 57258,
@@ -423,12 +423,12 @@
     {
       "bytes": 20405,
       "path": "plots/success_jpeg.svg",
-      "sha256": "598bcf962a6f2fc3a53c03741094fb2f3689114b3df90d6de9f7e0b4a07e6071"
+      "sha256": "f1fa774dc18e3d7f278fdac7842710d01b02f5ce6a7706ea615f84b1dfdc18f8"
     },
     {
       "bytes": 20603,
       "path": "plots/success_latency_ms.dark.svg",
-      "sha256": "ccad9db7be95f07d612b1e3795cd4ba15c6eda81e79e49d931938686462fcf32"
+      "sha256": "d36fabd80af7fd858238e5772537c9aff18589834689dae4a9df0c1525a016a9"
     },
     {
       "bytes": 59271,
@@ -438,12 +438,12 @@
     {
       "bytes": 20603,
       "path": "plots/success_latency_ms.svg",
-      "sha256": "6dee4418ee38b0dc2133882e6cb011147a5691e19044831a9a27e982f01f4433"
+      "sha256": "5dc77654f95bcc9fbf66d97458a8789d32ccf02294e107bac3115aea1e8da341"
     },
     {
       "bytes": 15322,
       "path": "plots/success_precision.dark.svg",
-      "sha256": "64ce5c4727c707bef49ae4b8e4f06513b1202d316134cd3b1c9578bc48662746"
+      "sha256": "9bc587c7d959ffcea5644c67159c1628122c25804c535682d8373b27908e5647"
     },
     {
       "bytes": 54584,
@@ -453,12 +453,12 @@
     {
       "bytes": 15322,
       "path": "plots/success_precision.svg",
-      "sha256": "7d0110dd8eccdb1f11d44c50b853d54dda1b3b109b0834311de0f60fc4f38c24"
+      "sha256": "c5d0827ddcb70847539d7eb6239b960b21b4562e6bebf0293cbfcd488b39b6ee"
     },
     {
       "bytes": 17238,
       "path": "plots/success_resolution.dark.svg",
-      "sha256": "a81ecdcc1c231da346270e21ef5622dd338cb531ead339793b05e1f18e860df2"
+      "sha256": "8968c458e441d4b27bbee9b120756677456c3eb15ff45ba42ca18c1e9e4d0396"
     },
     {
       "bytes": 61460,
@@ -468,12 +468,12 @@
     {
       "bytes": 17238,
       "path": "plots/success_resolution.svg",
-      "sha256": "1b20b6d92770b92f827501631d749d0b920db91c8e8e8a260fd3e1daf80aa940"
+      "sha256": "59b16763e1283c69b05dfb7a244b9a020c9b6ee769e72c4584f67488efa6f487"
     },
     {
-      "bytes": 14985,
+      "bytes": 15066,
       "path": "report.md",
-      "sha256": "27e11a81991cf3a6270586171ef9c0ef58d6115f568371141331d116c7c7d70c"
+      "sha256": "83698e0160da29a37741ef7e16b7186df49f7cbb7b39db96ae0236c1c0cdbc71"
     }
   ],
   "generator": "scripts/render_benchmark.py",
@@ -550,7 +550,7 @@
       "passed": true
     },
     {
-      "detail": "106 inference calls",
+      "detail": "106 INT4 inference calls",
       "name": "INT4 episodes all completed",
       "passed": true
     },

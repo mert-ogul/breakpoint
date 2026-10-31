@@ -394,13 +394,15 @@ def test_categorical_axes_are_not_described_as_crossings() -> None:
     assert by_axis["latency_ms"].ordered and by_axis["h264"].ordered
     lines = report.observations(data)
     ordered = [line for line in lines if "first tested point" in line]
-    assert len(ordered) == 3 and all("one by one" not in line for line in ordered)
+    assert len(ordered) == 3 and all("categorical" not in line for line in ordered)
+    assert any("interval includes threshold" in line for line in ordered)
     for title in ("Numeric precision", "Device latency replay"):
         line = next(x for x in lines if x.startswith(title))
-        assert "compared one by one" in line and "first tested" not in line
+        assert "categorical comparison, no ordering" in line and "first tested" not in line
+        assert "not below" in line or "below" in line
     for axis in (by_axis["precision"], by_axis["device_profile"]):
         sentence = report.breakpoint_sentence(axis)
-        assert "compared one by one with the baseline" in sentence
+        assert "Categorical comparison, no ordering" in sentence
     assert "First tested point below threshold" in report.breakpoint_sentence(by_axis["latency_ms"])
     assert "between" in report.breakpoint_sentence(by_axis["latency_ms"])
 

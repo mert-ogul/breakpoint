@@ -27,7 +27,16 @@ The arrival policy is `discard_stale`. Action `i` of a chunk is planned for time
 
 `scripts/profile_device.py` times only `InferenceSession.run` for batch size 1 on recorded corpus inputs: 50 warm-ups (discarded), then 1000 measured calls, kept in order. The profile records the device label, host and OS, ONNX Runtime provider and threads, model and corpus hashes, timed boundary, summary statistics, the raw sequence and telemetry when the OS exposes it. Output parity on the profiling device must pass first.
 
-Replay uses a recorded profile in place of a constant `L`. The benchmark gives each episode one contiguous window of 32 samples. For episode `i` of `n`, with `N` samples in the profile, the window starts at `floor(i * (N - 32) / (n - 1))`. Order inside the window is preserved, and an episode that needs more samples than its window holds fails. Window bounds and the consumed indices are saved per episode. The simulation runs on the host while the latency comes from the profile's device. This is contiguous window replay of the timed `InferenceSession.run` sequence, not `time.sleep`, host-time added to `L`, a fitted distribution, block resampling, continuous whole-trace replay, or a changed arrival policy.
+Replay uses a recorded profile in place of a constant `L`. The benchmark gives each episode one contiguous window of 32 samples. For episode `i` of `n`, with `N` samples in the profile, the window starts at `floor(i * (N - 32) / (n - 1))`. Order inside the window is preserved, and an episode that needs more samples than its window holds fails. Window bounds and the consumed indices are saved per episode. The simulation runs on the host while the latency comes from the profile's device. This is contiguous window replay of the timed `InferenceSession.run` sequence.
+
+These are not latency models:
+
+- `time.sleep`
+- host-time added to `L`
+- a fitted distribution
+- block resampling
+- continuous whole-trace replay
+- a changed arrival policy
 
 ## Image interventions
 
@@ -91,4 +100,4 @@ Isolation: constant-delay runs hold precision at FP32 and a native image. Precis
 
 ## Experimental, outside the benchmark
 
-The package also contains FP16 export (off unless requested), an H.264 deployment mode that models codec buffering delay, and Diffusion PushT and ACT insertion candidates. None of these is validated or used by the benchmark; unsupported combinations are reported as such.
+The package also contains FP16 export (off unless requested), an H.264 deployment mode that models codec buffering delay, and Diffusion PushT and ACT insertion candidates. None of these is validated or used by the benchmark. Unsupported combinations are reported as unsupported.

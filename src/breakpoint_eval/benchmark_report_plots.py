@@ -118,7 +118,10 @@ def success_figure(axis: AxisView, theme: Theme) -> plt.Figure:
         rate = view.successes / view.eligible
         yerr = [[rate - view.wilson["low"]], [view.wilson["high"] - rate]]
         color = theme.baseline if view.is_baseline else theme.stress
-        ax.errorbar(x, rate, yerr=yerr, fmt="none", ecolor=color, elinewidth=1.4, capsize=4)
+        # Cap marker faces default to C0 (#1f77b4); pin them to the series color.
+        err = ax.errorbar(x, rate, yerr=yerr, fmt="none", ecolor=color, elinewidth=1.4, capsize=4)
+        for cap in err.lines[1]:
+            cap.set_color(color)
         ax.plot(
             x,
             rate,

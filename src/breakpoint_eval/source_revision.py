@@ -17,8 +17,8 @@ LOGGER = logging.getLogger("breakpoint_eval.source_revision")
 def read_source_revision(repo_root: Path) -> dict[str, Any]:
     """Prefer Git; fall back to source_revision.txt for archive checkouts.
 
-    When Git is absent, mark archive context explicitly and do not fabricate a
-    clean working-tree status.
+    When Git is absent, mark archive context explicitly and leave clean
+    working-tree status unknown.
     """
     repo_root = Path(repo_root)
     git_dir = repo_root / ".git"
@@ -55,7 +55,7 @@ def read_source_revision(repo_root: Path) -> dict[str, Any]:
             "dirty": None,
             "status_porcelain": None,
             "archive_context": True,
-            "note": "Git absent; revision from source_revision.txt; clean status not fabricated",
+            "note": "Git absent; revision from source_revision.txt; clean status unknown",
         }
     return {
         "kind": "unavailable",
@@ -63,5 +63,5 @@ def read_source_revision(repo_root: Path) -> dict[str, Any]:
         "dirty": None,
         "status_porcelain": None,
         "archive_context": True,
-        "note": "neither Git nor source_revision.txt available; revision not fabricated",
+        "note": "neither Git nor source_revision.txt available; revision unknown",
     }

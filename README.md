@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-Breakpoint measures how inference delay, camera quality, and quantization affect a robot policy's success in simulation. It runs a pretrained ACT policy on the ALOHA TransferCube task with paired seeds and reports uncertainty for each condition.
+Breakpoint measures how inference delay, camera resolution, JPEG and H.264 compression, numeric precision, and device latency replay affect a robot policy's success in simulation. It runs a pretrained ACT policy on the ALOHA TransferCube task with paired seeds and reports uncertainty for each condition.
 
 ![Baseline and +640 ms delay, same seed, side by side](benchmarks/act-transfer/deployment-stress/media/comparison.gif)
 
@@ -41,12 +41,12 @@ Pretrained policy `lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on C
 | Device latency replay | laptop-m3 replay: 24, rpi5 replay: 9 |
 
 - Baseline (ONNX FP32, native image, 0 ms delay): 25/30 (83.3%; Wilson 95% 66.4% to 92.7%).
-- Constant added delay: first tested point below threshold is 320 ms at 18/30.
+- Constant added delay: first tested point below threshold is 320 ms at 18/30 (interval includes threshold).
 - Camera resolution: first tested point below threshold is 60x80 at 10/30.
 - JPEG quality: no tested point is below the threshold.
-- H.264 bitrate: first tested point below threshold is 250 kbps at 19/30.
-- Numeric precision: INT8 QDQ and INT4 weight-only are compared one by one with the baseline; none is below the threshold.
-- Device latency replay: laptop-m3 replay and rpi5 replay are compared one by one with the baseline; rpi5 replay is below the threshold.
+- H.264 bitrate: first tested point below threshold is 250 kbps at 19/30 (interval includes threshold).
+- Numeric precision (categorical comparison, no ordering) against 0.8 x baseline: INT8 QDQ 24/30 not below; INT4 weight-only 23/30 not below.
+- Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
 <!-- results:end -->
 
 These are observed grid points, not exact boundaries. The [full report](benchmarks/act-transfer/deployment-stress/report/report.md) has intervals, per-seed paired outcomes, latency traces and provenance. Evidence layout and result-specific limitations are in the [benchmark README](benchmarks/act-transfer/deployment-stress/README.md).
@@ -54,17 +54,18 @@ These are observed grid points, not exact boundaries. The [full report](benchmar
 ## Supported scope
 
 - One task and policy (`lerobot/act_aloha_sim_transfer_cube_human`), ONNX FP32 with static QDQ INT8 and INT4 weight-only.
-- Isolated axes: constant delay, resolution, JPEG, H.264 bitrate, precision, and laptop-m3 / rpi5 latency replay.
+- Isolated axes: constant delay, resolution, JPEG, H.264 bitrate, precision, and laptop-m3 / rpi5 latency replay. H.264 encode and decode happen in the same control step, with no codec or transport delay.
 - Evidence from macOS 14.6 arm64 (Python 3.11, CPU) and a Linux aarch64 Pi profile; other platforms are untested ([compatibility](docs/compatibility.md)).
 - FP16, H.264 deployment mode and Diffusion PushT remain in the package outside the validated scope.
 
 ## Limitations
 
-- Simulation only.
-- 30 episodes per condition; exploratory, not confirmed with fresh seeds.
-- The rpi5 replay is one throttled Pi state.
-- INT8 and INT4 are partial quantization ([methodology](docs/methodology.md#export-and-validation)).
-- H.264 is quality only.
+- Simulation only. The results say nothing about a physical robot.
+- Thirty episodes per condition give wide intervals. The run is exploratory and has not been confirmed with fresh seeds.
+- The rpi5 replay is one throttled Pi state. The firmware reported throttling or a temperature limit in almost every telemetry sample.
+- INT8 is a static QDQ graph. It is not a full-model INT8 result and was not required to match FP32 numerically ([methodology](docs/methodology.md#export-and-validation)).
+- INT4 stores 29 of 41 MatMul nodes as 4-bit blocks (61.6% of weight parameters); Conv, Gemm and activation MatMuls stay FP32, and weights are dequantized and computed in float. This is not a full-model INT4 result.
+- H.264 is encoded and decoded in the same control step with no codec or transport delay, and the stream overshot the requested bitrate by up to 118.2 kbps.
 - About 829 MB of raw evidence is not in the repository ([`large_evidence.json`](benchmarks/act-transfer/deployment-stress/data/large_evidence.json)).
 
 ## Documentation

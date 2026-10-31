@@ -462,7 +462,7 @@ def _render_summary_md(view: dict[str, Any]) -> str:
         if p:
             lines.append(f"- {name}: `{p}`")
         else:
-            lines.append(f"- {name}: missing (not fabricated)")
+            lines.append(f"- {name}: missing")
     if view.get("partial_diagnostics"):
         lines.append("")
         lines.append("## Partial diagnostics (interrupted run)")
@@ -509,7 +509,7 @@ def _html_page(view: dict[str, Any]) -> str:
                 f"<figcaption>{e(name)}</figcaption></figure>"
             )
         else:
-            plot_imgs.append(f"<p><em>{e(name)}: missing (not fabricated)</em></p>")
+            plot_imgs.append(f"<p><em>{e(name)}: missing</em></p>")
 
     links = "".join(
         f'<li><a href="{e(link["name"])}">{e(link["name"])}</a></li>'

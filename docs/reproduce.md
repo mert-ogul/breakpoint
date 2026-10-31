@@ -136,7 +136,7 @@ Packaging reads the run directory and writes a new package. It replaces an exist
 
 `package_benchmark.py` reads the export and profile locations from the run's lock. If they moved, pass `--export-dir` and `--profile DEVICE=PATH` (repeatable). Without `--out`, it writes the committed `benchmarks/act-transfer/deployment-stress/data`, so always pass `--out` here. Open `outputs/act-transfer/report/index.html`.
 
-## 7. Optional: comparison media
+## 7. Comparison media (optional)
 
 Needs the simulator environment, Pillow, matplotlib and `ffmpeg` with libx264 on `PATH` (`brew install ffmpeg` or `sudo apt-get install -y ffmpeg`).
 

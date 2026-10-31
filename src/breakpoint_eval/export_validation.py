@@ -695,7 +695,7 @@ def _load_quant_export_context(
     variant_label: str,
     display_name: str,
 ) -> tuple[Path, dict[str, Any], dict[str, Any], str, str, str]:
-    """Load manifest, parent FP32 sha, and variant status/sha.
+    """Load manifest, parent FP32 sha, and variant model-file hash check.
 
     Returns (manifest_path, manifest, variant, parent_sha, status, variant_sha).
     """
@@ -716,6 +716,34 @@ def _load_quant_export_context(
         export_dir, variant, label=variant_label, display_name=display_name
     )
     return manifest_path, manifest, variant, parent_sha, status, variant_sha
+
+
+def _write_validation_json(path: Path, result: dict[str, Any]) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _quant_binding_base(
+    *,
+    manifest: dict[str, Any],
+    variant: dict[str, Any],
+    variant_sha: str,
+    parent_sha: str,
+    variant_label: str,
+) -> dict[str, Any]:
+    return {
+        "model_sha256": variant_sha,
+        "corpus_eval_sha256": str(
+            ((manifest.get("corpus") or {}).get("evaluation") or {}).get("sha256") or ""
+        ),
+        "hub_revision": str(manifest.get("hub_revision") or ""),
+        "candidate": str(manifest.get("candidate") or ""),
+        "recipe_id": str(variant.get("recipe_id") or ""),
+        "variant_label": variant_label,
+        "parent_fp32_sha256": parent_sha,
+    }
 
 
 def build_int4_validation_v2(
@@ -841,26 +869,18 @@ def write_int4_validation_from_export(
     manifest_path, manifest, int4, parent_sha, status, int4_sha = _load_quant_export_context(
         export_dir, variant_label="int4_weight_only", display_name="INT4"
     )
-    candidate = str(manifest.get("candidate") or "")
-    hub_revision = str(manifest.get("hub_revision") or "")
-    recipe_id = str(int4.get("recipe_id") or "")
     comparisons = manifest.get("comparisons") or {}
     parity_onnx = comparisons.get("int4_weight_only_vs_onnx_fp32")
     parity_pt = comparisons.get("int4_weight_only_vs_pytorch_fp32")
     coverage = int4.get("quantization_coverage")
-    binding = {
-        "model_sha256": int4_sha,
-        "corpus_eval_sha256": str(
-            ((manifest.get("corpus") or {}).get("evaluation") or {}).get("sha256") or ""
-        ),
-        "hub_revision": hub_revision,
-        "candidate": candidate,
-        "recipe_id": recipe_id,
-        "variant_label": "int4_weight_only",
-        "parent_fp32_sha256": parent_sha,
-    }
     result = build_int4_validation_v2(
-        binding=binding,
+        binding=_quant_binding_base(
+            manifest=manifest,
+            variant=int4,
+            variant_sha=int4_sha,
+            parent_sha=parent_sha,
+            variant_label="int4_weight_only",
+        ),
         parity_vs_onnx_fp32=parity_onnx if isinstance(parity_onnx, dict) else None,
         parity_vs_pytorch_fp32=parity_pt if isinstance(parity_pt, dict) else None,
         quantization_coverage=coverage if isinstance(coverage, dict) else None,
@@ -873,9 +893,7 @@ def write_int4_validation_from_export(
         if output_path is not None
         else (export_dir / INT4_VALIDATION_FILENAME)
     )
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    return out
+    return _write_validation_json(out, result)
 
 
 def build_validation_v2_from_artifacts(
@@ -1030,23 +1048,16 @@ def write_int8_validation_from_export(
     )
     calib = (manifest.get("corpus") or {}).get("calibration") or {}
     calib_sha = str(calib.get("sha256") or "")
-    candidate = str(manifest.get("candidate") or "")
-    hub_revision = str(manifest.get("hub_revision") or "")
-    recipe_id = str(int8.get("recipe_id") or "")
     parity = (manifest.get("comparisons") or {}).get("int8_vs_onnx_fp32")
     coverage = int8.get("quantization_coverage")
-    binding = {
-        "model_sha256": int8_sha,
-        "corpus_eval_sha256": str(
-            ((manifest.get("corpus") or {}).get("evaluation") or {}).get("sha256") or ""
-        ),
-        "hub_revision": hub_revision,
-        "candidate": candidate,
-        "recipe_id": recipe_id,
-        "variant_label": "int8",
-        "parent_fp32_sha256": parent_sha,
-        "calibration_sha256": calib_sha,
-    }
+    binding = _quant_binding_base(
+        manifest=manifest,
+        variant=int8,
+        variant_sha=int8_sha,
+        parent_sha=parent_sha,
+        variant_label="int8",
+    )
+    binding["calibration_sha256"] = calib_sha
     result = build_int8_validation_v2(
         binding=binding,
         parity_vs_fp32=parity if isinstance(parity, dict) else None,
@@ -1061,9 +1072,7 @@ def write_int8_validation_from_export(
         if output_path is not None
         else (export_dir / INT8_VALIDATION_FILENAME)
     )
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    return out
+    return _write_validation_json(out, result)
 
 
 __all__ = [

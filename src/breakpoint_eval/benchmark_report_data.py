@@ -830,7 +830,7 @@ def validate_int4_episodes(rows: list[dict[str, Any]]) -> Check | None:
     return Check(
         "INT4 episodes all completed",
         not bad,
-        f"{n_calls} inference calls" if not bad else f"bad: {bad[:5]}; {n_calls} calls",
+        f"{n_calls} INT4 inference calls" if not bad else f"bad: {bad[:5]}; {n_calls} calls",
     )
 
 
