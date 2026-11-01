@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Re-record the selected baseline/stress pair and write the comparison media.
 
-Needs the simulator stack (see docs/compatibility.md), ONNX Runtime, Pillow, matplotlib
-(for bundled fonts), and ffmpeg with libx264 on PATH.
+Needs the simulator stack (see docs/compatibility.md), ONNX Runtime or PyTorch per the
+package lock, Pillow, matplotlib (for bundled fonts), and ffmpeg with libx264 on PATH.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def main(argv: list[str] | None = None) -> int:
         "--export-dir",
         type=Path,
         default=None,
-        help="export directory with act_chunk_fp32.onnx (default: artifacts.export_dir in "
-        "configs/act-transfer.json)",
+        help="export directory with act_chunk_fp32.onnx for onnxruntime packages "
+        "(default: artifacts.export_dir in configs/act-transfer.json)",
     )
     parser.add_argument(
         "--work",
@@ -53,7 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         help="scratch dir for the re-recorded runs and PNG frames",
     )
     parser.add_argument("--width", type=int, default=1280, help="video width in pixels")
-    parser.add_argument("--fps", type=float, default=12.5, help="output frame rate")
+    parser.add_argument(
+        "--fps",
+        type=float,
+        default=None,
+        help="output frame rate (default: real-time for the package control period)",
+    )
     parser.add_argument("--hold-frames", type=int, default=15, help="repeat the last frames")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

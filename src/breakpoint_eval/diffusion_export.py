@@ -18,6 +18,7 @@ from breakpoint_eval.diffusion_adapter import (
     diffusion_inference_provenance,
     pytorch_full_generation_provenance,
 )
+from breakpoint_eval.file_digest import sha256_file
 from breakpoint_eval.sim_env import control_period_s, load_policy
 from breakpoint_eval.stack import (
     LEROBOT_COMMIT,
@@ -29,6 +30,8 @@ from breakpoint_eval.stack import (
 
 LOGGER = logging.getLogger("breakpoint_eval.diffusion_export")
 
+_REQUIRED_CHECKPOINT_FILES = ("config.json", "model.safetensors")
+
 UNSUPPORTED_REASON = (
     "Diffusion Policy fresh inference is a multi-step denoising loop "
     "(observation encode + noise scheduler + UNet × num_inference_steps + "
@@ -37,6 +40,33 @@ UNSUPPORTED_REASON = (
     "denoising UNet is exported later, profile the Python scheduler loop with it "
     "and label the runtime as mixed — never treat one UNet pass as policy latency."
 )
+
+
+def checkpoint_file_hashes(checkpoint_dir: Path) -> dict[str, str]:
+    """SHA-256 of every regular file in the checkpoint directory (relative paths)."""
+    root = Path(checkpoint_dir).resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"checkpoint directory not found: {root}")
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    hashes = {str(path.relative_to(root)): sha256_file(path) for path in files}
+    missing = [name for name in _REQUIRED_CHECKPOINT_FILES if name not in hashes]
+    if missing:
+        raise FileNotFoundError(
+            f"checkpoint {root} missing required file(s) {missing}; found {sorted(hashes)}"
+        )
+    return hashes
+
+
+def policy_torch_dtype(policy: Any) -> str:
+    """Return the string form of the policy parameter dtype."""
+    parameters = getattr(policy, "parameters", None)
+    if callable(parameters):
+        for tensor in parameters():
+            return str(tensor.dtype)
+    dtype = getattr(policy, "dtype", None)
+    if dtype is not None:
+        return str(dtype)
+    raise ValueError("policy has no parameters to read dtype from")
 
 
 def run_diffusion_export_record(
@@ -61,6 +91,7 @@ def run_diffusion_export_record(
     policy = load_policy(spec, str(checkpoint_dir), device)
     inference = diffusion_inference_provenance(policy)
     runtime = pytorch_full_generation_provenance()
+    ckpt_files = checkpoint_file_hashes(checkpoint_dir)
 
     payload: dict[str, Any] = {
         "candidate": candidate,
@@ -72,6 +103,8 @@ def run_diffusion_export_record(
         "env_task": spec.env_task,
         "control_period_s": period_s,
         "checkpoint_dir": str(checkpoint_dir),
+        "checkpoint_files": ckpt_files,
+        "torch_dtype": policy_torch_dtype(policy),
         "device": device,
         "inference": inference,
         "onnx_export": {

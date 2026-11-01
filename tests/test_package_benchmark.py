@@ -274,3 +274,334 @@ def test_package_identities_omit_int4_for_old_lock(tmp_path: Path) -> None:
     module.package_identities(lock, [], out)
     identities = json.loads((out / "identities" / "identities.json").read_text())
     assert "model_int4_weight_only" not in identities
+
+
+def _pytorch_episode(seed: int, policy_seed: int, *, latency_s: float = 0.0) -> dict:
+    return {
+        "episode_index": 0,
+        "seed": seed,
+        "policy_rng_seed": policy_seed,
+        "outcome": "success",
+        "success": True,
+        "runtime_error": None,
+        "n_control_steps": 8,
+        "n_inference_calls": 1,
+        "n_fresh_chunks": 1,
+        "n_underflows": 0,
+        "n_missed_deadlines": 0,
+        "sum_reward": 1.0,
+        "max_reward": 1.0,
+        "control_period_s": 0.1,
+        "latency_mode": "constant",
+        "latency_s": latency_s,
+        "image_mode": "native",
+        "image_degrade_summary": {"capture_hw": [96, 96], "jpeg_quality": None},
+        "latency_trace_provenance": None,
+        "steps": [{"control_step_index": 7, "sim_time_s": 0.8, "is_success": True}],
+    }
+
+
+def _pytorch_report(seed: int = 6000, policy_seed: int = 16000, *, latency_s: float = 0.0) -> dict:
+    return {
+        "provenance": {
+            "candidate": "diffusion_pusht",
+            "env_created": True,
+            "env_seeds": [seed],
+            "policy_rng_seeds": [policy_seed],
+            "latency_mode": "constant",
+            "policy_backend": "pytorch",
+            "onnx_runtime": None,
+        },
+        "summary": {"n_episodes_total": 1, "n_runtime_error": 0},
+        "episodes": [_pytorch_episode(seed, policy_seed, latency_s=latency_s)],
+    }
+
+
+def test_package_pytorch_run_root_with_referenced_baseline(tmp_path: Path) -> None:
+    """A synthetic Diffusion PushT run packages when the lock carries pytorch + pytorch_fp32."""
+    from breakpoint_eval.benchmark_protocol import (
+        BACKEND_ONNXRUNTIME,
+        condition_incomplete_reason,
+    )
+    from breakpoint_eval.experiment_plan import (
+        ConditionSpec,
+        ExperimentAxis,
+        ExperimentPlan,
+        build_seed_pairs,
+        latency_conditions,
+        write_experiment_plan,
+    )
+
+    module = load_script()
+    full = tmp_path / "full"
+    export = tmp_path / "export"
+    export.mkdir()
+    checkpoint_files = {"model.safetensors": "a" * 64, "config.json": "b" * 64}
+    (export / "export_manifest.json").write_text(
+        json.dumps(
+            {
+                "candidate": "diffusion_pusht",
+                "checkpoint_files": checkpoint_files,
+                "control_period_s": 0.1,
+                "hub_revision": "rev",
+                "inference": {"num_inference_steps": 100},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    agreement = export / "upstream_agreement.json"
+    agreement.write_text(
+        json.dumps({"passed": True, "checkpoint_files": checkpoint_files}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    timing = tmp_path / "timing.json"
+    timing.write_text(
+        json.dumps(
+            {
+                "device_label": "laptop-m3",
+                "model": {"checkpoint_files": checkpoint_files},
+                "measurements": {
+                    "inference_latency_s": [0.5, 0.6],
+                    "n_measured": 2,
+                    "summary": {"count": 2, "median_s": 0.55, "p95_s": 0.6, "p99_s": 0.6},
+                },
+                "runtime": {
+                    "device": "cpu",
+                    "torch_threads": 4,
+                    "torch_version": "2.6.0",
+                    "timed_boundary": "pytorch_generate_actions_full_denoise",
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "timing.npz").write_bytes(b"npz")
+
+    seeds = build_seed_pairs(1, env_seed_start=6000, policy_seed_offset=10000)
+    plan = ExperimentPlan(
+        plan_id="v0.1_full_latency",
+        candidate="diffusion_pusht",
+        phase="exploratory",
+        n_episodes=1,
+        axis=ExperimentAxis.LATENCY_MS.value,
+        seed_pairs=seeds,
+        conditions=latency_conditions((0, 100)),
+        baseline_condition_id="latency_ms_0",
+    )
+    ref_plan = ExperimentPlan(
+        plan_id="v0.1_full_resolution",
+        candidate="diffusion_pusht",
+        phase="exploratory",
+        n_episodes=1,
+        axis=ExperimentAxis.RESOLUTION.value,
+        seed_pairs=seeds,
+        conditions=[
+            ConditionSpec(
+                condition_id="resolution_native",
+                axis=ExperimentAxis.RESOLUTION.value,
+                params={
+                    "mode": "native",
+                    "bypass": True,
+                    "latency_s": 0.0,
+                    "native_hw": [96, 96],
+                    "capture_hw": [96, 96],
+                },
+                label="native",
+            )
+        ],
+        baseline_condition_id="resolution_native",
+    )
+    plans_dir = full / "plans"
+    plans_dir.mkdir(parents=True)
+    write_experiment_plan(plan, plans_dir / f"{plan.plan_id}.json")
+    write_experiment_plan(ref_plan, plans_dir / f"{ref_plan.plan_id}.json")
+
+    shared = full / "shared_baselines" / "default_fp32_native_L0"
+    shared.mkdir(parents=True)
+    baseline = _pytorch_report()
+    (shared / "run_report.json").write_text(json.dumps(baseline) + "\n", encoding="utf-8")
+    (shared / "baseline_fingerprint.json").write_text(
+        json.dumps({"condition_id": "latency_ms_0"}, indent=2) + "\n", encoding="utf-8"
+    )
+
+    axis = full / "axes" / plan.plan_id
+    for condition_id, latency_s in (("latency_ms_0", 0.0), ("latency_ms_100", 0.1)):
+        cond_dir = axis / "conditions" / condition_id
+        cond_dir.mkdir(parents=True)
+        (cond_dir / "run_report.json").write_text(
+            json.dumps(_pytorch_report(latency_s=latency_s)) + "\n", encoding="utf-8"
+        )
+        (cond_dir / "provenance.json").write_text("{}\n", encoding="utf-8")
+        (cond_dir / "planned_settings.json").write_text("{}\n", encoding="utf-8")
+    (axis / "experiment_summary.json").write_text("{}\n", encoding="utf-8")
+
+    ref_dir = full / "axes" / ref_plan.plan_id / "conditions" / "resolution_native"
+    ref_dir.mkdir(parents=True)
+    (ref_dir / "run_report.json").write_text(json.dumps(baseline) + "\n", encoding="utf-8")
+    (ref_dir / "baseline_reference.json").write_text(
+        json.dumps(
+            {
+                "status": "referenced_baseline",
+                "reference_report": str(shared / "run_report.json"),
+                "reference_dir": str(shared),
+                "condition_id": "resolution_native",
+                "by_explicit_reference_only": True,
+                "measurements_fabricated": False,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (ref_dir / "provenance.json").write_text("{}\n", encoding="utf-8")
+    (full / "axes" / ref_plan.plan_id / "experiment_summary.json").write_text(
+        "{}\n", encoding="utf-8"
+    )
+
+    lock = {
+        "schema_version": 1,
+        "backend": "pytorch",
+        "candidate": "diffusion_pusht",
+        "baseline_reuse": {
+            "enabled": True,
+            "fingerprint": {
+                "latency_s": 0.0,
+                "image_mode": "native",
+                "variant_label": "pytorch_fp32",
+                "no_device_profile": True,
+            },
+        },
+        "artifacts": {
+            "export_dir": str(export),
+            "checkpoint_files": checkpoint_files,
+            "upstream_agreement_path": str(agreement),
+            "upstream_agreement_sha256": _sha(agreement),
+            "timing_profile_path": str(timing),
+            "timing_profile_sha256": _sha(timing),
+        },
+    }
+    (full / "protocol_lock.json").write_text(
+        json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    (full / "benchmark_config.json").write_text("{}\n", encoding="utf-8")
+    (full / "run_records.json").write_text(
+        json.dumps(
+            [
+                {
+                    "plan_id": plan.plan_id,
+                    "records": [
+                        {"condition_id": "latency_ms_0", "status": "complete"},
+                        {"condition_id": "latency_ms_100", "status": "complete"},
+                    ],
+                },
+                {
+                    "plan_id": ref_plan.plan_id,
+                    "records": [
+                        {"condition_id": "resolution_native", "status": "referenced_baseline"},
+                    ],
+                },
+            ],
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out = tmp_path / "pkg"
+    n = module.build_package(full, out, lock, export, {})
+    assert n == 3
+    assert (out / "episodes" / "episodes.jsonl").is_file()
+    assert (out / "validation" / "upstream_agreement.json").is_file()
+    assert (out / "timing" / "laptop-m3.json").is_file()
+
+    reason = condition_incomplete_reason(
+        axis / "conditions" / "latency_ms_0",
+        plan=plan,
+        condition=plan.conditions[0],
+        shared_baseline_dir=shared,
+        backend=BACKEND_ONNXRUNTIME,
+        variant_label="onnx_fp32",
+    )
+    assert reason is not None
+    assert "onnx_fp32" in reason
+
+
+def test_package_pytorch_validation_and_identities(tmp_path: Path) -> None:
+    module = load_script()
+    export = tmp_path / "export"
+    export.mkdir()
+    checkpoint_files = {"model.safetensors": "a" * 64, "config.json": "b" * 64}
+    (export / "export_manifest.json").write_text(
+        json.dumps(
+            {
+                "candidate": "diffusion_pusht",
+                "checkpoint_files": checkpoint_files,
+                "control_period_s": 0.1,
+                "hub_revision": "rev",
+                "inference": {"num_inference_steps": 100},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    agreement = tmp_path / "upstream_agreement.json"
+    agreement.write_text(
+        json.dumps({"passed": True, "checkpoint_files": checkpoint_files}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    timing = tmp_path / "timing.json"
+    timing.write_text(
+        json.dumps(
+            {
+                "device_label": "laptop-m3",
+                "model": {"checkpoint_files": checkpoint_files},
+                "measurements": {
+                    "inference_latency_s": [0.5, 0.6, 0.7],
+                    "n_measured": 3,
+                    "summary": {"count": 3, "median_s": 0.6, "p95_s": 0.7, "p99_s": 0.7},
+                },
+                "runtime": {
+                    "device": "cpu",
+                    "torch_threads": 4,
+                    "torch_version": "2.6.0",
+                    "timed_boundary": "pytorch_generate_actions_full_denoise",
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "timing.npz").write_bytes(b"npz")
+    lock = {
+        "artifacts": {
+            "checkpoint_files": checkpoint_files,
+            "upstream_agreement_path": str(agreement),
+            "upstream_agreement_sha256": _sha(agreement),
+            "timing_profile_path": str(timing),
+            "timing_profile_sha256": _sha(timing),
+        }
+    }
+    out = tmp_path / "pkg"
+    large: list[dict] = []
+    module.package_pytorch_validation(export, lock, out, large)
+    assert (out / "validation" / "export_manifest.json").is_file()
+    assert (out / "validation" / "upstream_agreement.json").is_file()
+    assert (out / "timing" / "laptop-m3.json").is_file()
+    assert any(e["path"].endswith("timing.npz") for e in large)
+    assert not (out / "validation" / "export_validation.json").exists()
+    assert not (out / "profiles").exists()
+    module.package_pytorch_identities(lock, [], out)
+    identities = json.loads((out / "identities" / "identities.json").read_text())
+    assert identities["checkpoint_files"] == checkpoint_files
+    assert "model_fp32" not in identities

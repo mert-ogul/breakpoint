@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "protocol_name": "diffusion_pusht_stress",
+  "protocol_version": "0.1",
+  "candidate": "diffusion_pusht",
+  "backend": "pytorch",
+  "image": {
+    "native_hw": [96, 96]
+  },
+  "artifacts": {
+    "export_dir": "artifacts/export/diffusion_pusht",
+    "upstream_agreement": "artifacts/export/diffusion_pusht/upstream_agreement.json",
+    "timing_profile_dir": "profiles/laptop-m3/diffusion_pusht"
+  },
+  "host": {
+    "compute_device": "cpu",
+    "torch_num_threads": 4
+  },
+  "trace_window": {
+    "length": 32,
+    "design": "contiguous_evenly_spaced_starts",
+    "formula": "floor(i*(N-32)/(n_episodes-1))",
+    "end_of_trace": "fail",
+    "not_block_resample": true,
+    "not_continuous_full_trace_replay": true
+  },
+  "scheduler": {
+    "chunk_arrival_policy": "discard_stale",
+    "latency_end_of_trace": "fail",
+    "run_conditions_sequentially": true
+  },
+  "statistics": {
+    "breakpoint_ratio": 0.8,
+    "baseline_success_floor": 0.5,
+    "wilson_z": 1.959963984540054,
+    "n_bootstrap": 2000,
+    "bootstrap_seed": 20261012,
+    "coverage": "pointwise",
+    "show_n_and_uncertainty": true,
+    "show_weak_baseline_and_unresolved": true,
+    "confirmation_fresh_seeds_separate": true
+  },
+  "smoke": {
+    "phase": "smoke",
+    "env_seeds": [4000, 4001, 4002, 4003, 4004],
+    "policy_seed_offset": 10000,
+    "latency_ms": [0, 800],
+    "resolution_hw": [[24, 24]],
+    "jpeg_qualities": [10],
+    "include_baseline": true,
+    "note": "Smoke checklist; not for publication claims."
+  },
+  "full": {
+    "phase": "exploratory",
+    "env_seed_start": 6000,
+    "n_episodes": 5,
+    "policy_seed_offset": 10000,
+    "latency_ms": [0, 100, 200, 400, 600, 800],
+    "resolution_hw": [[96, 96], [48, 48], [32, 32], [24, 24]],
+    "jpeg_qualities": ["bypass", 95, 75, 50, 25, 10],
+    "isolate_axes": true,
+    "native_bypass_is_not_jpeg_quality_100": true,
+    "note": "Isolated axis sweeps; confirmation with fresh seeds stays separate."
+  },
+  "baseline_reuse": {
+    "enabled": true,
+    "by_explicit_reference_only": true,
+    "fingerprint": {
+      "latency_s": 0.0,
+      "image_mode": "native",
+      "variant_label": "pytorch_fp32",
+      "no_device_profile": true
+    }
+  }
+}

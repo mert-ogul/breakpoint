@@ -99,22 +99,23 @@ SUPPORT_MATRIX: dict[str, CandidateSupport] = {
         candidate="diffusion_pusht",
         policy_type="diffusion",
         env_task="PushT-v0",
-        loaded="unverified",
-        ran="not_attempted",
+        loaded="yes",
+        ran="yes",
         reproduced_baseline="no",
         camera_impl="yes",
         camera_synthetic="yes",
-        camera_sim="unverified",
+        camera_sim="yes",
         zero_latency_impl="yes",
         zero_latency_synthetic="yes",
-        zero_latency_sim="unverified",
+        zero_latency_sim="yes",
         onnx_fp32="unsupported",
         onnx_int8="unsupported",
         onnx_int4="unsupported",
         device_profile="unsupported",
         notes=(
-            "Implementation and synthetic/stub gates exist; real PushT episode "
-            "ran/reproduced not claimed. ORT action-chunk export unsupported. "
+            "stress benchmark packaged in benchmarks/diffusion-pusht/stress: 80 CPU episodes "
+            "(seeds 6000-6004), PyTorch FP32 baseline 5/5, constant delay, resolution and JPEG. "
+            "Card-scale reproduction not run. ORT action-chunk export unsupported. "
             "Do not copy ACT device timings. No hardware experiments claimed."
         ),
     ),

@@ -1,8 +1,9 @@
 """Select, re-record, verify, and compose the comparison media from saved results.
 
-Selection reads only packaged episode records. Recording re-runs exactly one baseline and one
-stress episode through ``run_baseline`` with the saved seeds and effective settings, then checks
-them against the saved run before any media is written.
+Selection reads packaged episode records for the seed pair and the latency plan's 0 ms provenance
+for chunk span. Recording re-runs exactly one baseline and one stress episode through
+``run_baseline`` with the saved seeds and effective settings, then checks them against the saved
+run before any media is written.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import math
 import shutil
 import subprocess
 from contextlib import contextmanager
@@ -20,6 +22,7 @@ from typing import Any
 import numpy as np
 
 from breakpoint_eval.artifact_names import PROTOCOL_LOCK_NAME, require_artifact
+from breakpoint_eval.benchmark_protocol import BACKEND_ONNXRUNTIME, backend_and_variant_from_lock
 from breakpoint_eval.benchmark_report_style import (
     ACCENT_RGB,
     DARK_BG,
@@ -33,24 +36,28 @@ from breakpoint_eval.stack import repo_root_from_package
 LOGGER = logging.getLogger("breakpoint_eval.benchmark_media")
 
 REPO_ROOT = repo_root_from_package()
-BASELINE_CONDITION = "latency_ms_0"
-STRESS_CONDITION = "latency_ms_640"
-LATENCY_PLAN = "v0.1_full_latency"
-SELECTION_RULE = (
-    "Take the most severe tested constant delay (640 ms) against the 0 ms baseline of the same "
-    "latency plan. Among seeds where the baseline succeeded and the stress episode did not, "
-    "use the lowest env seed. No other seeds were run or compared."
-)
 CHARCOAL = hex_to_rgb(DARK_BG)
 OFF_WHITE = DARK_FG_RGB
 BASELINE_BLUE = INK_RGB
 STRESS_AMBER = ACCENT_RGB
 MUTED = MUTED_RGB
-CONTROL_PERIOD_S = 0.02
+REWARD_REL_TOL = 1e-12
+REWARD_ABS_TOL = 1e-12
 
 
 class MediaVerificationError(RuntimeError):
     """Raised when a re-recorded episode does not match the saved result."""
+
+
+@dataclass(frozen=True)
+class LatencyMediaSpec:
+    plan_id: str
+    baseline_condition: str
+    stress_condition: str
+    stress_delay_ms: int
+    control_period_s: float
+    chunk_span_ms: int
+    selection_rule: str
 
 
 @dataclass
@@ -73,22 +80,173 @@ class PanelSpec:
     event_time_s: float
 
 
-def select_pair(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def latency_ms_from_condition_id(condition_id: str) -> int:
+    prefix = "latency_ms_"
+    if not condition_id.startswith(prefix):
+        raise ValueError(f"not a latency condition id: {condition_id!r}")
+    return int(condition_id[len(prefix) :])
+
+
+def frame_stride(control_period_s: float, fps: float) -> int:
+    steps = round(1.0 / fps / control_period_s)
+    if abs(steps * control_period_s * fps - 1.0) > 1e-9:
+        raise ValueError(f"fps {fps} does not align with the {control_period_s} s control period")
+    return steps
+
+
+def default_media_fps(control_period_s: float) -> float:
+    """Real-time playback fps.
+
+    Prefer stride 4 when that still yields at least 5 fps (ACT 20 ms → 12.5 fps). Otherwise
+    stride 2 (PushT 100 ms → 5 fps).
+    """
+    for stride in (4, 2, 1):
+        fps = 1.0 / (stride * control_period_s)
+        if fps >= 5.0 - 1e-9:
+            return fps
+    return 1.0 / control_period_s
+
+
+def selection_rule_text(stress_delay_ms: int, chunk_span_ms: int) -> str:
+    return (
+        f"Take the largest tested constant delay strictly below one chunk span "
+        f"({chunk_span_ms} ms), here {stress_delay_ms} ms, against the 0 ms baseline of the same "
+        "latency plan. Among seeds where the baseline succeeded and the stress episode did not, "
+        "use the lowest env seed. No other seeds were run or compared."
+    )
+
+
+def latency_rows_from_package(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    latency_rows = [r for r in rows if r.get("axis") == "latency_ms"]
+    if not latency_rows:
+        latency_rows = [r for r in rows if str(r["condition_id"]).startswith("latency_ms_")]
+    return latency_rows
+
+
+def _latency_plan_delays(latency_rows: list[dict[str, Any]]) -> tuple[str, dict[int, str]]:
+    plan_ids = {r["plan_id"] for r in latency_rows}
+    if len(plan_ids) != 1:
+        raise MediaVerificationError(
+            f"expected one latency_ms plan in saved results, found {sorted(plan_ids)}"
+        )
+    plan_id = next(iter(plan_ids))
+    delays = {
+        latency_ms_from_condition_id(r["condition_id"]): r["condition_id"]
+        for r in latency_rows
+        if r["plan_id"] == plan_id
+    }
+    if 0 not in delays:
+        raise MediaVerificationError("latency plan has no 0 ms baseline condition")
+    return plan_id, delays
+
+
+def stress_delay_below_chunk_span(delays: dict[int, str], chunk_span_ms: int) -> int:
+    below = [delay for delay in delays if 0 < delay < chunk_span_ms]
+    if not below:
+        raise MediaVerificationError(
+            f"no tested delay is strictly below the {chunk_span_ms} ms chunk span"
+        )
+    return max(below)
+
+
+def _baseline_rows(
+    rows: list[dict[str, Any]], *, plan_id: str, baseline_condition: str
+) -> list[dict[str, Any]]:
+    return [r for r in rows if r["plan_id"] == plan_id and r["condition_id"] == baseline_condition]
+
+
+def _shared_baseline_provenance_path(data_dir: Path) -> Path:
+    from breakpoint_eval.benchmark_report_data import find_shared_baseline, load_json
+
+    lock = load_json(require_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME))
+    plans_dir = data_dir / "protocol" / "plans"
+    plans = [load_json(path) for path in sorted(plans_dir.glob("*.json"))]
+    shared = find_shared_baseline(plans, lock)
+    return data_dir / "historical" / shared.plan_id / shared.condition_id / "provenance.json"
+
+
+def latency_baseline_provenance_path(
+    data_dir: Path,
+    *,
+    plan_id: str,
+    baseline_condition: str,
+    rows: list[dict[str, Any]],
+) -> Path:
+    """Provenance file that supplies n_action_steps and control_period_s for chunk span."""
+    primary = data_dir / "historical" / plan_id / baseline_condition / "provenance.json"
+    if primary.is_file():
+        return primary
+    baseline = _baseline_rows(rows, plan_id=plan_id, baseline_condition=baseline_condition)
+    if baseline and all(bool(r.get("referenced_baseline")) for r in baseline):
+        shared = _shared_baseline_provenance_path(data_dir)
+        if shared.is_file():
+            return shared
+        raise MediaVerificationError(f"latency baseline provenance missing: {shared}")
+    raise MediaVerificationError(f"latency baseline provenance missing: {primary}")
+
+
+def chunk_span_from_provenance(
+    data_dir: Path,
+    *,
+    plan_id: str,
+    baseline_condition: str,
+    rows: list[dict[str, Any]],
+) -> tuple[float, int]:
+    path = latency_baseline_provenance_path(
+        data_dir, plan_id=plan_id, baseline_condition=baseline_condition, rows=rows
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("n_action_steps") is None or payload.get("control_period_s") is None:
+        raise MediaVerificationError(
+            f"latency baseline provenance lacks n_action_steps or control_period_s: {path}"
+        )
+    control_period_s = float(payload["control_period_s"])
+    n_action_steps = int(payload["n_action_steps"])
+    chunk_span_ms = int(round(n_action_steps * control_period_s * 1000.0))
+    return control_period_s, chunk_span_ms
+
+
+def resolve_latency_media(rows: list[dict[str, Any]], *, data_dir: Path) -> LatencyMediaSpec:
+    latency_rows = latency_rows_from_package(rows)
+    plan_id, delays = _latency_plan_delays(latency_rows)
+    control_period_s, chunk_span_ms = chunk_span_from_provenance(
+        data_dir, plan_id=plan_id, baseline_condition=delays[0], rows=rows
+    )
+    stress_delay_ms = stress_delay_below_chunk_span(delays, chunk_span_ms)
+    return LatencyMediaSpec(
+        plan_id=plan_id,
+        baseline_condition=delays[0],
+        stress_condition=delays[stress_delay_ms],
+        stress_delay_ms=stress_delay_ms,
+        control_period_s=control_period_s,
+        chunk_span_ms=chunk_span_ms,
+        selection_rule=selection_rule_text(stress_delay_ms, chunk_span_ms),
+    )
+
+
+def select_pair(rows: list[dict[str, Any]], *, data_dir: Path) -> dict[str, Any]:
+    latency_rows = latency_rows_from_package(rows)
+    plan_id, delays = _latency_plan_delays(latency_rows)
+    control_period_s, chunk_span_ms = chunk_span_from_provenance(
+        data_dir, plan_id=plan_id, baseline_condition=delays[0], rows=rows
+    )
+    stress_delay_ms = stress_delay_below_chunk_span(delays, chunk_span_ms)
+    baseline_condition = delays[0]
+    stress_condition = delays[stress_delay_ms]
+
     def condition_rows(condition: str) -> dict[int, dict[str, Any]]:
         return {
-            r["seed"]: r
-            for r in rows
-            if r["plan_id"] == LATENCY_PLAN and r["condition_id"] == condition
+            r["seed"]: r for r in rows if r["plan_id"] == plan_id and r["condition_id"] == condition
         }
 
-    base, stress = condition_rows(BASELINE_CONDITION), condition_rows(STRESS_CONDITION)
+    base, stress = condition_rows(baseline_condition), condition_rows(stress_condition)
     lost = sorted(s for s in base if base[s]["success"] and not stress[s]["success"])
     gained = sorted(s for s in base if not base[s]["success"] and stress[s]["success"])
     if not lost:
         raise MediaVerificationError("no baseline-success / stress-failure pair in saved results")
     seed = lost[0]
     return {
-        "rule": SELECTION_RULE,
+        "rule": selection_rule_text(stress_delay_ms, chunk_span_ms),
         "disclosure": "Selected example, not a typical episode. Aggregate results are shown "
         "alongside.",
         "seed": seed,
@@ -100,6 +258,12 @@ def select_pair(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "seeds_baseline_did_not_succeed_stress_did": gained,
         "baseline_successes": sum(r["success"] for r in base.values()),
         "stress_successes": sum(r["success"] for r in stress.values()),
+        "plan_id": plan_id,
+        "baseline_condition": baseline_condition,
+        "stress_condition": stress_condition,
+        "stress_delay_ms": stress_delay_ms,
+        "chunk_span_ms": chunk_span_ms,
+        "control_period_s": control_period_s,
     }
 
 
@@ -164,6 +328,7 @@ def record_episode(
     work_dir: Path,
     stride: int,
     export_dir: Path,
+    backend: str,
 ) -> Recording:
     from breakpoint_eval.experiment_plan import load_experiment_plan
     from breakpoint_eval.run_baseline import run_baseline
@@ -171,20 +336,25 @@ def record_episode(
 
     plan = load_experiment_plan(plan_path)
     condition = next(c for c in plan.conditions if c.condition_id == condition_id)
+    onnx_model = (export_dir / "act_chunk_fp32.onnx") if backend == BACKEND_ONNXRUNTIME else None
     request = condition_run_request(
         plan=plan,
         condition=condition,
         condition_dir=work_dir / condition_id,
         repo_root=REPO_ROOT,
         device=host["compute_device"],
-        onnx_model=export_dir / "act_chunk_fp32.onnx",
+        onnx_model=onnx_model,
         latency_profile=None,
         save_video=False,
-        ort_providers=host["ort_providers"],
-        ort_intra_op_num_threads=host["intra_op_num_threads"],
-        ort_inter_op_num_threads=host["inter_op_num_threads"],
+        ort_providers=host.get("ort_providers"),
+        ort_intra_op_num_threads=host.get("intra_op_num_threads"),
+        ort_inter_op_num_threads=host.get("inter_op_num_threads"),
     )
     request = dataclasses.replace(request, seeds=[seed], policy_rng_seeds=[policy_rng_seed])
+    if backend != BACKEND_ONNXRUNTIME:
+        torch_threads = host.get("torch_num_threads")
+        if torch_threads is not None:
+            request = dataclasses.replace(request, torch_threads=int(torch_threads))
     tap = FrameTap(stride)
     with frame_tap(tap):
         report_path = run_baseline(request)
@@ -228,8 +398,21 @@ def compare_with_saved(recording: Recording, saved_row: dict[str, Any]) -> dict[
         return result
     new_steps, old_steps = ep["steps"], raw["steps"]
     same_timeline = len(new_steps) == len(old_steps) and all(
-        (a["sim_time_s"], a["reward"], a["is_success"], a["request_time_s"], a["ready_time_s"])
-        == (b["sim_time_s"], b["reward"], b["is_success"], b["request_time_s"], b["ready_time_s"])
+        (a["sim_time_s"], a["is_success"], a["request_time_s"], a["ready_time_s"])
+        == (b["sim_time_s"], b["is_success"], b["request_time_s"], b["ready_time_s"])
+        for a, b in zip(new_steps, old_steps, strict=False)
+    )
+    reward_diffs = [
+        abs(float(a["reward"]) - float(b["reward"]))
+        for a, b in zip(new_steps, old_steps, strict=False)
+    ]
+    rewards_within_tolerance = len(new_steps) == len(old_steps) and all(
+        math.isclose(
+            float(a["reward"]),
+            float(b["reward"]),
+            rel_tol=REWARD_REL_TOL,
+            abs_tol=REWARD_ABS_TOL,
+        )
         for a, b in zip(new_steps, old_steps, strict=False)
     )
     diffs = [
@@ -239,7 +422,11 @@ def compare_with_saved(recording: Recording, saved_row: dict[str, Any]) -> dict[
     result.update(
         {
             "raw_step_comparison": "compared against saved control-step log",
-            "timeline_reward_success_request_ready_equal": same_timeline,
+            "timeline_success_request_ready_equal": same_timeline,
+            "rewards_max_abs_difference": float(max(reward_diffs)) if reward_diffs else None,
+            "reward_rel_tol": REWARD_REL_TOL,
+            "reward_abs_tol": REWARD_ABS_TOL,
+            "rewards_within_tolerance": rewards_within_tolerance,
             "max_abs_action_difference": float(max(diffs)) if diffs else None,
             "actions_bitwise_equal": bool(diffs and max(diffs) == 0.0),
         }
@@ -248,8 +435,11 @@ def compare_with_saved(recording: Recording, saved_row: dict[str, Any]) -> dict[
 
 
 def require_match(comparison: dict[str, Any]) -> None:
-    ok = comparison["matches_compact_record"] and comparison.get(
-        "timeline_reward_success_request_ready_equal", True
+    ok = (
+        comparison["matches_compact_record"]
+        and comparison.get("timeline_success_request_ready_equal", True)
+        and comparison.get("rewards_within_tolerance", True)
+        and comparison.get("actions_bitwise_equal", True)
     )
     if not ok:
         raise MediaVerificationError(f"re-recorded episode differs from saved: {comparison}")
@@ -284,11 +474,15 @@ class Layout:
     scale: float
 
 
-def make_layout(width: int) -> Layout:
+def make_layout(width: int, frame_hw: tuple[int, int] | None = None) -> Layout:
     scale = width / 1280
     margin = round(16 * scale)
     panel_w = (width - 3 * margin) // 2
-    panel_h = panel_w * 3 // 4
+    if frame_hw is None:
+        panel_h = panel_w * 3 // 4
+    else:
+        frame_h, frame_w = frame_hw
+        panel_h = max(1, panel_w * frame_h // frame_w)
     header_h, status_h, footer_h = round(44 * scale), round(40 * scale), round(62 * scale)
     height = margin + header_h + panel_h + status_h + footer_h + margin
     return Layout(
@@ -299,7 +493,14 @@ def make_layout(width: int) -> Layout:
 def fit_frame(frame: np.ndarray, layout: Layout):
     from PIL import Image
 
-    return Image.fromarray(frame).resize((layout.panel_w, layout.panel_h), Image.LANCZOS)
+    image = Image.fromarray(frame)
+    scale = min(layout.panel_w / image.width, layout.panel_h / image.height)
+    new_w = max(1, round(image.width * scale))
+    new_h = max(1, round(image.height * scale))
+    resized = image.resize((new_w, new_h), Image.LANCZOS)
+    canvas = Image.new("RGB", (layout.panel_w, layout.panel_h), CHARCOAL)
+    canvas.paste(resized, ((layout.panel_w - new_w) // 2, (layout.panel_h - new_h) // 2))
+    return canvas
 
 
 def compose_frames(
@@ -310,10 +511,12 @@ def compose_frames(
     fps: float,
     hold_frames: int,
     out_dir: Path,
+    control_period_s: float,
 ) -> dict[str, Any]:
     from PIL import Image, ImageDraw, ImageFont
 
-    layout = make_layout(width)
+    sample = next(iter(panels[0].recording.frames.values()))
+    layout = make_layout(width, frame_hw=(int(sample.shape[0]), int(sample.shape[1])))
     fonts = font_dir()
 
     def px(base: int) -> int:
@@ -323,9 +526,7 @@ def compose_frames(
     sans = ImageFont.truetype(str(fonts / "DejaVuSans.ttf"), px(17))
     mono = ImageFont.truetype(str(fonts / "DejaVuSansMono.ttf"), px(19))
     mono_bold = ImageFont.truetype(str(fonts / "DejaVuSansMono-Bold.ttf"), px(19))
-    steps_per_frame = round(1.0 / fps / CONTROL_PERIOD_S)
-    if abs(steps_per_frame * CONTROL_PERIOD_S * fps - 1.0) > 1e-9:
-        raise ValueError(f"fps {fps} does not align with the {CONTROL_PERIOD_S} s control period")
+    steps_per_frame = frame_stride(control_period_s, fps)
     last_step = max(p.recording.n_steps for p in panels)
     n_motion = -(-last_step // steps_per_frame) + 1
     xs = [layout.margin + i * (layout.panel_w + layout.margin) for i in range(2)]
@@ -362,9 +563,9 @@ def compose_frames(
             )
             canvas.paste(resized[key], (x, y + layout.header_h))
             sy = y + layout.header_h + layout.panel_h
-            clock = f"t = {k * CONTROL_PERIOD_S:5.2f} s"
+            clock = f"t = {k * control_period_s:5.2f} s"
             draw.text((x, sy + layout.status_h // 2), clock, font=mono, fill=MUTED, anchor="lm")
-            reached = k * CONTROL_PERIOD_S >= panel.event_time_s - 1e-9
+            reached = k * control_period_s >= panel.event_time_s - 1e-9
             if reached:
                 label = f"{panel.event_label.upper()} {panel.event_time_s:.2f} s"
                 draw.text(
@@ -555,22 +756,53 @@ def social_preview(panels: list[PanelSpec], footer_lines: list[str], out_path: P
         )
         draw.text((x + 10, top - 17), label, font=chip, fill=OFF_WHITE, anchor="lm")
         frame = Image.fromarray(panel.recording.frames[panel.recording.n_steps])
-        canvas.paste(frame.resize((panel_w, panel_h), Image.LANCZOS), (x, top))
+        fitted = Image.new("RGB", (panel_w, panel_h), CHARCOAL)
+        scale = min(panel_w / frame.width, panel_h / frame.height)
+        new_w, new_h = max(1, round(frame.width * scale)), max(1, round(frame.height * scale))
+        fitted.paste(
+            frame.resize((new_w, new_h), Image.LANCZOS),
+            ((panel_w - new_w) // 2, (panel_h - new_h) // 2),
+        )
+        canvas.paste(fitted, (x, top))
     for n, line in enumerate(footer_lines):
         draw.text((90, top + panel_h + 10 + n * 26), line, font=small, fill=MUTED)
     canvas.save(out_path)
 
 
-def build_panels(recordings: dict[str, Recording]) -> list[PanelSpec]:
+def build_panels(recordings: dict[str, Recording], *, stress_delay_ms: int) -> list[PanelSpec]:
+    baseline_id = min(recordings, key=latency_ms_from_condition_id)
+    stress_id = max(recordings, key=latency_ms_from_condition_id)
     specs = [
-        (BASELINE_CONDITION, "Baseline, 0 ms delay", "", BASELINE_BLUE),
-        (STRESS_CONDITION, "+640 ms delay", "", STRESS_AMBER),
+        (baseline_id, "Baseline, 0 ms delay", "", BASELINE_BLUE),
+        (stress_id, f"+{stress_delay_ms} ms delay", "", STRESS_AMBER),
     ]
     panels = []
     for condition, title, detail, color in specs:
         label, event_time = panel_event(recordings[condition])
         panels.append(PanelSpec(title, detail, color, recordings[condition], label, event_time))
     return panels
+
+
+def footer_lines_for_package(
+    *,
+    lock: dict[str, Any],
+    selection: dict[str, Any],
+) -> list[str]:
+    delay = f"+{selection['stress_delay_ms']} ms"
+    n = selection["n_seeds"]
+    aggregate = (
+        f"Selected example, not typical. All {n} seeds: baseline "
+        f"{selection['baseline_successes']}/{n}, {delay} "
+        f"{selection['stress_successes']}/{n} succeeded."
+    )
+    backend, _ = backend_and_variant_from_lock(lock)
+    if backend == BACKEND_ONNXRUNTIME:
+        return [
+            f"ACT ONNX FP32 | ALOHA TransferCube sim | env seed {selection['seed']} | policy RNG "
+            f"{selection['policy_rng_seed']} | aligned by simulation time, real-time speed",
+            aggregate,
+        ]
+    return [f"{aggregate} Simulation footage, not a physical robot."]
 
 
 def make_media(
@@ -580,7 +812,7 @@ def make_media(
     work_dir: Path,
     export_dir: Path,
     width: int,
-    fps: float,
+    fps: float | None,
     hold_frames: int,
 ) -> dict[str, Any]:
     rows = [
@@ -589,11 +821,18 @@ def make_media(
         if line
     ]
     lock = json.loads(require_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME).read_text())
-    selection = select_pair(rows)
-    stride = round(1.0 / fps / CONTROL_PERIOD_S)
-    plan_path = data_dir / "protocol" / "plans" / f"{LATENCY_PLAN}.json"
+    backend, _ = backend_and_variant_from_lock(lock)
+    selection = select_pair(rows, data_dir=data_dir)
+    control_period_s = float(selection["control_period_s"])
+    if fps is None:
+        fps = default_media_fps(control_period_s)
+    stride = frame_stride(control_period_s, fps)
+    plan_path = data_dir / "protocol" / "plans" / f"{selection['plan_id']}.json"
     recordings, comparisons = {}, []
-    for condition, key in ((BASELINE_CONDITION, "baseline"), (STRESS_CONDITION, "stress")):
+    for condition, key in (
+        (selection["baseline_condition"], "baseline"),
+        (selection["stress_condition"], "stress"),
+    ):
         LOGGER.info("recording %s seed %s", condition, selection["seed"])
         recordings[condition] = record_episode(
             plan_path=plan_path,
@@ -604,32 +843,47 @@ def make_media(
             work_dir=work_dir,
             stride=stride,
             export_dir=export_dir,
+            backend=backend,
         )
         comparison = compare_with_saved(recordings[condition], selection[key])
         require_match(comparison)
         comparisons.append(comparison)
-    panels = build_panels(recordings)
-    footer = [
-        f"ACT ONNX FP32 | ALOHA TransferCube sim | env seed {selection['seed']} | policy RNG "
-        f"{selection['policy_rng_seed']} | aligned by simulation time, real-time speed",
-        f"Selected example, not typical. All {selection['n_seeds']} seeds: baseline "
-        f"{selection['baseline_successes']}/{selection['n_seeds']}, +640 ms "
-        f"{selection['stress_successes']}/{selection['n_seeds']} succeeded.",
-    ]
+    panels = build_panels(recordings, stress_delay_ms=selection["stress_delay_ms"])
+    footer = footer_lines_for_package(lock=lock, selection=selection)
     out_dir.mkdir(parents=True, exist_ok=True)
     frames_dir = work_dir / "composed_frames"
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
     composed = compose_frames(
-        panels, footer, width=width, fps=fps, hold_frames=hold_frames, out_dir=frames_dir
+        panels,
+        footer,
+        width=width,
+        fps=fps,
+        hold_frames=hold_frames,
+        out_dir=frames_dir,
+        control_period_s=control_period_s,
     )
     commands = encode_media(frames_dir, out_dir, fps)
-    social_preview(
-        panels,
-        [footer[1], "Simulation footage, not a physical robot."],
-        out_dir / "social-preview.png",
-    )
-    selection_out = {k: v for k, v in selection.items() if k not in ("baseline", "stress")}
+    if backend == BACKEND_ONNXRUNTIME:
+        social_preview(
+            panels,
+            [footer[1], "Simulation footage, not a physical robot."],
+            out_dir / "social-preview.png",
+        )
+    selection_out = {
+        k: v
+        for k, v in selection.items()
+        if k
+        not in (
+            "baseline",
+            "stress",
+            "plan_id",
+            "baseline_condition",
+            "stress_condition",
+            "stress_delay_ms",
+            "control_period_s",
+        )
+    }
     selection_out["baseline_record"] = selection["baseline"]["source_report"]
     selection_out["stress_record"] = selection["stress"]["source_report"]
     verification = {

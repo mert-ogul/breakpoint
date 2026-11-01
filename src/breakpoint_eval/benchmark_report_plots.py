@@ -47,11 +47,13 @@ THEMES = (
 )
 
 
-def short_label(condition_id: str) -> str:
+def short_label(condition_id: str, *, capture_hw: list[int] | tuple[int, ...] | None = None) -> str:
     if condition_id.startswith("latency_ms_"):
         return f"{condition_id.rsplit('_', 1)[1]} ms"
     if condition_id == "resolution_native":
-        return "480x640\nnative"
+        if not isinstance(capture_hw, (list, tuple)) or len(capture_hw) < 2:
+            raise ValueError("resolution_native label needs capture_hw or native_hw from the plan")
+        return f"{capture_hw[0]}x{capture_hw[1]}\nnative"
     if condition_id.startswith("resolution_capture_"):
         return condition_id.rsplit("_", 1)[1]
     if condition_id == "jpeg_bypass":
@@ -73,8 +75,23 @@ def short_label(condition_id: str) -> str:
     return condition_id
 
 
+def condition_capture_hw(view: ConditionView) -> list[int] | tuple[int, ...] | None:
+    """Native or capture size from plan params, else from the first episode row."""
+    params = getattr(view, "params", None) or {}
+    for key in ("capture_hw", "native_hw"):
+        hw = params.get(key)
+        if isinstance(hw, (list, tuple)) and len(hw) >= 2:
+            return hw
+    if not view.rows:
+        return None
+    hw = view.rows[0].get("capture_hw")
+    if isinstance(hw, (list, tuple)) and len(hw) >= 2:
+        return hw
+    return None
+
+
 def tick_label(axis: AxisView, view: ConditionView) -> str:
-    label = short_label(view.condition_id)
+    label = short_label(view.condition_id, capture_hw=condition_capture_hw(view))
     if view.is_baseline and axis.axis == "device_profile":
         return f"{label}\nbaseline"
     return label

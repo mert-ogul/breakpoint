@@ -9,6 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_DIR = ROOT / "benchmarks" / "act-transfer" / "deployment-stress"
+PUSHT_BENCHMARK_DIR = ROOT / "benchmarks" / "diffusion-pusht" / "stress"
 
 pytestmark = pytest.mark.skipif(
     not (ROOT / "pyproject.toml").is_file() or not BENCHMARK_DIR.is_dir(),
@@ -24,6 +25,8 @@ def _markdown_files() -> list[Path]:
     files += sorted((ROOT / "docs").glob("*.md"))
     files += sorted(BENCHMARK_DIR.glob("*.md"))
     files.append(BENCHMARK_DIR / "report" / "report.md")
+    files += sorted(PUSHT_BENCHMARK_DIR.glob("*.md"))
+    files.append(PUSHT_BENCHMARK_DIR / "report" / "report.md")
     return [f for f in files if f.is_file()]
 
 

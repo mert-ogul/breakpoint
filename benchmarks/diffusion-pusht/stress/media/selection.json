@@ -1,0 +1,18 @@
+{
+  "rule": "Take the largest tested constant delay strictly below one chunk span (800 ms), here 600 ms, against the 0 ms baseline of the same latency plan. Among seeds where the baseline succeeded and the stress episode did not, use the lowest env seed. No other seeds were run or compared.",
+  "disclosure": "Selected example, not a typical episode. Aggregate results are shown alongside.",
+  "seed": 6000,
+  "policy_rng_seed": 16000,
+  "n_seeds": 5,
+  "seeds_baseline_succeeded_stress_did_not": [
+    6000,
+    6001,
+    6003
+  ],
+  "seeds_baseline_did_not_succeed_stress_did": [],
+  "baseline_successes": 5,
+  "stress_successes": 2,
+  "chunk_span_ms": 800,
+  "baseline_record": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+  "stress_record": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_600/run_report.json"
+}

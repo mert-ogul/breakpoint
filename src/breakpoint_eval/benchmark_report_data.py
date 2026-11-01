@@ -24,6 +24,7 @@ from breakpoint_eval.artifact_names import (
     require_artifact,
     resolve_artifact,
 )
+from breakpoint_eval.benchmark_protocol import BACKEND_ONNXRUNTIME, BACKEND_PYTORCH
 from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.experiment_summary import wilson_interval
 from breakpoint_eval.latency_trace import contiguous_window_starts
@@ -46,13 +47,19 @@ AXIS_UNITS = {
     "precision": "ONNX graph variant",
     "device_profile": "measured ONNX Runtime chunk latency replayed from a device profile",
 }
-# Required axes always present; h264 is optional and inserts after jpeg when present.
-REQUIRED_AXES = ("latency_ms", "resolution", "jpeg", "precision", "device_profile")
 AXIS_ORDER = ("latency_ms", "resolution", "jpeg", "h264", "precision", "device_profile")
+# phase_config key -> axis name for axes the packaged plans cover.
+PHASE_CONFIG_AXIS_KEYS = (
+    ("latency_ms", "latency_ms"),
+    ("resolution_hw", "resolution"),
+    ("jpeg_qualities", "jpeg"),
+    ("h264_bitrates_kbps", "h264"),
+    ("precision_variants", "precision"),
+    ("device_profiles", "device_profile"),
+)
 RATE_TOLERANCE = 1e-9
 # Axes whose conditions are ordered from mild to severe; the others compare categories.
 ORDERED_AXES = frozenset({"latency_ms", "resolution", "jpeg", "h264"})
-REQUIRED_PROFILES = ("laptop-m3", "rpi5")
 MANIFEST_SCHEMA_VERSION = 1
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 ROW_KEYS = (
@@ -72,15 +79,8 @@ ROW_KEYS = (
     "consumed_delays_s",
 )
 PLAN_KEYS = ("plan_id", "axis", "phase", "conditions", "env_seeds", "policy_rng_seeds")
-# Lock fields the renderer reads, as dotted paths.
-LOCK_PATHS = (
+LOCK_PATHS_COMMON = (
     "candidate",
-    "artifacts.fp32_sha256",
-    "artifacts.int8_sha256",
-    "artifacts.int8_status",
-    "host.ort_providers",
-    "host.intra_op_num_threads",
-    "host.inter_op_num_threads",
     "host.compute_device",
     "source_revision.revision",
     "source_revision.dirty",
@@ -93,6 +93,23 @@ LOCK_PATHS = (
     "trace_window.length",
     "baseline_reuse.fingerprint.latency_s",
 )
+LOCK_PATHS_ONNXRUNTIME = LOCK_PATHS_COMMON + (
+    "artifacts.fp32_sha256",
+    "artifacts.int8_sha256",
+    "artifacts.int8_status",
+    "host.ort_providers",
+    "host.intra_op_num_threads",
+    "host.inter_op_num_threads",
+)
+LOCK_PATHS_PYTORCH = LOCK_PATHS_COMMON + (
+    "backend",
+    "artifacts.checkpoint_files",
+    "artifacts.upstream_agreement_sha256",
+    "artifacts.timing_profile_sha256",
+    "host.torch_num_threads",
+)
+# Retained name for callers/tests that import the ONNX field list.
+LOCK_PATHS = LOCK_PATHS_ONNXRUNTIME
 
 
 class ReportDataError(RuntimeError):
@@ -122,6 +139,7 @@ class ConditionView:
     paired: dict[str, int] | None = None
     saved_contrast: dict[str, Any] | None = None
     ordered_value: float | None = None
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -163,6 +181,23 @@ class ProfileView:
 
 
 @dataclass(frozen=True)
+class TimingView:
+    """Action-generation timing from timing/<device_label>.json (pytorch packages)."""
+
+    device_label: str
+    n: int
+    median_s: float
+    p95_s: float
+    p99_s: float
+    max_s: float
+    torch_version: str | None
+    torch_threads: int | None
+    device: str | None
+    timed_boundary: str | None
+    path: str
+
+
+@dataclass(frozen=True)
 class SharedBaseline:
     """The condition that other axes reuse by reference, found from the lock fingerprint."""
 
@@ -184,10 +219,15 @@ class ReportData:
     rows: list[dict[str, Any]]
     trace_window_length: int = 0
     checks: list[Check] = field(default_factory=list)
+    timings: list[TimingView] = field(default_factory=list)
 
     @property
     def n_runs(self) -> int:
         return len({row["source_report"] for row in self.rows})
+
+    @property
+    def backend(self) -> str:
+        return str(self.lock.get("backend") or BACKEND_ONNXRUNTIME)
 
 
 def load_json(path: Path) -> Any:
@@ -256,25 +296,67 @@ def _manifest_entries(manifest_path: Path, data_dir: Path) -> list[dict[str, Any
     return entries
 
 
+def lock_backend(lock: dict[str, Any]) -> str:
+    return str(lock.get("backend") or BACKEND_ONNXRUNTIME)
+
+
+def lock_paths_for(lock: dict[str, Any]) -> tuple[str, ...]:
+    if lock_backend(lock) == BACKEND_PYTORCH:
+        return LOCK_PATHS_PYTORCH
+    return LOCK_PATHS_ONNXRUNTIME
+
+
+def required_axes_from_lock(lock: dict[str, Any]) -> tuple[str, ...]:
+    """Axes required by the packaged plans' phase config."""
+    phase = lock.get("phase_config") or {}
+    return tuple(axis for key, axis in PHASE_CONFIG_AXIS_KEYS if key in phase)
+
+
+def required_profiles_from_lock(lock: dict[str, Any]) -> tuple[str, ...]:
+    """Device-replay profiles listed in the lock (empty for pytorch)."""
+    if lock_backend(lock) == BACKEND_PYTORCH:
+        return ()
+    identities = (lock.get("artifacts") or {}).get("profile_identities") or {}
+    if isinstance(identities, dict) and identities:
+        return tuple(identities)
+    phase = lock.get("phase_config") or {}
+    profiles = phase.get("device_profiles") or []
+    return tuple(str(p) for p in profiles)
+
+
 def required_inputs(data_dir: Path) -> list[str]:
     """Package files the renderer reads; each must be listed in the manifest."""
     required = ["episodes/episodes.jsonl", "identities/identities.json", "large_evidence.json"]
     try:
-        lock = resolve_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME)
-        validation = [
-            resolve_artifact(data_dir / "validation", name)
-            for name in (
-                EXPORT_VALIDATION_NAME,
-                EXPORT_VALIDATION_INT8_NAME,
-                EXPORT_VALIDATION_INT4_NAME,
-            )
-        ]
+        lock_path = resolve_artifact(data_dir / "protocol", PROTOCOL_LOCK_NAME)
     except ValueError as exc:
         raise ReportDataError(str(exc)) from exc
-    if lock is None:
+    if lock_path is None:
         raise ReportDataError(f"{data_dir / 'protocol'} has no {PROTOCOL_LOCK_NAME}")
-    required.append(lock.relative_to(data_dir).as_posix())
-    required += [p.relative_to(data_dir).as_posix() for p in validation if p is not None]
+    required.append(lock_path.relative_to(data_dir).as_posix())
+    lock = load_json(lock_path)
+    backend = lock_backend(lock)
+    if backend == BACKEND_PYTORCH:
+        for name in ("export_manifest.json", "upstream_agreement.json"):
+            path = data_dir / "validation" / name
+            if path.is_file():
+                required.append(path.relative_to(data_dir).as_posix())
+        required += [
+            p.relative_to(data_dir).as_posix() for p in sorted((data_dir / "timing").glob("*.json"))
+        ]
+    else:
+        try:
+            validation = [
+                resolve_artifact(data_dir / "validation", name)
+                for name in (
+                    EXPORT_VALIDATION_NAME,
+                    EXPORT_VALIDATION_INT8_NAME,
+                    EXPORT_VALIDATION_INT4_NAME,
+                )
+            ]
+        except ValueError as exc:
+            raise ReportDataError(str(exc)) from exc
+        required += [p.relative_to(data_dir).as_posix() for p in validation if p is not None]
     plans = sorted((data_dir / "protocol" / "plans").glob("*.json"))
     if not plans:
         raise ReportDataError(f"{data_dir / 'protocol' / 'plans'} has no plan files")
@@ -283,7 +365,7 @@ def required_inputs(data_dir: Path) -> list[str]:
         p.relative_to(data_dir).as_posix()
         for p in sorted((data_dir / "summaries").glob("*.experiment_summary.json"))
     ]
-    for device in REQUIRED_PROFILES:
+    for device in required_profiles_from_lock(lock):
         required += [f"profiles/{device}/profile.json", f"profiles/{device}/profile_run_meta.json"]
     required += [
         p.relative_to(data_dir).as_posix()
@@ -392,7 +474,7 @@ def validate_structure(
     plans: list[dict[str, Any]], rows: list[dict[str, Any]], lock: dict[str, Any]
 ) -> None:
     """Reject packages that lack the plans, conditions, seeds, rows, or profiles the report uses."""
-    for dotted in LOCK_PATHS:
+    for dotted in lock_paths_for(lock):
         _require_path(lock, dotted, "protocol lock")
     window_length = lock["trace_window"]["length"]
     if not isinstance(window_length, int) or window_length < 1:
@@ -425,10 +507,11 @@ def validate_structure(
                 )
     if len(set(axes)) != len(axes):
         raise ReportDataError(f"duplicate axis in plans: {axes}")
-    missing_required = [a for a in REQUIRED_AXES if a not in axes]
+    required_axes = required_axes_from_lock(lock)
+    missing_required = [a for a in required_axes if a not in axes]
     if missing_required:
         raise ReportDataError(
-            f"plans must cover each of {list(REQUIRED_AXES)} once; missing {missing_required}"
+            f"plans must cover each of {list(required_axes)} once; missing {missing_required}"
         )
     if len({plan["plan_id"] for plan in plans}) != len(plans):
         raise ReportDataError("duplicate plan_id in protocol/plans")
@@ -452,7 +535,7 @@ def validate_structure(
                     f"{plan['plan_id']}/{condition['condition_id']} has no eligible episodes"
                 )
     find_shared_baseline(plans, lock)
-    for device in REQUIRED_PROFILES:
+    for device in required_profiles_from_lock(lock):
         if not any(r["condition_id"] == f"device_profile_{device}_fp32" for r in rows):
             raise ReportDataError(f"no device replay rows for required profile {device}")
 
@@ -478,6 +561,7 @@ def condition_view(
         wilson=wilson_interval(successes, eligible),
         saved_contrast=contrasts.get(entry["condition_id"]),
         ordered_value=(saved or {}).get("ordered_value"),
+        params=dict(entry.get("params") or {}),
     )
 
 
@@ -866,6 +950,101 @@ def validate_h264_rows(rows: list[dict[str, Any]]) -> Check | None:
     )
 
 
+def load_timing_views(data_dir: Path) -> list[TimingView]:
+    """Load timing/*.json into TimingView rows when present."""
+    folder = data_dir / "timing"
+    if not folder.is_dir():
+        return []
+    views: list[TimingView] = []
+    for path in sorted(folder.glob("*.json")):
+        payload = load_json(path)
+        measurements = payload.get("measurements") or {}
+        samples = measurements.get("inference_latency_s")
+        if samples:
+            stats = sample_stats(np.asarray(samples, dtype=np.float64))
+        else:
+            summary = measurements.get("summary") or {}
+            stats = {
+                "count": int(summary.get("count") or measurements.get("n_measured") or 0),
+                "median_s": float(summary["median_s"]),
+                "p95_s": float(summary["p95_s"]),
+                "p99_s": float(summary["p99_s"]),
+                "max_s": float(summary.get("max_s") or summary["p99_s"]),
+            }
+        runtime = payload.get("runtime") or {}
+        device_label = str(payload.get("device_label") or path.stem)
+        views.append(
+            TimingView(
+                device_label=device_label,
+                n=int(stats["count"]),
+                median_s=float(stats["median_s"]),
+                p95_s=float(stats["p95_s"]),
+                p99_s=float(stats["p99_s"]),
+                max_s=float(stats["max_s"]),
+                torch_version=runtime.get("torch_version"),
+                torch_threads=runtime.get("torch_threads"),
+                device=runtime.get("device"),
+                timed_boundary=runtime.get("timed_boundary"),
+                path=f"timing/{path.name}",
+            )
+        )
+    return views
+
+
+def _zero_abs_diff(payload: dict[str, Any]) -> bool:
+    value = payload.get("max_abs_action_difference")
+    return value is not None and float(value) == 0.0
+
+
+def validate_upstream_agreement(data_dir: Path, _lock: dict[str, Any]) -> Check:
+    path = data_dir / "validation" / "upstream_agreement.json"
+    agreement = load_json(path)
+    per_seed = agreement.get("per_seed") or []
+    n = len(per_seed)
+    bitwise = all(row.get("passed") is True and _zero_abs_diff(row) for row in per_seed)
+    determinism = agreement.get("determinism") or {}
+    rerun_ok = determinism.get("passed") is True and _zero_abs_diff(determinism)
+    passed = agreement.get("passed") is True and bitwise and rerun_ok and n > 0
+    return Check(
+        f"Upstream agreement passed on {n} seeds with bitwise-equal actions and rerun determinism",
+        passed,
+        f"passed={agreement.get('passed')!r}; determinism={determinism.get('passed')!r}",
+    )
+
+
+def validate_row_candidates(rows: list[dict[str, Any]], lock: dict[str, Any]) -> Check:
+    expected = lock["candidate"]
+    bad = sorted(
+        {
+            f"{r.get('plan_id')}/{r.get('condition_id')}"
+            for r in rows
+            if r.get("candidate") != expected
+        }
+    )
+    return Check(
+        "Every episode row candidate equals the lock candidate (no pooling)",
+        not bad,
+        f"candidate={expected}" if not bad else f"mismatched: {bad[:5]}",
+    )
+
+
+def validate_timing_checkpoint_hashes(
+    data_dir: Path, lock: dict[str, Any], timings: list[TimingView]
+) -> Check:
+    expected = lock["artifacts"]["checkpoint_files"]
+    problems: list[str] = []
+    for timing in timings:
+        payload = load_json(data_dir / timing.path)
+        recorded = (payload.get("model") or {}).get("checkpoint_files")
+        if recorded != expected:
+            problems.append(timing.device_label)
+    return Check(
+        "Timing profile checkpoint hashes equal the lock checkpoint hashes",
+        not problems,
+        "ok" if not problems else f"mismatch: {problems}",
+    )
+
+
 def load_report_data(data_dir: Path) -> ReportData:
     data_dir = data_dir.resolve()
     manifest_check, manifest_sha = verify_manifest(data_dir)
@@ -890,16 +1069,23 @@ def _load_verified(data_dir: Path, manifest_check: Check, manifest_sha: str) -> 
     window_length = lock["trace_window"]["length"]
     shared = find_shared_baseline(plans, lock)
     axes = [build_axis(data_dir, rows, plan, lock, shared) for plan in plans]
-    profiles = [build_profile(data_dir, d, rows, window_length) for d in REQUIRED_PROFILES]
+    profile_names = required_profiles_from_lock(lock)
+    profiles = [build_profile(data_dir, d, rows, window_length) for d in profile_names]
+    timings = load_timing_views(data_dir)
     checks = [
         manifest_check,
         *validate_rows(axes, rows, plans),
         *validate_summaries(axes),
         validate_baseline_reuse(rows, shared),
         validate_constant_latency(rows),
-        *validate_replay(profiles, rows, window_length),
-        validate_identities(lock, profiles),
     ]
+    if profiles:
+        checks.extend(validate_replay(profiles, rows, window_length))
+        checks.append(validate_identities(lock, profiles))
+    if lock_backend(lock) == BACKEND_PYTORCH:
+        checks.append(validate_upstream_agreement(data_dir, lock))
+        checks.append(validate_row_candidates(rows, lock))
+        checks.append(validate_timing_checkpoint_hashes(data_dir, lock, timings))
     int4_check = validate_int4_episodes(rows)
     if int4_check is not None:
         checks.append(int4_check)
@@ -907,14 +1093,20 @@ def _load_verified(data_dir: Path, manifest_check: Check, manifest_sha: str) -> 
     if h264_check is not None:
         checks.append(h264_check)
     validation_files = {}
-    for name in (
-        EXPORT_VALIDATION_NAME,
-        EXPORT_VALIDATION_INT8_NAME,
-        EXPORT_VALIDATION_INT4_NAME,
-    ):
-        path = resolve_artifact(data_dir / "validation", name)
-        if path is not None:
-            validation_files[name] = load_json(path)
+    if lock_backend(lock) == BACKEND_PYTORCH:
+        for name in ("export_manifest.json", "upstream_agreement.json"):
+            path = data_dir / "validation" / name
+            if path.is_file():
+                validation_files[name] = load_json(path)
+    else:
+        for name in (
+            EXPORT_VALIDATION_NAME,
+            EXPORT_VALIDATION_INT8_NAME,
+            EXPORT_VALIDATION_INT4_NAME,
+        ):
+            path = resolve_artifact(data_dir / "validation", name)
+            if path is not None:
+                validation_files[name] = load_json(path)
     return ReportData(
         data_dir=data_dir,
         axes=axes,
@@ -927,4 +1119,5 @@ def _load_verified(data_dir: Path, manifest_check: Check, manifest_sha: str) -> 
         rows=rows,
         trace_window_length=window_length,
         checks=checks,
+        timings=timings,
     )

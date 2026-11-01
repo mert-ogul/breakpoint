@@ -1,6 +1,6 @@
 # Contributing
 
-Breakpoint is an experimental evaluation harness for one ACT cube-transfer task. Issues and small pull requests that fix bugs, tests or documentation are welcome. New policies, tasks or stress axes are out of scope for this release.
+Breakpoint is an experimental evaluation harness for pinned Hub candidates (ACT transfer is packaged; Diffusion PushT is documented on this branch). Issues and small pull requests that fix bugs, tests or documentation are welcome. New candidates need their own config, package and report.
 
 ## Setup
 

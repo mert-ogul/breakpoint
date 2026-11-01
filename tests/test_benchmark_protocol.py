@@ -12,7 +12,10 @@ from pathlib import Path
 import pytest
 
 from breakpoint_eval.benchmark_protocol import (
+    BACKEND_ONNXRUNTIME,
+    BACKEND_PYTORCH,
     assert_lock_matches,
+    backend_and_variant_from_lock,
     build_full_axis_plans,
     build_smoke_plan,
     condition_is_shared_baseline,
@@ -22,12 +25,15 @@ from breakpoint_eval.benchmark_protocol import (
     load_benchmark_config,
     resolve_h264_support,
     resolve_profile_by_identity,
+    resolve_pytorch_timing_profile,
+    run_report_problem,
 )
 from breakpoint_eval.experiment_plan import (
     ExperimentAxis,
     ExperimentPlan,
     build_seed_pairs,
     h264_conditions,
+    latency_conditions,
 )
 from breakpoint_eval.latency_trace import (
     EndOfTraceBehavior,
@@ -40,6 +46,7 @@ from breakpoint_eval.source_revision import read_source_revision
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "configs" / "act-transfer.json"
+DIFFUSION_CONFIG_PATH = ROOT / "configs" / "diffusion-pusht.json"
 
 
 def test_config_loads() -> None:
@@ -307,6 +314,7 @@ def test_freeze_protocol_lock_includes_int4_fields(tmp_path: Path) -> None:
         phase="smoke",
     )
     art = lock["artifacts"]
+    assert lock["backend"] == BACKEND_ONNXRUNTIME
     assert art["int4_path"] == str(tmp_path / "int4.onnx")
     assert art["int4_sha256"] == "d" * 64
     assert art["int4_status"] == "ok"
@@ -630,7 +638,13 @@ def test_condition_report_problem_h264_summary_fields(
             summary["cameras"]["top"][key] = override[key]
     path = tmp_path / "run_report.json"
     path.write_text(json.dumps(report), encoding="utf-8")
-    problem = condition_report_problem(path, plan, plan.conditions[0])
+    problem = condition_report_problem(
+        path,
+        plan,
+        plan.conditions[0],
+        backend=BACKEND_ONNXRUNTIME,
+        variant_label="onnx_fp32",
+    )
     assert problem is not None
     assert match in problem
 
@@ -639,7 +653,280 @@ def test_condition_report_problem_h264_ok(tmp_path: Path) -> None:
     plan = _h264_plan()
     path = tmp_path / "run_report.json"
     path.write_text(json.dumps(_h264_report(plan)), encoding="utf-8")
-    assert condition_report_problem(path, plan, plan.conditions[0]) is None
+    assert (
+        condition_report_problem(
+            path,
+            plan,
+            plan.conditions[0],
+            backend=BACKEND_ONNXRUNTIME,
+            variant_label="onnx_fp32",
+        )
+        is None
+    )
+
+
+def test_backend_and_variant_from_lock() -> None:
+    backend, variant = backend_and_variant_from_lock(
+        {
+            "backend": "pytorch",
+            "baseline_reuse": {"fingerprint": {"variant_label": "pytorch_fp32"}},
+            "artifacts": {},
+        }
+    )
+    assert backend == BACKEND_PYTORCH
+    assert variant == "pytorch_fp32"
+    backend, variant = backend_and_variant_from_lock(
+        {
+            "baseline_reuse": {"fingerprint": {"variant_label": "onnx_fp32"}},
+            "artifacts": {"fp32_sha256": "abc"},
+        }
+    )
+    assert backend == BACKEND_ONNXRUNTIME
+    assert variant == "onnx_fp32"
+    with pytest.raises(ValueError, match="variant_label"):
+        backend_and_variant_from_lock({"backend": "pytorch", "artifacts": {}})
+    with pytest.raises(ValueError, match="backend"):
+        backend_and_variant_from_lock(
+            {
+                "baseline_reuse": {"fingerprint": {"variant_label": "onnx_fp32"}},
+                "artifacts": {},
+            }
+        )
+
+
+def test_diffusion_config_loads() -> None:
+    cfg = load_benchmark_config(DIFFUSION_CONFIG_PATH)
+    assert cfg["protocol_name"] == "diffusion_pusht_stress"
+    assert cfg["protocol_version"] == "0.1"
+    assert cfg["candidate"] == "diffusion_pusht"
+    assert cfg["backend"] == "pytorch"
+    assert cfg["image"]["native_hw"] == [96, 96]
+    assert cfg["host"]["compute_device"] == "cpu"
+    assert cfg["host"]["torch_num_threads"] == 4
+    assert cfg["baseline_reuse"]["fingerprint"]["variant_label"] == "pytorch_fp32"
+    assert "precision_variants" not in cfg["smoke"]
+    assert "h264_bitrates_kbps" not in cfg["full"]
+    assert "device_profiles" not in cfg["full"]
+
+
+def test_diffusion_plans_latency_resolution_jpeg_only() -> None:
+    cfg = load_benchmark_config(DIFFUSION_CONFIG_PATH)
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
+
+    fake = ResolvedArtifacts(export_dir=Path("/tmp/diffusion-export"), backend=BACKEND_PYTORCH)
+    smoke = build_smoke_plan(cfg, fake)
+    assert [s.env_seed for s in smoke.seed_pairs] == [4000, 4001, 4002, 4003, 4004]
+    assert [s.policy_rng_seed for s in smoke.seed_pairs] == [14000, 14001, 14002, 14003, 14004]
+    smoke_ids = [c.condition_id for c in smoke.conditions]
+    assert smoke_ids == ["latency_ms_0", "latency_ms_800", "resolution_capture_24x24", "jpeg_q10"]
+    assert not any(c.axis == ExperimentAxis.PRECISION.value for c in smoke.conditions)
+    assert not any(c.axis == ExperimentAxis.H264.value for c in smoke.conditions)
+
+    plans = build_full_axis_plans(cfg, fake)
+    assert [p.axis for p in plans] == [
+        ExperimentAxis.LATENCY_MS.value,
+        ExperimentAxis.RESOLUTION.value,
+        ExperimentAxis.JPEG.value,
+    ]
+    assert [c.params["latency_ms"] for c in plans[0].conditions] == [0, 100, 200, 400, 600, 800]
+    res = plans[1]
+    assert [c.params["capture_hw"] for c in res.conditions] == [
+        [96, 96],
+        [48, 48],
+        [32, 32],
+        [24, 24],
+    ]
+    assert res.conditions[0].condition_id == "resolution_native"
+    assert res.conditions[0].params["native_hw"] == [96, 96]
+    jpeg = plans[2]
+    assert [c.condition_id for c in jpeg.conditions] == [
+        "jpeg_bypass",
+        "jpeg_q95",
+        "jpeg_q75",
+        "jpeg_q50",
+        "jpeg_q25",
+        "jpeg_q10",
+    ]
+
+
+def _write_diffusion_timing_profile(
+    path: Path,
+    *,
+    candidate: str = "diffusion_pusht",
+    checkpoint_files: dict[str, str] | None = None,
+    kind: str = "action_generation_timing",
+) -> Path:
+    payload = {
+        "kind": kind,
+        "candidate": candidate,
+        "device_label": "laptop-m3",
+        "model": {
+            "variant_label": "pytorch_fp32",
+            "checkpoint_files": checkpoint_files
+            or {"config.json": "aa", "model.safetensors": "bb"},
+        },
+        "measurements": {"inference_latency_s": [0.1] * 40},
+    }
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    return path
+
+
+def test_pytorch_timing_profile_refuses_device_profile_and_wrong_candidate(tmp_path: Path) -> None:
+    hashes = {"config.json": "aa", "model.safetensors": "bb"}
+    good = _write_diffusion_timing_profile(tmp_path / "good.json", checkpoint_files=hashes)
+    assert (
+        resolve_pytorch_timing_profile(
+            tmp_path, candidate="diffusion_pusht", checkpoint_files=hashes
+        )
+        == good
+    )
+
+    device_dir = tmp_path / "with_device"
+    device_dir.mkdir()
+    _write_diffusion_timing_profile(device_dir / "timing.json", checkpoint_files=hashes)
+    _write_diffusion_timing_profile(
+        device_dir / "device.json",
+        checkpoint_files=hashes,
+        kind="device_profile",
+    )
+    with pytest.raises(ValueError, match="device profile|non-timing"):
+        resolve_pytorch_timing_profile(
+            device_dir, candidate="diffusion_pusht", checkpoint_files=hashes
+        )
+
+    wrong_dir = tmp_path / "wrong_candidate"
+    wrong_dir.mkdir()
+    _write_diffusion_timing_profile(
+        wrong_dir / "other.json",
+        candidate="act_aloha_transfer",
+        checkpoint_files=hashes,
+    )
+    with pytest.raises(ValueError, match="candidate"):
+        resolve_pytorch_timing_profile(
+            wrong_dir, candidate="diffusion_pusht", checkpoint_files=hashes
+        )
+
+
+def test_pytorch_lock_resume_refuses_checkpoint_or_threads_change(tmp_path: Path) -> None:
+    cfg = load_benchmark_config(DIFFUSION_CONFIG_PATH)
+    host = host_settings_from_config(cfg)
+    from breakpoint_eval.benchmark_protocol import ResolvedArtifacts
+
+    arts = ResolvedArtifacts(
+        export_dir=tmp_path,
+        backend=BACKEND_PYTORCH,
+        checkpoint_files={"config.json": "aa", "model.safetensors": "bb"},
+        upstream_agreement_path=tmp_path / "upstream_agreement.json",
+        upstream_agreement_sha256="a" * 64,
+        timing_profile_path=tmp_path / "timing.json",
+        timing_profile_sha256="b" * 64,
+    )
+    lock = freeze_protocol_lock(
+        config=cfg,
+        artifacts=arts,
+        source_revision={"kind": "git", "revision": "abc"},
+        host=host,
+        phase="smoke",
+    )
+    assert lock["backend"] == "pytorch"
+    assert lock["host"]["torch_num_threads"] == 4
+    assert "ort_providers" not in lock["host"]
+    assert lock["artifacts"]["checkpoint_files"] == {
+        "config.json": "aa",
+        "model.safetensors": "bb",
+    }
+
+    changed_hash = json.loads(json.dumps(lock))
+    changed_hash["artifacts"]["checkpoint_files"] = {
+        "config.json": "cc",
+        "model.safetensors": "bb",
+    }
+    with pytest.raises(ValueError, match="resume refused"):
+        assert_lock_matches(lock, changed_hash)
+
+    changed_threads = json.loads(json.dumps(lock))
+    changed_threads["host"]["torch_num_threads"] = 8
+    with pytest.raises(ValueError, match="resume refused"):
+        assert_lock_matches(lock, changed_threads)
+
+
+def test_pytorch_run_report_problem_accepts_pytorch_rejects_onnx(tmp_path: Path) -> None:
+    plan = ExperimentPlan(
+        plan_id="diffusion_fixture",
+        candidate="diffusion_pusht",
+        phase="exploratory",
+        n_episodes=1,
+        axis=ExperimentAxis.LATENCY_MS.value,
+        seed_pairs=build_seed_pairs(1, env_seed_start=6000, policy_seed_offset=10000),
+        conditions=latency_conditions((0,)),
+        baseline_condition_id="latency_ms_0",
+    )
+    pair = plan.seed_pairs[0]
+    base_ep = {
+        "episode_index": 0,
+        "seed": pair.env_seed,
+        "policy_rng_seed": pair.policy_rng_seed,
+        "outcome": "success",
+        "success": True,
+        "runtime_error": None,
+        "n_control_steps": 10,
+        "latency_mode": "constant",
+        "latency_s": 0.0,
+        "image_mode": "native",
+    }
+    pytorch_report = {
+        "provenance": {
+            "candidate": plan.candidate,
+            "env_created": True,
+            "env_seeds": [pair.env_seed],
+            "policy_rng_seeds": [pair.policy_rng_seed],
+            "latency_mode": "constant",
+            "policy_backend": "pytorch",
+            "onnx_runtime": None,
+        },
+        "summary": {"n_episodes_total": 1, "n_runtime_error": 0},
+        "episodes": [base_ep],
+    }
+    path = tmp_path / "run_report.json"
+    path.write_text(json.dumps(pytorch_report), encoding="utf-8")
+    assert (
+        condition_report_problem(
+            path,
+            plan,
+            plan.conditions[0],
+            backend=BACKEND_PYTORCH,
+            variant_label="pytorch_fp32",
+        )
+        is None
+    )
+    assert (
+        run_report_problem(
+            path,
+            plan=plan,
+            expected_runtime={
+                "latency_mode": "constant",
+                "latency_s": 0.0,
+                "image_mode": "native",
+                "variant_label": "pytorch_fp32",
+                "policy_backend": "pytorch",
+            },
+        )
+        is None
+    )
+
+    onnx_report = json.loads(json.dumps(pytorch_report))
+    onnx_report["provenance"]["policy_backend"] = "onnxruntime"
+    onnx_report["provenance"]["onnx_runtime"] = {"variant_label": "onnx_fp32"}
+    path.write_text(json.dumps(onnx_report), encoding="utf-8")
+    problem = condition_report_problem(
+        path,
+        plan,
+        plan.conditions[0],
+        backend=BACKEND_PYTORCH,
+        variant_label="pytorch_fp32",
+    )
+    assert problem is not None
+    assert "pytorch" in problem or "onnx_runtime" in problem
 
 
 def test_scripts_help_and_dry_run() -> None:

@@ -1,0 +1,31 @@
+{
+  "axis": "jpeg",
+  "condition_id": "jpeg_q95",
+  "device": "cpu",
+  "env_seeds": [
+    6000,
+    6001,
+    6002,
+    6003,
+    6004
+  ],
+  "latency_window_length": null,
+  "latency_window_starts": null,
+  "onnx_model": null,
+  "ort_inter_op_num_threads": null,
+  "ort_intra_op_num_threads": null,
+  "ort_providers": null,
+  "params": {
+    "bypass": false,
+    "jpeg_quality": 95,
+    "mode": "jpeg"
+  },
+  "policy_rng_seeds": [
+    16000,
+    16001,
+    16002,
+    16003,
+    16004
+  ],
+  "torch_threads": 4
+}

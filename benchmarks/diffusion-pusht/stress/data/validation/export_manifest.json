@@ -1,0 +1,71 @@
+{
+  "act_timings_reused": false,
+  "candidate": "diffusion_pusht",
+  "checkpoint_dir": "/Users/mertogul/Desktop/breakpoint-1/.cache/huggingface/models--lerobot--diffusion_pusht/snapshots/202c8695947a458d8ce08ce1c0219f2588d60b33",
+  "checkpoint_files": {
+    ".gitattributes": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+    "README.md": "122b7d5067abfaf7e2ac44e6ab184bee8fb5c58d777e82d5c92bd3849dd308c3",
+    "config.json": "50fce05c2c4cfd170d16feac4274ebf2e6f730f186f47ba816bfbdefaac44163",
+    "eval_info.json": "94ec32a9c500e284dc7cdf13fc9b5a3f1a86fd25f898098f799ef254ee917613",
+    "model.safetensors": "995d14d35db57d95c35ad9704c3d79c8612b7bc45f3877e5c46c2cdc516856a8",
+    "replay.mp4": "e956db76b7b6c4966da78f9e73bdbeed6f73fac34a865e9a238c535b085c9348",
+    "train_config.json": "abf2cecb46b0ae8b0f67d9ee713cd16b0d9fbcc7b0ef79042b72661975d107b5",
+    "training_curves.png": "165332d8e66d16c940509863b875b93881dfafb542319620d67139a0ae33b97a"
+  },
+  "control_period_s": 0.1,
+  "device": "cpu",
+  "device_profile": {
+    "pytorch_timing_boundary": {
+      "includes_all_denoising_iterations": true,
+      "includes_noise_scheduler_loop": true,
+      "includes_observation_encode": true,
+      "includes_unnormalize": true,
+      "note": "Timed boundary is one fresh Diffusion Policy action-generation call in PyTorch, including observation encoding, the full noise-scheduler loop, and unnormalize. Not a single UNet forward.",
+      "runtime_label": "pytorch_full_action_generation",
+      "single_unet_pass_only": false,
+      "timed_boundary": "pytorch_generate_actions_full_denoise"
+    },
+    "reason": "No ORT action-chunk model to profile. Use PyTorch full action-generation timing (pytorch_generate_actions_full_denoise) or a explicitly labeled mixed UNet+scheduler path. Do not copy ACT profile latencies.",
+    "status": "unsupported"
+  },
+  "env_task": "PushT-v0",
+  "env_type": "pusht",
+  "hub_repo": "lerobot/diffusion_pusht",
+  "hub_revision": "202c8695947a458d8ce08ce1c0219f2588d60b33",
+  "inference": {
+    "horizon": 16,
+    "image_features": [
+      "observation.image"
+    ],
+    "n_action_steps": 8,
+    "n_obs_steps": 2,
+    "noise_scheduler_type": "DDPM",
+    "note": "Policy inference latency is one fresh action-generation call including all denoising iterations. Timing a single denoising network pass alone is not policy inference latency.",
+    "num_inference_steps": 100,
+    "num_train_timesteps": 100,
+    "policy_type": "diffusion",
+    "prediction_type": "epsilon",
+    "timed_boundary_default": "pytorch_generate_actions_full_denoise"
+  },
+  "lerobot_commit": "3c0a209f9fac4d2a57617e686a7f2a2309144ba2",
+  "onnx_export": {
+    "reason": "Diffusion Policy fresh inference is a multi-step denoising loop (observation encode + noise scheduler + UNet \u00d7 num_inference_steps + unnormalize). A single-shot ONNX action-chunk graph matching that boundary is not supported. PyTorch simulation axes remain available. If only the denoising UNet is exported later, profile the Python scheduler loop with it and label the runtime as mixed \u2014 never treat one UNet pass as policy latency.",
+    "status": "unsupported",
+    "variants": []
+  },
+  "policy_type": "diffusion",
+  "precision_recipes": {
+    "fp16": "unsupported",
+    "int4_weight_only": "unsupported",
+    "int8": "unsupported",
+    "onnx_fp32": "unsupported"
+  },
+  "pytorch_simulation_axes": {
+    "available": true,
+    "camera_degrade": true,
+    "combined_stress": true,
+    "latency": true,
+    "note": "Stress sweeps may use the PyTorch DiffusionPolicy adapter."
+  },
+  "torch_dtype": "torch.float32"
+}

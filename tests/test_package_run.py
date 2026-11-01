@@ -136,6 +136,16 @@ class SyntheticRun:
             "schema_version": 1,
             "protocol_name": "act_deployment_stress",
             "protocol_version": "0.1",
+            "backend": "onnxruntime",
+            "baseline_reuse": {
+                "enabled": True,
+                "fingerprint": {
+                    "latency_s": 0.0,
+                    "image_mode": "native",
+                    "variant_label": "onnx_fp32",
+                    "no_device_profile": True,
+                },
+            },
             "artifacts": {
                 "export_dir": str(self.export),
                 "fp32_path": str(self.export / "act_chunk_fp32.onnx"),

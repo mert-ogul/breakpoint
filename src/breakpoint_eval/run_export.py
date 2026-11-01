@@ -522,7 +522,7 @@ def run_export(req: ExportRequest) -> Path:
         "export_validation": export_validation,
         "notes": [
             "Precision labels alone never drive results; each variant uses its weights/runtime.",
-            "INT8 recipe is static QDQ; not silently replaced after failure.",
+            "INT8 recipe is static QDQ.",
             "INT4 is weight-only MatMulNBits when supported; not native INT4 activation timing.",
             "Quantized success-rate preservation is not required; valid labeled compute is.",
             "Reference chunk NPZ keys are sample_id values (seed{seed}_t{step}).",

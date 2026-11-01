@@ -23,13 +23,16 @@ from breakpoint_eval.artifact_names import (  # noqa: E402
     resolve_artifact,
 )
 from breakpoint_eval.benchmark_protocol import (  # noqa: E402
+    BACKEND_PYTORCH,
     DEFAULT_CONFIG_REL,
     assert_lock_matches,
+    baseline_variant_from_config,
     build_full_axis_plans,
     build_smoke_plan,
     condition_completed,
     condition_is_shared_baseline,
     condition_report_problem,
+    config_backend,
     describe_plan_commands,
     freeze_protocol_lock,
     host_settings_from_config,
@@ -105,16 +108,20 @@ def _execute_condition(
     artifacts,
     shared_baseline: Path | None,
     baseline_report: Path | None,
+    backend: str,
+    variant_label: str,
 ) -> dict:
     condition_dir.mkdir(parents=True, exist_ok=True)
     if (
         shared_baseline is not None
         and baseline_report is not None
-        and condition_is_shared_baseline(condition)
+        and condition_is_shared_baseline(condition, baseline_variant=variant_label)
         and condition.condition_id != "latency_ms_0"
         and baseline_report.is_file()
     ):
-        problem = shared_baseline_problem(shared_baseline, plan=plan)
+        problem = shared_baseline_problem(
+            shared_baseline, plan=plan, backend=backend, variant_label=variant_label
+        )
         if problem is not None:
             LOGGER.error("condition %s: referenced baseline: %s", condition.condition_id, problem)
             return {
@@ -138,8 +145,8 @@ def _execute_condition(
         shutil.copy2(baseline_report, dest)
         return {**ref, "report": str(dest)}
 
-    onnx_model = artifacts.fp32_path
-    if condition.axis == "precision":
+    onnx_model = None if backend == BACKEND_PYTORCH else artifacts.fp32_path
+    if backend != BACKEND_PYTORCH and condition.axis == "precision":
         variant = condition.params.get("variant_label")
         if variant == "int8":
             if artifacts.int8_status != "ok" or artifacts.int8_path is None:
@@ -177,10 +184,12 @@ def _execute_condition(
         onnx_model=onnx_model,
         latency_profile=None,
         save_video=False,
-        ort_providers=list(host.ort_providers),
+        ort_providers=list(host.ort_providers) if host.ort_providers is not None else None,
         ort_intra_op_num_threads=host.intra_op_num_threads,
         ort_inter_op_num_threads=host.inter_op_num_threads,
     )
+    if host.torch_num_threads is not None:
+        req = dataclasses.replace(req, torch_threads=host.torch_num_threads)
     planned = {
         "condition_id": condition.condition_id,
         "axis": condition.axis,
@@ -192,6 +201,7 @@ def _execute_condition(
         "ort_providers": host.ort_providers,
         "ort_intra_op_num_threads": host.intra_op_num_threads,
         "ort_inter_op_num_threads": host.inter_op_num_threads,
+        "torch_threads": host.torch_num_threads,
         "latency_window_starts": req.latency_window_starts,
         "latency_window_length": req.latency_window_length,
     }
@@ -213,7 +223,9 @@ def _execute_condition(
         )
         return {"condition_id": condition.condition_id, "status": "errored", "error": err}
 
-    problem = condition_report_problem(report, plan, condition)
+    problem = condition_report_problem(
+        report, plan, condition, backend=backend, variant_label=variant_label
+    )
     if problem is not None:
         LOGGER.error("condition %s incomplete: %s", condition.condition_id, problem)
         (condition_dir / "condition_error.json").write_text(
@@ -275,12 +287,15 @@ def main(argv: list[str] | None = None) -> int:
         host = host_settings_from_config(config)
         if host.compute_device != "cpu":
             raise ValueError("the protocol requires host.compute_device=cpu (no MPS inheritance)")
+        backend = config_backend(config)
+        variant_label = baseline_variant_from_config(config)
 
         overrides: dict[str, Path] = {}
-        if args.profile_laptop is not None:
-            overrides["laptop-m3"] = args.profile_laptop.resolve()
-        if args.profile_rpi5 is not None:
-            overrides["rpi5"] = args.profile_rpi5.resolve()
+        if backend != BACKEND_PYTORCH:
+            if args.profile_laptop is not None:
+                overrides["laptop-m3"] = args.profile_laptop.resolve()
+            if args.profile_rpi5 is not None:
+                overrides["rpi5"] = args.profile_rpi5.resolve()
 
         artifacts = resolve_benchmark_artifacts(
             config,
@@ -288,7 +303,9 @@ def main(argv: list[str] | None = None) -> int:
             export_dir=args.export_dir.resolve() if args.export_dir else None,
             profile_overrides=overrides or None,
         )
-        h264_support = resolve_h264_support(config)
+        h264_support = (
+            resolve_h264_support(config) if isinstance(config.get("h264"), dict) else None
+        )
         source_revision = read_source_revision(repo_root)
         lock = freeze_protocol_lock(
             config=config,
@@ -327,33 +344,36 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
-        if artifacts.int8_status != "ok":
-            print(
-                json.dumps(
-                    {
-                        "int8": {
-                            "status": artifacts.int8_status,
-                            "detail": artifacts.int8_detail,
-                            "measurements_fabricated": False,
-                        }
-                    },
-                    indent=2,
+        phase_cfg = config.get(args.phase) or {}
+        if "precision_variants" in phase_cfg:
+            if artifacts.int8_status != "ok":
+                print(
+                    json.dumps(
+                        {
+                            "int8": {
+                                "status": artifacts.int8_status,
+                                "detail": artifacts.int8_detail,
+                                "measurements_fabricated": False,
+                            }
+                        },
+                        indent=2,
+                    )
                 )
-            )
-        if artifacts.int4_status != "ok":
-            print(
-                json.dumps(
-                    {
-                        "int4": {
-                            "status": artifacts.int4_status,
-                            "detail": artifacts.int4_detail,
-                            "measurements_fabricated": False,
-                        }
-                    },
-                    indent=2,
+            if artifacts.int4_status != "ok":
+                print(
+                    json.dumps(
+                        {
+                            "int4": {
+                                "status": artifacts.int4_status,
+                                "detail": artifacts.int4_detail,
+                                "measurements_fabricated": False,
+                            }
+                        },
+                        indent=2,
+                    )
                 )
-            )
-        print(json.dumps({"h264": h264_support}, indent=2))
+        if h264_support is not None:
+            print(json.dumps({"h264": h264_support}, indent=2))
         print("# dry-run complete: no run-result directories created, no episodes evaluated")
         return 0
 
@@ -375,7 +395,8 @@ def main(argv: list[str] | None = None) -> int:
         lock_path.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         shutil.copy2(args.config.resolve(), out / BENCHMARK_CONFIG_NAME)
 
-    if artifacts.int8_status != "ok":
+    phase_cfg = config.get(args.phase) or {}
+    if "precision_variants" in phase_cfg and artifacts.int8_status != "ok":
         write_unsupported_record(
             out,
             stem="int8",
@@ -384,9 +405,9 @@ def main(argv: list[str] | None = None) -> int:
             path=artifacts.int8_path,
             sha256=artifacts.int8_sha256,
         )
-    phase_cfg = config.get(args.phase) or {}
     if (
-        "int4_weight_only" in phase_cfg.get("precision_variants", [])
+        "precision_variants" in phase_cfg
+        and "int4_weight_only" in phase_cfg.get("precision_variants", [])
         and artifacts.int4_status != "ok"
     ):
         write_unsupported_record(
@@ -397,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
             path=artifacts.int4_path,
             sha256=artifacts.int4_sha256,
         )
-    if config.get("h264") is not None and h264_support.get("status") != "ok":
+    if h264_support is not None and h264_support.get("status") != "ok":
         write_unsupported_record(
             out,
             stem="h264",
@@ -421,7 +442,12 @@ def main(argv: list[str] | None = None) -> int:
         for condition in plan.conditions:
             condition_dir = axis_out / "conditions" / condition.condition_id
             if args.resume and condition_completed(
-                condition_dir, plan=plan, condition=condition, shared_baseline_dir=shared
+                condition_dir,
+                plan=plan,
+                condition=condition,
+                shared_baseline_dir=shared,
+                backend=backend,
+                variant_label=variant_label,
             ):
                 LOGGER.info("resume skip completed %s", condition.condition_id)
                 report = condition_dir / "run_report.json"
@@ -438,6 +464,8 @@ def main(argv: list[str] | None = None) -> int:
                 artifacts=artifacts,
                 shared_baseline=shared,
                 baseline_report=baseline_report if baseline_report.is_file() else None,
+                backend=backend,
+                variant_label=variant_label,
             )
             records.append(rec)
             incomplete_condition = rec.get("status") in {"errored", "incomplete"}

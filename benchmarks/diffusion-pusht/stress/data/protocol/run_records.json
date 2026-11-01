@@ -1,0 +1,575 @@
+[
+  {
+    "plan_id": "v0.1_full_latency",
+    "records": [
+      {
+        "condition_id": "latency_ms_0",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+        "planned": {
+          "condition_id": "latency_ms_0",
+          "axis": "latency_ms",
+          "params": {
+            "latency_ms": 0,
+            "latency_s": 0.0,
+            "precision_held": "onnx_fp32",
+            "timing_schedule": "constant_added_inference_delay"
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "latency_ms_100",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_100/run_report.json",
+        "planned": {
+          "condition_id": "latency_ms_100",
+          "axis": "latency_ms",
+          "params": {
+            "latency_ms": 100,
+            "latency_s": 0.1,
+            "precision_held": "onnx_fp32",
+            "timing_schedule": "constant_added_inference_delay"
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "latency_ms_200",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_200/run_report.json",
+        "planned": {
+          "condition_id": "latency_ms_200",
+          "axis": "latency_ms",
+          "params": {
+            "latency_ms": 200,
+            "latency_s": 0.2,
+            "precision_held": "onnx_fp32",
+            "timing_schedule": "constant_added_inference_delay"
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "latency_ms_400",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_400/run_report.json",
+        "planned": {
+          "condition_id": "latency_ms_400",
+          "axis": "latency_ms",
+          "params": {
+            "latency_ms": 400,
+            "latency_s": 0.4,
+            "precision_held": "onnx_fp32",
+            "timing_schedule": "constant_added_inference_delay"
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "latency_ms_600",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_600/run_report.json",
+        "planned": {
+          "condition_id": "latency_ms_600",
+          "axis": "latency_ms",
+          "params": {
+            "latency_ms": 600,
+            "latency_s": 0.6,
+            "precision_held": "onnx_fp32",
+            "timing_schedule": "constant_added_inference_delay"
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "latency_ms_800",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_800/run_report.json",
+        "planned": {
+          "condition_id": "latency_ms_800",
+          "axis": "latency_ms",
+          "params": {
+            "latency_ms": 800,
+            "latency_s": 0.8,
+            "precision_held": "onnx_fp32",
+            "timing_schedule": "constant_added_inference_delay"
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      }
+    ]
+  },
+  {
+    "plan_id": "v0.1_full_resolution",
+    "records": [
+      {
+        "status": "referenced_baseline",
+        "reference_report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0/run_report.json",
+        "reference_dir": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0",
+        "condition_id": "resolution_native",
+        "by_explicit_reference_only": true,
+        "measurements_fabricated": false,
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_native/run_report.json"
+      },
+      {
+        "condition_id": "resolution_capture_48x48",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_48x48/run_report.json",
+        "planned": {
+          "condition_id": "resolution_capture_48x48",
+          "axis": "resolution",
+          "params": {
+            "mode": "downsample",
+            "native_hw": [
+              96,
+              96
+            ],
+            "capture_hw": [
+              48,
+              48
+            ],
+            "effective_policy_hw": [
+              96,
+              96
+            ]
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "resolution_capture_32x32",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_32x32/run_report.json",
+        "planned": {
+          "condition_id": "resolution_capture_32x32",
+          "axis": "resolution",
+          "params": {
+            "mode": "downsample",
+            "native_hw": [
+              96,
+              96
+            ],
+            "capture_hw": [
+              32,
+              32
+            ],
+            "effective_policy_hw": [
+              96,
+              96
+            ]
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "resolution_capture_24x24",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_24x24/run_report.json",
+        "planned": {
+          "condition_id": "resolution_capture_24x24",
+          "axis": "resolution",
+          "params": {
+            "mode": "downsample",
+            "native_hw": [
+              96,
+              96
+            ],
+            "capture_hw": [
+              24,
+              24
+            ],
+            "effective_policy_hw": [
+              96,
+              96
+            ]
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      }
+    ]
+  },
+  {
+    "plan_id": "v0.1_full_jpeg",
+    "records": [
+      {
+        "status": "referenced_baseline",
+        "reference_report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0/run_report.json",
+        "reference_dir": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0",
+        "condition_id": "jpeg_bypass",
+        "by_explicit_reference_only": true,
+        "measurements_fabricated": false,
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_bypass/run_report.json"
+      },
+      {
+        "condition_id": "jpeg_q95",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json",
+        "planned": {
+          "condition_id": "jpeg_q95",
+          "axis": "jpeg",
+          "params": {
+            "mode": "jpeg",
+            "jpeg_quality": 95,
+            "bypass": false
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "jpeg_q75",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json",
+        "planned": {
+          "condition_id": "jpeg_q75",
+          "axis": "jpeg",
+          "params": {
+            "mode": "jpeg",
+            "jpeg_quality": 75,
+            "bypass": false
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "jpeg_q50",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json",
+        "planned": {
+          "condition_id": "jpeg_q50",
+          "axis": "jpeg",
+          "params": {
+            "mode": "jpeg",
+            "jpeg_quality": 50,
+            "bypass": false
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "jpeg_q25",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json",
+        "planned": {
+          "condition_id": "jpeg_q25",
+          "axis": "jpeg",
+          "params": {
+            "mode": "jpeg",
+            "jpeg_quality": 25,
+            "bypass": false
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      },
+      {
+        "condition_id": "jpeg_q10",
+        "status": "complete",
+        "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json",
+        "planned": {
+          "condition_id": "jpeg_q10",
+          "axis": "jpeg",
+          "params": {
+            "mode": "jpeg",
+            "jpeg_quality": 10,
+            "bypass": false
+          },
+          "env_seeds": [
+            6000,
+            6001,
+            6002,
+            6003,
+            6004
+          ],
+          "policy_rng_seeds": [
+            16000,
+            16001,
+            16002,
+            16003,
+            16004
+          ],
+          "onnx_model": null,
+          "device": "cpu",
+          "ort_providers": null,
+          "ort_intra_op_num_threads": null,
+          "ort_inter_op_num_threads": null,
+          "torch_threads": 4,
+          "latency_window_starts": null,
+          "latency_window_length": null
+        }
+      }
+    ]
+  }
+]

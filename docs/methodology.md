@@ -1,6 +1,6 @@
 # Methodology
 
-This page defines how Breakpoint injects stress, validates the model and turns episodes into numbers. The saved example is described in its [benchmark README](../benchmarks/act-transfer/deployment-stress/README.md). The thresholds below are project conventions, not safety criteria.
+This page defines how Breakpoint injects stress, validates the model and turns episodes into numbers. The saved ACT example is described in its [benchmark README](../benchmarks/act-transfer/deployment-stress/README.md); Diffusion PushT in its [benchmark README](../benchmarks/diffusion-pusht/stress/README.md). The thresholds below are project conventions, not safety criteria.
 
 ## Control timing
 
@@ -98,6 +98,48 @@ For ordered axes (delay, resolution, JPEG quality), the report lists every teste
 
 Isolation: constant-delay runs hold precision at FP32 and a native image. Precision runs use zero delay. H.264 runs at FP32, native resolution and 0 ms delay. INT4 runs at a native image and 0 ms delay. Device replay is a separate condition from the delay axis. Effects measured on separate axes are not additive.
 
-## Experimental, outside the benchmark
+## Diffusion Policy on PushT
 
-The package also contains FP16 export (off unless requested), an H.264 deployment mode that models codec buffering delay, and Diffusion PushT and ACT insertion candidates. None of these is validated or used by the benchmark. Unsupported combinations are reported as unsupported.
+Separate candidate from ACT transfer. Configuration is `configs/diffusion-pusht.json` (`diffusion_pusht_stress` 0.1). It uses its own env seeds, package root and report; episode rows are never pooled with ACT, and an ACT device profile is refused as the timing input.
+
+### Policy and task
+
+Pretrained policy `lerobot/diffusion_pusht` at Hub revision `202c8695947a458d8ce08ce1c0219f2588d60b33`, on PushT-v0 through `gym-pusht`. The LeRobot PushT env config runs at 10 Hz (100 ms control period) with a 300-step episode limit. Success is the environment's `is_success` (goal coverage at or above 0.95).
+
+### Inference
+
+Checkpoint settings: `n_obs_steps` 2, `horizon` 16, `n_action_steps` 8, DDPM noise scheduler with 100 denoising steps (`num_inference_steps`). Evaluation runs PyTorch FP32 on CPU with a fixed thread count from the config (`host.torch_num_threads`, 4). One fresh chunk is one full `generate_actions` call (observation encode, the full noise-scheduler loop, and unnormalize), not a single UNet pass. When the action buffer still has actions, the observation history is still updated every control step via `observe`.
+
+### Stress
+
+Constant delay uses the same discrete-event scheduler and `discard_stale` arrival policy as ACT, in simulated time only; host generation time is not added to `L`. With an 8-step chunk and a 100 ms period, `L = 800` ms makes every action in the chunk stale on arrival. Resolution starts from native 96x96. JPEG encode and decode are at native 96x96. A separate policy RNG seed is applied per episode (`env_seed + policy_seed_offset`).
+
+Axes in the config: constant delay, resolution and JPEG. Precision recipes, H.264 and device-profile conditions are not in the plan. The packaged full phase uses `n_episodes` 5 (env seeds 6000 to 6004): 80 episode rows across 16 condition rows, with resolution and JPEG reusing the delay-plan 0 ms baseline (70 fresh episodes, 15 distinct run reports).
+
+### Upstream check
+
+`breakpoint verify-upstream` runs closed-loop agreement for Diffusion: the L=0 scheduler path against the upstream `select_action` queue on the same seeds. Per seed it requires matching outcomes, success, step counts, sum of rewards, and bitwise-equal actions. The first seed is also re-run for determinism. The written `upstream_agreement.json` must have `passed: true` and checkpoint hashes that match the export record before a pytorch-backend run will resolve its artifacts.
+
+### Timing
+
+`scripts/profile_diffusion.py` times one full PyTorch action-generation call (`pytorch_generate_actions_full_denoise`) on real PushT observations (env reset, native image path, then preprocess). Defaults: 5 warm-ups (discarded), then 50 measured calls, each on a distinct reset seed from 2300 upward. The packaged laptop-m3 profile (4 torch threads, CPU) has median 13433.8 ms, p95 32554.3 ms, p99 48941.5 ms and max 49842.4 ms. The control period is 100 ms and the largest tested delay is 800 ms. The profile is shown in the report; those latencies are not replayed into episodes as device delay.
+
+### Not supported
+
+| Item | Reason |
+| --- | --- |
+| ONNX export | Fresh inference is a multi-step denoising loop; a single-shot ONNX action-chunk graph matching that boundary is not supported |
+| INT8 | No ONNX graph to quantize; recorded as unsupported |
+| INT4 | No ONNX graph to quantize; recorded as unsupported |
+| FP16 | Recorded as unsupported for this candidate |
+| Device latency replay | No ORT action-chunk model to profile or replay; ACT profiles are refused |
+| H.264 | Not attempted for this candidate (not in the plan) |
+| Comparison media | Not attempted for this candidate |
+
+### Separation
+
+Own Hub revision, env seeds (smoke 4000 to 4004, full from 6000), config, export record, upstream agreement, action-generation timing profile, package directory and report block (`results-pusht`). No pooling with ACT transfer or insertion. No ACT profile is accepted as Diffusion timing.
+
+## Experimental
+
+FP16 export (off unless requested), the H.264 deployment mode that models codec buffering delay, and the ACT insertion candidate remain outside the validated ACT transfer and Diffusion PushT protocols. Unsupported combinations are reported as unsupported.

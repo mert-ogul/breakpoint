@@ -3,6 +3,10 @@
   "protocol_name": "act_deployment_stress",
   "protocol_version": "0.1",
   "candidate": "act_aloha_transfer",
+  "backend": "onnxruntime",
+  "image": {
+    "native_hw": [480, 640]
+  },
   "artifacts": {
     "export_dir": "artifacts/export/act-transfer",
     "fp32_onnx_name": "act_chunk_fp32.onnx",

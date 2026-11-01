@@ -1,0 +1,148 @@
+{
+  "axis": "resolution",
+  "baseline_condition_id": "resolution_native",
+  "candidate": "diffusion_pusht",
+  "conditions": [
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_native",
+      "label": "resolution native 96x96",
+      "params": {
+        "capture_hw": [
+          96,
+          96
+        ],
+        "effective_policy_hw": [
+          96,
+          96
+        ],
+        "linear_scale": 1.0,
+        "mode": "native",
+        "native_hw": [
+          96,
+          96
+        ]
+      }
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_48x48",
+      "label": "resolution capture 48x48",
+      "params": {
+        "capture_hw": [
+          48,
+          48
+        ],
+        "effective_policy_hw": [
+          96,
+          96
+        ],
+        "mode": "downsample",
+        "native_hw": [
+          96,
+          96
+        ]
+      }
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_32x32",
+      "label": "resolution capture 32x32",
+      "params": {
+        "capture_hw": [
+          32,
+          32
+        ],
+        "effective_policy_hw": [
+          96,
+          96
+        ],
+        "mode": "downsample",
+        "native_hw": [
+          96,
+          96
+        ]
+      }
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_24x24",
+      "label": "resolution capture 24x24",
+      "params": {
+        "capture_hw": [
+          24,
+          24
+        ],
+        "effective_policy_hw": [
+          96,
+          96
+        ],
+        "mode": "downsample",
+        "native_hw": [
+          96,
+          96
+        ]
+      }
+    }
+  ],
+  "confirms_plan_id": null,
+  "conventions": {
+    "combined_only_after_isolated": true,
+    "effects_not_assumed_additive": true,
+    "grids_are_experimental_choices_not_known_thresholds": true,
+    "hundred_episodes_not_precise_boundary": true,
+    "n_episodes_full_default": 100,
+    "n_episodes_smoke": 5,
+    "no_optional_stopping_for_headline": true
+  },
+  "env_seeds": [
+    6000,
+    6001,
+    6002,
+    6003,
+    6004
+  ],
+  "isolation_notes": [
+    "Resolution axis only; latency and precision at defaults."
+  ],
+  "n_episodes": 5,
+  "notes": [
+    "Isolated resolution axis; native bypass is not JPEG quality 100."
+  ],
+  "phase": "exploratory",
+  "plan_id": "v0.1_full_resolution",
+  "policy_rng_seeds": [
+    16000,
+    16001,
+    16002,
+    16003,
+    16004
+  ],
+  "seed_pairs": [
+    {
+      "env_seed": 6000,
+      "episode_index": 0,
+      "policy_rng_seed": 16000
+    },
+    {
+      "env_seed": 6001,
+      "episode_index": 1,
+      "policy_rng_seed": 16001
+    },
+    {
+      "env_seed": 6002,
+      "episode_index": 2,
+      "policy_rng_seed": 16002
+    },
+    {
+      "env_seed": 6003,
+      "episode_index": 3,
+      "policy_rng_seed": 16003
+    },
+    {
+      "env_seed": 6004,
+      "episode_index": 4,
+      "policy_rng_seed": 16004
+    }
+  ]
+}

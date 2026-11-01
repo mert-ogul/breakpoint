@@ -27,6 +27,9 @@ from breakpoint_eval.artifact_names import (  # noqa: E402
     resolve_artifact,
 )
 from breakpoint_eval.benchmark_protocol import (  # noqa: E402
+    BACKEND_ONNXRUNTIME,
+    BACKEND_PYTORCH,
+    backend_and_variant_from_lock,
     condition_incomplete_reason,
     resolve_profile_by_identity,
 )
@@ -95,7 +98,12 @@ def condition_report_path(full_root: Path, plan_id: str, record: dict[str, Any])
 
 
 def resolve_condition(
-    full_root: Path, plan: ExperimentPlan, record: dict[str, Any]
+    full_root: Path,
+    plan: ExperimentPlan,
+    record: dict[str, Any],
+    *,
+    backend: str,
+    variant_label: str,
 ) -> tuple[Path, bool]:
     """Validate a finished record against its plan; return (report path, referenced)."""
     condition = next(c for c in plan.conditions if c.condition_id == record["condition_id"])
@@ -104,7 +112,12 @@ def resolve_condition(
     referenced = (condition_dir / REFERENCE_NAME).is_file()
     shared = report_path.parent if referenced else full_root / "shared_baselines"
     reason = condition_incomplete_reason(
-        condition_dir, plan=plan, condition=condition, shared_baseline_dir=shared
+        condition_dir,
+        plan=plan,
+        condition=condition,
+        shared_baseline_dir=shared,
+        backend=backend,
+        variant_label=variant_label,
     )
     if reason is not None:
         raise ValueError(f"{plan.plan_id}/{condition.condition_id} is incomplete: {reason}")
@@ -175,12 +188,13 @@ def compact_episode_row(
     referenced: bool,
     source: str,
     episode: dict[str, Any],
+    candidate: str | None = None,
 ) -> dict[str, Any]:
     steps = episode["steps"]
     trace = episode.get("latency_trace_provenance") or {}
     image = episode.get("image_degrade_summary") or {}
     control_period_s = float(episode["control_period_s"])
-    return {
+    row = {
         "axis": axis,
         "plan_id": plan_id,
         "condition_id": condition_id,
@@ -213,6 +227,9 @@ def compact_episode_row(
         "source_report": source,
         **_h264_compact_fields(episode),
     }
+    if candidate is not None:
+        row["candidate"] = candidate
+    return row
 
 
 def check_episodes_jsonl_duplicates_report(report: dict[str, Any], jsonl_path: Path) -> None:
@@ -240,6 +257,7 @@ def collect_episode_rows(
     lock: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return (episode rows, per-condition resolution records) for every planned condition."""
+    backend, variant_label = backend_and_variant_from_lock(lock)
     rows: list[dict[str, Any]] = []
     resolutions: list[dict[str, Any]] = []
     hashed: set[Path] = set()
@@ -268,7 +286,9 @@ def collect_episode_rows(
                     }
                 )
                 continue
-            report_path, referenced = resolve_condition(full_root, plan, record)
+            report_path, referenced = resolve_condition(
+                full_root, plan, record, backend=backend, variant_label=variant_label
+            )
             report = load_json(report_path)
             source = repo_relative(report_path)
             for episode in report["episodes"]:
@@ -280,6 +300,7 @@ def collect_episode_rows(
                         referenced=referenced,
                         source=source,
                         episode=episode,
+                        candidate=plan.candidate,
                     )
                 )
             resolutions.append(
@@ -484,6 +505,67 @@ def package_identities(lock: dict[str, Any], resolutions: list[dict[str, Any]], 
     write_json(out / "identities" / "condition_resolution.json", resolutions)
 
 
+def _require_locked_sha256(path: Path, expected: str, label: str) -> None:
+    digest = sha256_file(path)
+    if digest != expected:
+        raise ValueError(f"{label} {path} sha256 {digest} does not match the locked sha256")
+
+
+def package_pytorch_validation(
+    export_dir: Path,
+    lock: dict[str, Any],
+    out: Path,
+    large: list[dict[str, Any]],
+) -> None:
+    """Package Diffusion export record, upstream agreement, and action-generation timing."""
+    artifacts = lock["artifacts"]
+    manifest = export_dir / "export_manifest.json"
+    if not manifest.is_file():
+        raise FileNotFoundError(f"missing Diffusion export record: {manifest}")
+    recorded = artifacts.get("checkpoint_files")
+    if not isinstance(recorded, dict) or not recorded:
+        raise ValueError("pytorch lock artifacts.checkpoint_files is required")
+    export_record = load_json(manifest)
+    if export_record.get("checkpoint_files") != recorded:
+        raise ValueError("export_manifest checkpoint_files do not match the locked hashes")
+    copy_verbatim(manifest, out / "validation" / "export_manifest.json")
+
+    agreement_src = Path(artifacts["upstream_agreement_path"])
+    if not agreement_src.is_file():
+        raise FileNotFoundError(f"upstream_agreement missing: {agreement_src}")
+    _require_locked_sha256(
+        agreement_src, artifacts["upstream_agreement_sha256"], "upstream_agreement"
+    )
+    copy_verbatim(agreement_src, out / "validation" / "upstream_agreement.json")
+
+    timing_src = Path(artifacts["timing_profile_path"])
+    if not timing_src.is_file():
+        raise FileNotFoundError(f"timing profile missing: {timing_src}")
+    _require_locked_sha256(timing_src, artifacts["timing_profile_sha256"], "timing profile")
+    timing = load_json(timing_src)
+    device_label = timing.get("device_label")
+    if not isinstance(device_label, str) or not device_label:
+        raise ValueError(f"timing profile {timing_src} has no device_label")
+    if timing.get("model", {}).get("checkpoint_files") != recorded:
+        raise ValueError("timing profile checkpoint_files do not match the locked hashes")
+    copy_verbatim(timing_src, out / "timing" / f"{device_label}.json")
+    npz = timing_src.with_suffix(".npz")
+    if npz.is_file():
+        large.append(large_entry(npz, "duplicate_of_timing_profile_samples"))
+
+
+def package_pytorch_identities(
+    lock: dict[str, Any], resolutions: list[dict[str, Any]], out: Path
+) -> None:
+    artifacts = lock["artifacts"]
+    identities = {
+        "checkpoint_files": dict(artifacts["checkpoint_files"]),
+        "lock_keys": sorted(lock),
+    }
+    write_json(out / "identities" / "identities.json", identities)
+    write_json(out / "identities" / "condition_resolution.json", resolutions)
+
+
 def build_manifest(out: Path) -> dict[str, Any]:
     files = sorted(p for p in out.rglob("*") if p.is_file() and p.name != "manifest.json")
     return {
@@ -554,9 +636,18 @@ def build_package(
     package_protocol(full_root, out)
     package_summaries(full_root, out)
     package_historical(full_root, out)
-    package_validation(export_dir, lock, out, large)
-    package_profiles(lock, profile_overrides, out, large)
-    package_identities(lock, resolutions, out)
+    backend, _variant_label = backend_and_variant_from_lock(lock)
+    if backend == BACKEND_PYTORCH:
+        if profile_overrides:
+            raise ValueError("pytorch packages have no device profiles; omit --profile")
+        package_pytorch_validation(export_dir, lock, out, large)
+        package_pytorch_identities(lock, resolutions, out)
+    elif backend == BACKEND_ONNXRUNTIME:
+        package_validation(export_dir, lock, out, large)
+        package_profiles(lock, profile_overrides, out, large)
+        package_identities(lock, resolutions, out)
+    else:
+        raise ValueError(f"unsupported lock backend {backend!r}")
     write_json(
         out / "large_evidence.json",
         {
@@ -606,7 +697,15 @@ def _parse_profile(value: str) -> tuple[str, Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_FULL, help="completed full-run root")
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="packaged data directory")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=DEFAULT_OUT,
+        help=(
+            "packaged data directory (default: ACT deployment-stress/data; "
+            "for Diffusion PushT use benchmarks/diffusion-pusht/stress/data)"
+        ),
+    )
     parser.add_argument(
         "--export-dir", type=Path, default=None, help="export directory if not at its locked path"
     )

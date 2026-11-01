@@ -21,6 +21,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="rewrite the generated results block of this README from the packaged data",
     )
+    parser.add_argument(
+        "--readme-block",
+        default="results",
+        help='README marker name: "results" (ACT) or "results-pusht" (Diffusion PushT)',
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
@@ -40,7 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         written = render_benchmark_report(args.input, args.out)
         if args.update_readme is not None:
-            changed = update_readme_results(args.input, args.update_readme)
+            changed = update_readme_results(
+                args.input, args.update_readme, readme_block=args.readme_block
+            )
             LOGGER.info("%s %s", args.update_readme, "updated" if changed else "already current")
     except (ReportValidationError, ReportDataError) as exc:
         LOGGER.error("%s", exc)
