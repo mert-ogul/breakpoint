@@ -1,0 +1,114 @@
+[
+  {
+    "condition_id": "latency_ms_0",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_100",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_100/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_200",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_200/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_400",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_400/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_600",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_600/run_report.json"
+  },
+  {
+    "condition_id": "latency_ms_800",
+    "plan_id": "v0.1_full_latency",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_800/run_report.json"
+  },
+  {
+    "condition_id": "resolution_native",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "referenced_baseline",
+    "resolution": "referenced_baseline",
+    "source_report": "outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0/run_report.json"
+  },
+  {
+    "condition_id": "resolution_capture_48x48",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_48x48/run_report.json"
+  },
+  {
+    "condition_id": "resolution_capture_32x32",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_32x32/run_report.json"
+  },
+  {
+    "condition_id": "resolution_capture_24x24",
+    "plan_id": "v0.1_full_resolution",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_24x24/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_bypass",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "referenced_baseline",
+    "resolution": "referenced_baseline",
+    "source_report": "outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q95",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q75",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q50",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q25",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json"
+  },
+  {
+    "condition_id": "jpeg_q10",
+    "plan_id": "v0.1_full_jpeg",
+    "record_status": "complete",
+    "resolution": "complete",
+    "source_report": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json"
+  }
+]

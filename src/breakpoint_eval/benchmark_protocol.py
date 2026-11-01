@@ -113,6 +113,34 @@ def baseline_variant_from_config(config: dict[str, Any]) -> str:
     return str(fingerprint.get("variant_label") or "onnx_fp32")
 
 
+def backend_and_variant_from_lock(lock: dict[str, Any]) -> tuple[str, str]:
+    """Return ``(backend, baseline variant_label)`` from a protocol lock.
+
+    Both values must be present on the lock (or, for older ONNX locks that omit
+    ``backend``, inferable from ONNX artifact fields). Callers pass the pair into
+    completeness checks; those checks have no onnxruntime/onnx_fp32 defaults.
+    """
+    fingerprint = (lock.get("baseline_reuse") or {}).get("fingerprint")
+    if not isinstance(fingerprint, dict) or not fingerprint.get("variant_label"):
+        raise ValueError("lock requires baseline_reuse.fingerprint.variant_label")
+    variant_label = str(fingerprint["variant_label"])
+    raw_backend = lock.get("backend")
+    if raw_backend is None:
+        arts = lock.get("artifacts") or {}
+        if not isinstance(arts, dict):
+            raise ValueError("lock missing backend")
+        if arts.get("timing_profile_path") or arts.get("checkpoint_files"):
+            raw_backend = BACKEND_PYTORCH
+        elif arts.get("fp32_sha256") is not None or arts.get("fp32_path") is not None:
+            raw_backend = BACKEND_ONNXRUNTIME
+        else:
+            raise ValueError("lock missing backend")
+    backend = str(raw_backend)
+    if backend not in {BACKEND_ONNXRUNTIME, BACKEND_PYTORCH}:
+        raise ValueError(f"unsupported lock backend {backend!r}")
+    return backend, variant_label
+
+
 def load_benchmark_config(path: Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if int(payload.get("schema_version", -1)) != 1:
@@ -951,6 +979,7 @@ def freeze_protocol_lock(
     assert artifacts.fp32_path is not None
     lock = {
         **shared,
+        "backend": BACKEND_ONNXRUNTIME,
         "artifacts": {
             "export_dir": str(artifacts.export_dir),
             "fp32_path": str(artifacts.fp32_path),
@@ -1015,10 +1044,14 @@ def assert_lock_matches(existing: dict[str, Any], fresh: dict[str, Any]) -> None
 def _expected_runtime(
     condition: ConditionSpec,
     *,
-    backend: str = BACKEND_ONNXRUNTIME,
-    variant_label: str = "onnx_fp32",
+    backend: str,
+    variant_label: str,
 ) -> dict[str, Any]:
     """Runtime identity a finished report must show for this condition."""
+    if backend not in {BACKEND_ONNXRUNTIME, BACKEND_PYTORCH}:
+        raise ValueError(f"unsupported backend {backend!r}")
+    if not variant_label:
+        raise ValueError("variant_label is required")
     params = condition.params
     axis = condition.axis
     expected: dict[str, Any] = {
@@ -1086,16 +1119,18 @@ def _h264_summary_problem(episode: dict[str, Any], condition: ConditionSpec) -> 
 
 def _shared_baseline_runtime(
     *,
-    backend: str = BACKEND_ONNXRUNTIME,
-    variant_label: str = "onnx_fp32",
-    config: dict[str, Any] | None = None,
+    backend: str,
+    variant_label: str,
 ) -> dict[str, Any]:
-    fingerprint = _baseline_fingerprint(config)
+    if backend not in {BACKEND_ONNXRUNTIME, BACKEND_PYTORCH}:
+        raise ValueError(f"unsupported backend {backend!r}")
+    if not variant_label:
+        raise ValueError("variant_label is required")
     return {
         "latency_mode": "constant",
-        "latency_s": fingerprint["latency_s"],
-        "image_mode": fingerprint["image_mode"],
-        "variant_label": variant_label or fingerprint["variant_label"],
+        "latency_s": 0.0,
+        "image_mode": "native",
+        "variant_label": variant_label,
         "policy_backend": backend,
     }
 
@@ -1143,7 +1178,9 @@ def run_report_problem(
         return "provenance policy_rng_seeds differ from the plan"
     if provenance.get("latency_mode") != expected_runtime["latency_mode"]:
         return f"latency_mode {provenance.get('latency_mode')!r} differs from the condition"
-    backend = expected_runtime.get("policy_backend", BACKEND_ONNXRUNTIME)
+    if "policy_backend" not in expected_runtime:
+        raise ValueError("expected_runtime requires policy_backend")
+    backend = expected_runtime["policy_backend"]
     if backend == BACKEND_PYTORCH:
         if provenance.get("policy_backend") != BACKEND_PYTORCH:
             return f"policy_backend {provenance.get('policy_backend')!r} is not 'pytorch'"
@@ -1185,8 +1222,8 @@ def condition_report_problem(
     plan: ExperimentPlan,
     condition: ConditionSpec,
     *,
-    backend: str = BACKEND_ONNXRUNTIME,
-    variant_label: str = "onnx_fp32",
+    backend: str,
+    variant_label: str,
 ) -> str | None:
     problem = run_report_problem(
         report_path,
@@ -1218,8 +1255,8 @@ def shared_baseline_problem(
     shared_baseline_dir: Path,
     *,
     plan: ExperimentPlan,
-    backend: str = BACKEND_ONNXRUNTIME,
-    variant_label: str = "onnx_fp32",
+    backend: str,
+    variant_label: str,
 ) -> str | None:
     """Check the shared baseline report that reference conditions point to."""
     report_path = Path(shared_baseline_dir) / "run_report.json"
@@ -1238,8 +1275,8 @@ def condition_incomplete_reason(
     plan: ExperimentPlan,
     condition: ConditionSpec,
     shared_baseline_dir: Path,
-    backend: str = BACKEND_ONNXRUNTIME,
-    variant_label: str = "onnx_fp32",
+    backend: str,
+    variant_label: str,
 ) -> str | None:
     """Return why a condition directory is not a finished, matching run, else None."""
     condition_dir = Path(condition_dir)
@@ -1280,8 +1317,8 @@ def condition_completed(
     plan: ExperimentPlan,
     condition: ConditionSpec,
     shared_baseline_dir: Path,
-    backend: str = BACKEND_ONNXRUNTIME,
-    variant_label: str = "onnx_fp32",
+    backend: str,
+    variant_label: str,
 ) -> bool:
     reason = condition_incomplete_reason(
         condition_dir,

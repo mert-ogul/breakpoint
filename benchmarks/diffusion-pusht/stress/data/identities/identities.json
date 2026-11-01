@@ -1,0 +1,28 @@
+{
+  "checkpoint_files": {
+    ".gitattributes": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+    "README.md": "122b7d5067abfaf7e2ac44e6ab184bee8fb5c58d777e82d5c92bd3849dd308c3",
+    "config.json": "50fce05c2c4cfd170d16feac4274ebf2e6f730f186f47ba816bfbdefaac44163",
+    "eval_info.json": "94ec32a9c500e284dc7cdf13fc9b5a3f1a86fd25f898098f799ef254ee917613",
+    "model.safetensors": "995d14d35db57d95c35ad9704c3d79c8612b7bc45f3877e5c46c2cdc516856a8",
+    "replay.mp4": "e956db76b7b6c4966da78f9e73bdbeed6f73fac34a865e9a238c535b085c9348",
+    "train_config.json": "abf2cecb46b0ae8b0f67d9ee713cd16b0d9fbcc7b0ef79042b72661975d107b5",
+    "training_curves.png": "165332d8e66d16c940509863b875b93881dfafb542319620d67139a0ae33b97a"
+  },
+  "lock_keys": [
+    "artifacts",
+    "backend",
+    "baseline_reuse",
+    "candidate",
+    "host",
+    "phase",
+    "phase_config",
+    "protocol_name",
+    "protocol_version",
+    "scheduler",
+    "schema_version",
+    "source_revision",
+    "statistics",
+    "trace_window"
+  ]
+}

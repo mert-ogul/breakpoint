@@ -35,7 +35,7 @@ Other platforms, Python 3.12 and GPU hosts are untested. `requires-python` allow
 
 The simulator pins are in [`requirements-simulation.txt`](../requirements-simulation.txt). [`constraints-macos-arm64.txt`](../constraints-macos-arm64.txt) is the full freeze of the macOS environment that passed `pip check`. Neither file is a lockfile for other platforms.
 
-Scope of the evidence: the saved packaged benchmark is ACT transfer only (export, validation, evaluation). ACT insertion has no retained episode package. Diffusion PushT has its own config and tooling on this branch; a packaged stress result is not claimed here. The ACT baseline of 25 of 30 successes (83.3%) is not a reproduction of the model card's 83% over 500 CUDA FP32 episodes. That reproduction was not run.
+Scope of the evidence: packaged stress results cover ACT transfer and Diffusion PushT (export, validation, evaluation). ACT insertion has no retained episode package. The ACT baseline of 25 of 30 successes (83.3%) is not a reproduction of the model card's 83% over 500 CUDA FP32 episodes. The Diffusion PushT baseline of 5 of 5 is not a reproduction of the model card's 65.4% over 500 episodes. Those card-scale reproductions were not run.
 
 ## Install routes
 

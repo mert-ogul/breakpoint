@@ -1,0 +1,216 @@
+{
+  "files": [
+    {
+      "bytes": 839532,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "ce42379049c6f914fb4ff1e70482eeaabeaee01694204fc481b3d5ee053f259b"
+    },
+    {
+      "bytes": 545507,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_0/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "660a3852f603b0766e8fddb74b56668398790fc65589f2960500476d04141455"
+    },
+    {
+      "bytes": 1442638,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_100/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "f0e5df1ba840e71877ae1e4ebe3d65b4fc5b791d4f856a2f7d8027dfcf790133"
+    },
+    {
+      "bytes": 940066,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_100/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "011430fda90caafaff9e17905604d150cceabf80dba9a4b837bdf933bf03c292"
+    },
+    {
+      "bytes": 977591,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_200/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "00f6be53bfea7929dfc25697b5d4b4e11a6cc679669d30491f7779d02b956ab6"
+    },
+    {
+      "bytes": 634372,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_200/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "f8a5149beeedf8c21103f702dd1239e9d6f14fa840910ba2de2f66e6a70db09d"
+    },
+    {
+      "bytes": 1236680,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_400/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "d6d817244b878694464a5deafd1b6eacaf0a7b253ea7387cfb7219b4fb16ab20"
+    },
+    {
+      "bytes": 800332,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_400/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "df22bbf0fcb098bfab2fefb4624002a4c6a01a2f54f0073e138912ebbe7fa57f"
+    },
+    {
+      "bytes": 1487949,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_600/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "f8fbe681bcf8b62f6a7f532904ce8971a992c77ca00e7439f8a15a4739bfbcc9"
+    },
+    {
+      "bytes": 959103,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_600/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "9dc1b35ebd913f6ed0932d08d68fa8596bedda96c9b5df76f76bc75154306efb"
+    },
+    {
+      "bytes": 1580630,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_800/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "78f5d6874a5dc30ed7bf2202f31d0338c20f9f4fd08a7a05be91dbf17a2ef8ac"
+    },
+    {
+      "bytes": 1001732,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_800/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "546bb206bec569c8812a5ffb8abd0a5a3d1ecfc1fdf1c3713c9cc82ac4e95631"
+    },
+    {
+      "bytes": 839532,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "ce42379049c6f914fb4ff1e70482eeaabeaee01694204fc481b3d5ee053f259b"
+    },
+    {
+      "bytes": 1268370,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_48x48/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "3153d1c49b9272b87f4ad8729e4cdc87e6587739aec4a179d86a575d0b4b035c"
+    },
+    {
+      "bytes": 826850,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_48x48/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "6580283342e65756a89094bb293b266f32c586f8f11f6f27bfe5d559a5b04887"
+    },
+    {
+      "bytes": 1219386,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_32x32/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "0a0934383d85a66430222b14e9fde3134c3ed154cb23529983406832ffc3444b"
+    },
+    {
+      "bytes": 794042,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_32x32/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "fdc58b5a6df695b7ae9a858f8bd52a1a877267aa98caad6cb1d765930b4d1eb8"
+    },
+    {
+      "bytes": 1216234,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_24x24/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "9d0cfb207da2092b556052719f457cf86b2f32d8fc14bf13199ee7065f84513d"
+    },
+    {
+      "bytes": 792550,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_resolution/conditions/resolution_capture_24x24/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "acc41744f8d22a433a2409bed44a1dea59ab2d3f39f3513411de3a61ad2361a9"
+    },
+    {
+      "bytes": 1223201,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "647b3d3f64527a9e0861b9e2e08e19b835bcdca3e2188a245dcfa707b4a59ad0"
+    },
+    {
+      "bytes": 797569,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q95/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "18fbce41bb90db81c128175fc79cc4b6b6b54f71b9d1ac6fe4c6a09380315880"
+    },
+    {
+      "bytes": 1435373,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "ec5505babd61277d53b4befaf3b231df0ab144be930d676e8d22dfe4fc1ab45f"
+    },
+    {
+      "bytes": 936835,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q75/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "9996ba8c682a73d24c99d2dffa27a154ba32604b20819331017acc08def0bd1c"
+    },
+    {
+      "bytes": 1440541,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "3e30dbcb4b8b622e2dbe6f08c03564e24ae9e221be482bcd68fa7bd64e5e55a7"
+    },
+    {
+      "bytes": 940213,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q50/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "9df23c65d80d45470620936882cb6a4022730739efd12017743c0ad5f6c8d4a0"
+    },
+    {
+      "bytes": 1403122,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "e42f69901177049ceeb67df5b17de6c03509d308132d2b81f5ee0a2164966620"
+    },
+    {
+      "bytes": 915520,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q25/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "dddf6ba970b540ef9cac03ea8f0efdd1c0e926294727faedec092dee4b2f4a45"
+    },
+    {
+      "bytes": 1564254,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/run_report.json",
+      "role": "canonical_control_step_log",
+      "sha256": "8a6185dc1c8cb3b8c7a109360f4237ee7b428477a69e456d63bd4578317304ac"
+    },
+    {
+      "bytes": 1021126,
+      "in_repository": false,
+      "path": "outputs/diffusion-pusht/full/axes/v0.1_full_jpeg/conditions/jpeg_q10/episodes.jsonl",
+      "role": "duplicate_of_run_report_episodes",
+      "sha256": "44aebf7eaa7e7388916f22224b2578848d80dc38114d0b3b594fc849cf9bff74"
+    },
+    {
+      "bytes": 649,
+      "in_repository": false,
+      "path": "profiles/laptop-m3/diffusion_pusht/diffusion_pusht__pytorch_fp32__laptop-m3__full_denoise.npz",
+      "role": "duplicate_of_timing_profile_samples",
+      "sha256": "bb9ccae2c8634ffe8c8d4b76270ec6f5effa6d0dbbfaed8aec55992986a64f93"
+    }
+  ],
+  "note": "Not copied into the repository. Present locally under the listed paths.",
+  "schema_version": 1
+}

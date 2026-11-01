@@ -204,11 +204,11 @@ Times one full PyTorch `generate_actions` call on real PushT observations (5 war
   --phase full --out outputs/diffusion-pusht/full
 ```
 
-Smoke: env seeds 4000 to 4004, baseline, 800 ms, 24x24, JPEG 10. Full: env seeds 6000 to 6004, isolated delay, resolution and JPEG. Full-run wall time depends on the measured generation median from step 3. After baseline reuse the full phase has 70 fresh episodes; an order-of-magnitude estimate at the zero-latency cadence is:
+Smoke: env seeds 4000 to 4004, baseline, 800 ms, 24x24, JPEG 10. Full: 5 paired episodes per condition, env seeds 6000 to 6004, isolated delay, resolution and JPEG (80 packaged episode rows). After baseline reuse the full phase has 70 fresh episodes. The packaged laptop-m3 median for one full `generate_actions` call is 13433.8 ms; an order-of-magnitude estimate at the zero-latency cadence is about 9.8 h:
 
-`estimate_s ≈ 70 × (300 / 8) × median_s`
+`estimate_s ≈ 70 × (300 / 8) × 13.4338 ≈ 35264`
 
-where `median_s` is the profile median for one full `generate_actions` call, 300 is the episode step limit and 8 is `n_action_steps`. Under long constant delay a fully stale chunk can trigger a new request every control step, so generations per episode can rise toward 300.
+where 300 is the episode step limit and 8 is `n_action_steps`. Under long constant delay a fully stale chunk can trigger a new request every control step, so generations per episode can rise toward 300. Control-step logs for the saved run are about 18 MB of `run_report.json` plus about 12 MB of duplicate `episodes.jsonl` ([`large_evidence.json`](../benchmarks/diffusion-pusht/stress/data/large_evidence.json)).
 
 ### 5. Package and render
 

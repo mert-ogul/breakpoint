@@ -1,0 +1,453 @@
+{
+  "axis": "latency_ms",
+  "axis_summary": {
+    "baseline_success_floor": 0.5,
+    "baseline_success_rate": 1.0,
+    "breakpoint": {
+      "first_below": "latency_ms_100",
+      "non_monotonic": true,
+      "observed_interval": {
+        "above_condition_id": "latency_ms_0",
+        "above_ordered_value": 0.0,
+        "below_condition_id": "latency_ms_100",
+        "below_ordered_value": 100.0,
+        "interpolated": false
+      },
+      "preceding_above": "latency_ms_0",
+      "recovery_condition_ids": [
+        "latency_ms_200"
+      ],
+      "status": "observed_interval"
+    },
+    "breakpoint_exploratory_only": null,
+    "headline_suppressed": false,
+    "note": "Observed interval only; not an interpolated exact boundary.",
+    "points": [
+      {
+        "below_threshold": false,
+        "condition_id": "latency_ms_0",
+        "eligible": 5,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "constant delay 0 ms (FP32 held)",
+        "n_runtime_error": 0,
+        "ordered_value": 0.0,
+        "planned": 5,
+        "success_rate": 1.0,
+        "successes": 5,
+        "wilson_95": {
+          "high": 1.0,
+          "level": 0.95,
+          "low": 0.5655175352168251,
+          "method": "wilson",
+          "n": 5,
+          "point": 1.0,
+          "successes": 5,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": true,
+        "condition_id": "latency_ms_100",
+        "eligible": 5,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "constant delay 100 ms (FP32 held)",
+        "n_runtime_error": 0,
+        "ordered_value": 100.0,
+        "planned": 5,
+        "success_rate": 0.6,
+        "successes": 3,
+        "wilson_95": {
+          "high": 0.882379225767352,
+          "level": 0.95,
+          "low": 0.2307242812760128,
+          "method": "wilson",
+          "n": 5,
+          "point": 0.6,
+          "successes": 3,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": false,
+        "condition_id": "latency_ms_200",
+        "eligible": 5,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "constant delay 200 ms (FP32 held)",
+        "n_runtime_error": 0,
+        "ordered_value": 200.0,
+        "planned": 5,
+        "success_rate": 0.8,
+        "successes": 4,
+        "wilson_95": {
+          "high": 0.9637758913675698,
+          "level": 0.95,
+          "low": 0.3755346297625253,
+          "method": "wilson",
+          "n": 5,
+          "point": 0.8,
+          "successes": 4,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": true,
+        "condition_id": "latency_ms_400",
+        "eligible": 5,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "constant delay 400 ms (FP32 held)",
+        "n_runtime_error": 0,
+        "ordered_value": 400.0,
+        "planned": 5,
+        "success_rate": 0.6,
+        "successes": 3,
+        "wilson_95": {
+          "high": 0.882379225767352,
+          "level": 0.95,
+          "low": 0.2307242812760128,
+          "method": "wilson",
+          "n": 5,
+          "point": 0.6,
+          "successes": 3,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": true,
+        "condition_id": "latency_ms_600",
+        "eligible": 5,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "constant delay 600 ms (FP32 held)",
+        "n_runtime_error": 0,
+        "ordered_value": 600.0,
+        "planned": 5,
+        "success_rate": 0.4,
+        "successes": 2,
+        "wilson_95": {
+          "high": 0.769275718723987,
+          "level": 0.95,
+          "low": 0.11762077423264783,
+          "method": "wilson",
+          "n": 5,
+          "point": 0.4,
+          "successes": 2,
+          "unresolved": false
+        }
+      },
+      {
+        "below_threshold": true,
+        "condition_id": "latency_ms_800",
+        "eligible": 5,
+        "incomplete": false,
+        "incomplete_reasons": [],
+        "label": "constant delay 800 ms (FP32 held)",
+        "n_runtime_error": 0,
+        "ordered_value": 800.0,
+        "planned": 5,
+        "success_rate": 0.0,
+        "successes": 0,
+        "wilson_95": {
+          "high": 0.43448246478317476,
+          "level": 0.95,
+          "low": 0.0,
+          "method": "wilson",
+          "n": 5,
+          "point": 0.0,
+          "successes": 0,
+          "unresolved": false
+        }
+      }
+    ],
+    "ratio": 0.8,
+    "reason": null
+  },
+  "baseline_condition_id": "latency_ms_0",
+  "baseline_success_floor": 0.5,
+  "candidate": "diffusion_pusht",
+  "conditions": [
+    {
+      "condition_id": "latency_ms_0",
+      "eligible": 5,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "constant delay 0 ms (FP32 held)",
+      "n_runtime_error": 0,
+      "params": {
+        "latency_ms": 0,
+        "latency_s": 0.0,
+        "precision_held": "onnx_fp32",
+        "timing_schedule": "constant_added_inference_delay"
+      },
+      "planned": 5,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_0/run_report.json",
+      "success_rate": 1.0,
+      "successes": 5,
+      "wilson_95": {
+        "high": 1.0,
+        "level": 0.95,
+        "low": 0.5655175352168251,
+        "method": "wilson",
+        "n": 5,
+        "point": 1.0,
+        "successes": 5,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "latency_ms_100",
+      "eligible": 5,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "constant delay 100 ms (FP32 held)",
+      "n_runtime_error": 0,
+      "params": {
+        "latency_ms": 100,
+        "latency_s": 0.1,
+        "precision_held": "onnx_fp32",
+        "timing_schedule": "constant_added_inference_delay"
+      },
+      "planned": 5,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_100/run_report.json",
+      "success_rate": 0.6,
+      "successes": 3,
+      "wilson_95": {
+        "high": 0.882379225767352,
+        "level": 0.95,
+        "low": 0.2307242812760128,
+        "method": "wilson",
+        "n": 5,
+        "point": 0.6,
+        "successes": 3,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "latency_ms_200",
+      "eligible": 5,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "constant delay 200 ms (FP32 held)",
+      "n_runtime_error": 0,
+      "params": {
+        "latency_ms": 200,
+        "latency_s": 0.2,
+        "precision_held": "onnx_fp32",
+        "timing_schedule": "constant_added_inference_delay"
+      },
+      "planned": 5,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_200/run_report.json",
+      "success_rate": 0.8,
+      "successes": 4,
+      "wilson_95": {
+        "high": 0.9637758913675698,
+        "level": 0.95,
+        "low": 0.3755346297625253,
+        "method": "wilson",
+        "n": 5,
+        "point": 0.8,
+        "successes": 4,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "latency_ms_400",
+      "eligible": 5,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "constant delay 400 ms (FP32 held)",
+      "n_runtime_error": 0,
+      "params": {
+        "latency_ms": 400,
+        "latency_s": 0.4,
+        "precision_held": "onnx_fp32",
+        "timing_schedule": "constant_added_inference_delay"
+      },
+      "planned": 5,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_400/run_report.json",
+      "success_rate": 0.6,
+      "successes": 3,
+      "wilson_95": {
+        "high": 0.882379225767352,
+        "level": 0.95,
+        "low": 0.2307242812760128,
+        "method": "wilson",
+        "n": 5,
+        "point": 0.6,
+        "successes": 3,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "latency_ms_600",
+      "eligible": 5,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "constant delay 600 ms (FP32 held)",
+      "n_runtime_error": 0,
+      "params": {
+        "latency_ms": 600,
+        "latency_s": 0.6,
+        "precision_held": "onnx_fp32",
+        "timing_schedule": "constant_added_inference_delay"
+      },
+      "planned": 5,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_600/run_report.json",
+      "success_rate": 0.4,
+      "successes": 2,
+      "wilson_95": {
+        "high": 0.769275718723987,
+        "level": 0.95,
+        "low": 0.11762077423264783,
+        "method": "wilson",
+        "n": 5,
+        "point": 0.4,
+        "successes": 2,
+        "unresolved": false
+      }
+    },
+    {
+      "condition_id": "latency_ms_800",
+      "eligible": 5,
+      "incomplete": false,
+      "incomplete_reasons": [],
+      "label": "constant delay 800 ms (FP32 held)",
+      "n_runtime_error": 0,
+      "params": {
+        "latency_ms": 800,
+        "latency_s": 0.8,
+        "precision_held": "onnx_fp32",
+        "timing_schedule": "constant_added_inference_delay"
+      },
+      "planned": 5,
+      "report_path": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/axes/v0.1_full_latency/conditions/latency_ms_800/run_report.json",
+      "success_rate": 0.0,
+      "successes": 0,
+      "wilson_95": {
+        "high": 0.43448246478317476,
+        "level": 0.95,
+        "low": 0.0,
+        "method": "wilson",
+        "n": 5,
+        "point": 0.0,
+        "successes": 0,
+        "unresolved": false
+      }
+    }
+  ],
+  "confirms_plan_id": null,
+  "conventions": {
+    "exploratory_separate_from_confirmation": true,
+    "hundred_episodes_not_precise_boundary": true,
+    "no_interpolated_exact_boundary": true,
+    "no_optional_stopping": true,
+    "not_safety_criteria": true,
+    "pointwise_bootstrap_not_simultaneous": true
+  },
+  "env_seeds": [
+    6000,
+    6001,
+    6002,
+    6003,
+    6004
+  ],
+  "isolation_notes": [
+    "Synthetic constant delay; precision held at pytorch_fp32."
+  ],
+  "n_episodes_planned": 5,
+  "paired_contrasts_vs_baseline": [
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "latency_ms_100",
+      "coverage": "pointwise",
+      "high": 0.19999999999999996,
+      "level": 0.95,
+      "low": -0.6000000000000001,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 5,
+      "point": -0.20000000000000007,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "latency_ms_200",
+      "coverage": "pointwise",
+      "high": 0.19999999999999996,
+      "level": 0.95,
+      "low": -0.4,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 5,
+      "point": 0.0,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "latency_ms_400",
+      "coverage": "pointwise",
+      "high": 0.19999999999999996,
+      "level": 0.95,
+      "low": -0.6000000000000001,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 5,
+      "point": -0.20000000000000007,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "latency_ms_600",
+      "coverage": "pointwise",
+      "high": 0.0,
+      "level": 0.95,
+      "low": -0.8,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 5,
+      "point": -0.4,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    },
+    {
+      "bootstrap_seed": 20261012,
+      "condition_id": "latency_ms_800",
+      "coverage": "pointwise",
+      "high": -0.8,
+      "level": 0.95,
+      "low": -0.8,
+      "method": "paired_bootstrap",
+      "n_bootstrap": 2000,
+      "n_pairs": 5,
+      "point": -0.8,
+      "ratio": 0.8,
+      "simultaneous_across_sweep": false,
+      "statistic": "p_condition - ratio * p_baseline",
+      "unresolved": false
+    }
+  ],
+  "phase": "exploratory",
+  "plan_id": "v0.1_full_latency",
+  "policy_rng_seeds": [
+    16000,
+    16001,
+    16002,
+    16003,
+    16004
+  ],
+  "ratio": 0.8
+}

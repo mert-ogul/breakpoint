@@ -21,6 +21,7 @@ from breakpoint_eval.benchmark_report_data import ReportDataError, load_report_d
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "benchmarks" / "act-transfer" / "deployment-stress" / "data"
+PUSHT_DATA = ROOT / "benchmarks" / "diffusion-pusht" / "stress" / "data"
 
 pytestmark = pytest.mark.skipif(not DATA.is_dir(), reason="packaged benchmark data not present")
 
@@ -53,6 +54,23 @@ def test_saved_example_passes_every_check() -> None:
     baseline = data.axes[0].conditions[0]
     assert (baseline.successes, baseline.eligible) == (25, 30)
     assert len(data.rows) == 810
+
+
+def test_pusht_saved_example_passes_every_check() -> None:
+    assert PUSHT_DATA.is_dir()
+    data = load_report_data(PUSHT_DATA)
+    failed = [c.name for c in data.checks if not c.passed]
+    assert failed == []
+    baseline = data.axes[0].conditions[0]
+    assert (baseline.successes, baseline.eligible) == (5, 5)
+    assert len(data.rows) == 80
+    assert data.n_runs == 15
+    counts = {a.axis: [v.successes for v in a.conditions] for a in data.axes}
+    assert counts == {
+        "latency_ms": [5, 3, 4, 3, 2, 0],
+        "resolution": [5, 3, 3, 3],
+        "jpeg": [5, 3, 2, 2, 2, 1],
+    }
 
 
 def test_render_does_not_edit_input_and_counts_match_records(tmp_path: Path) -> None:

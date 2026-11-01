@@ -27,6 +27,7 @@ from breakpoint_eval.artifact_names import (  # noqa: E402
     resolve_artifact,
 )
 from breakpoint_eval.benchmark_protocol import (  # noqa: E402
+    backend_and_variant_from_lock,
     condition_incomplete_reason,
     resolve_profile_by_identity,
 )
@@ -97,7 +98,12 @@ def condition_report_path(full_root: Path, plan_id: str, record: dict[str, Any])
 
 
 def resolve_condition(
-    full_root: Path, plan: ExperimentPlan, record: dict[str, Any]
+    full_root: Path,
+    plan: ExperimentPlan,
+    record: dict[str, Any],
+    *,
+    backend: str,
+    variant_label: str,
 ) -> tuple[Path, bool]:
     """Validate a finished record against its plan; return (report path, referenced)."""
     condition = next(c for c in plan.conditions if c.condition_id == record["condition_id"])
@@ -106,7 +112,12 @@ def resolve_condition(
     referenced = (condition_dir / REFERENCE_NAME).is_file()
     shared = report_path.parent if referenced else full_root / "shared_baselines"
     reason = condition_incomplete_reason(
-        condition_dir, plan=plan, condition=condition, shared_baseline_dir=shared
+        condition_dir,
+        plan=plan,
+        condition=condition,
+        shared_baseline_dir=shared,
+        backend=backend,
+        variant_label=variant_label,
     )
     if reason is not None:
         raise ValueError(f"{plan.plan_id}/{condition.condition_id} is incomplete: {reason}")
@@ -246,6 +257,7 @@ def collect_episode_rows(
     lock: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return (episode rows, per-condition resolution records) for every planned condition."""
+    backend, variant_label = backend_and_variant_from_lock(lock)
     rows: list[dict[str, Any]] = []
     resolutions: list[dict[str, Any]] = []
     hashed: set[Path] = set()
@@ -274,7 +286,9 @@ def collect_episode_rows(
                     }
                 )
                 continue
-            report_path, referenced = resolve_condition(full_root, plan, record)
+            report_path, referenced = resolve_condition(
+                full_root, plan, record, backend=backend, variant_label=variant_label
+            )
             report = load_json(report_path)
             source = repo_relative(report_path)
             for episode in report["episodes"]:
@@ -609,10 +623,6 @@ def replace_directory(staged: Path, out: Path) -> None:
     shutil.rmtree(backup)
 
 
-def lock_backend(lock: dict[str, Any]) -> str:
-    return str(lock.get("backend") or BACKEND_ONNXRUNTIME)
-
-
 def build_package(
     full_root: Path,
     out: Path,
@@ -626,7 +636,7 @@ def build_package(
     package_protocol(full_root, out)
     package_summaries(full_root, out)
     package_historical(full_root, out)
-    backend = lock_backend(lock)
+    backend, _variant_label = backend_and_variant_from_lock(lock)
     if backend == BACKEND_PYTORCH:
         if profile_overrides:
             raise ValueError("pytorch packages have no device profiles; omit --profile")

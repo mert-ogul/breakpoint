@@ -12,8 +12,10 @@ from pathlib import Path
 import pytest
 
 from breakpoint_eval.benchmark_protocol import (
+    BACKEND_ONNXRUNTIME,
     BACKEND_PYTORCH,
     assert_lock_matches,
+    backend_and_variant_from_lock,
     build_full_axis_plans,
     build_smoke_plan,
     condition_is_shared_baseline,
@@ -312,6 +314,7 @@ def test_freeze_protocol_lock_includes_int4_fields(tmp_path: Path) -> None:
         phase="smoke",
     )
     art = lock["artifacts"]
+    assert lock["backend"] == BACKEND_ONNXRUNTIME
     assert art["int4_path"] == str(tmp_path / "int4.onnx")
     assert art["int4_sha256"] == "d" * 64
     assert art["int4_status"] == "ok"
@@ -635,7 +638,13 @@ def test_condition_report_problem_h264_summary_fields(
             summary["cameras"]["top"][key] = override[key]
     path = tmp_path / "run_report.json"
     path.write_text(json.dumps(report), encoding="utf-8")
-    problem = condition_report_problem(path, plan, plan.conditions[0])
+    problem = condition_report_problem(
+        path,
+        plan,
+        plan.conditions[0],
+        backend=BACKEND_ONNXRUNTIME,
+        variant_label="onnx_fp32",
+    )
     assert problem is not None
     assert match in problem
 
@@ -644,7 +653,45 @@ def test_condition_report_problem_h264_ok(tmp_path: Path) -> None:
     plan = _h264_plan()
     path = tmp_path / "run_report.json"
     path.write_text(json.dumps(_h264_report(plan)), encoding="utf-8")
-    assert condition_report_problem(path, plan, plan.conditions[0]) is None
+    assert (
+        condition_report_problem(
+            path,
+            plan,
+            plan.conditions[0],
+            backend=BACKEND_ONNXRUNTIME,
+            variant_label="onnx_fp32",
+        )
+        is None
+    )
+
+
+def test_backend_and_variant_from_lock() -> None:
+    backend, variant = backend_and_variant_from_lock(
+        {
+            "backend": "pytorch",
+            "baseline_reuse": {"fingerprint": {"variant_label": "pytorch_fp32"}},
+            "artifacts": {},
+        }
+    )
+    assert backend == BACKEND_PYTORCH
+    assert variant == "pytorch_fp32"
+    backend, variant = backend_and_variant_from_lock(
+        {
+            "baseline_reuse": {"fingerprint": {"variant_label": "onnx_fp32"}},
+            "artifacts": {"fp32_sha256": "abc"},
+        }
+    )
+    assert backend == BACKEND_ONNXRUNTIME
+    assert variant == "onnx_fp32"
+    with pytest.raises(ValueError, match="variant_label"):
+        backend_and_variant_from_lock({"backend": "pytorch", "artifacts": {}})
+    with pytest.raises(ValueError, match="backend"):
+        backend_and_variant_from_lock(
+            {
+                "baseline_reuse": {"fingerprint": {"variant_label": "onnx_fp32"}},
+                "artifacts": {},
+            }
+        )
 
 
 def test_diffusion_config_loads() -> None:

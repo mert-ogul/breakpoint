@@ -1,0 +1,110 @@
+{
+  "artifacts": {
+    "checkpoint_files": {
+      ".gitattributes": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+      "README.md": "122b7d5067abfaf7e2ac44e6ab184bee8fb5c58d777e82d5c92bd3849dd308c3",
+      "config.json": "50fce05c2c4cfd170d16feac4274ebf2e6f730f186f47ba816bfbdefaac44163",
+      "eval_info.json": "94ec32a9c500e284dc7cdf13fc9b5a3f1a86fd25f898098f799ef254ee917613",
+      "model.safetensors": "995d14d35db57d95c35ad9704c3d79c8612b7bc45f3877e5c46c2cdc516856a8",
+      "replay.mp4": "e956db76b7b6c4966da78f9e73bdbeed6f73fac34a865e9a238c535b085c9348",
+      "train_config.json": "abf2cecb46b0ae8b0f67d9ee713cd16b0d9fbcc7b0ef79042b72661975d107b5",
+      "training_curves.png": "165332d8e66d16c940509863b875b93881dfafb542319620d67139a0ae33b97a"
+    },
+    "export_dir": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/diffusion_pusht",
+    "timing_profile_path": "/Users/mertogul/Desktop/breakpoint-1/profiles/laptop-m3/diffusion_pusht/diffusion_pusht__pytorch_fp32__laptop-m3__full_denoise.json",
+    "timing_profile_sha256": "db4a4fc45a8fb508c8c4b7e96fe644b96b5c99343e8736d7464b4253a453fbb9",
+    "upstream_agreement_path": "/Users/mertogul/Desktop/breakpoint-1/artifacts/export/diffusion_pusht/upstream_agreement.json",
+    "upstream_agreement_sha256": "a6d541d622d4aa144cb685517788ea9ddffa08d3c0b06d1a20ccf139c3d7bc3c"
+  },
+  "backend": "pytorch",
+  "baseline_reuse": {
+    "by_explicit_reference_only": true,
+    "enabled": true,
+    "fingerprint": {
+      "image_mode": "native",
+      "latency_s": 0.0,
+      "no_device_profile": true,
+      "variant_label": "pytorch_fp32"
+    }
+  },
+  "candidate": "diffusion_pusht",
+  "host": {
+    "compute_device": "cpu",
+    "torch_num_threads": 4
+  },
+  "phase": "full",
+  "phase_config": {
+    "env_seed_start": 6000,
+    "isolate_axes": true,
+    "jpeg_qualities": [
+      "bypass",
+      95,
+      75,
+      50,
+      25,
+      10
+    ],
+    "latency_ms": [
+      0,
+      100,
+      200,
+      400,
+      600,
+      800
+    ],
+    "n_episodes": 5,
+    "native_bypass_is_not_jpeg_quality_100": true,
+    "note": "Isolated axis sweeps; confirmation with fresh seeds stays separate.",
+    "phase": "exploratory",
+    "policy_seed_offset": 10000,
+    "resolution_hw": [
+      [
+        96,
+        96
+      ],
+      [
+        48,
+        48
+      ],
+      [
+        32,
+        32
+      ],
+      [
+        24,
+        24
+      ]
+    ]
+  },
+  "protocol_name": "diffusion_pusht_stress",
+  "protocol_version": "0.1",
+  "scheduler": {
+    "chunk_arrival_policy": "discard_stale",
+    "latency_end_of_trace": "fail",
+    "run_conditions_sequentially": true
+  },
+  "schema_version": 1,
+  "source_revision": {
+    "archive_context": false,
+    "dirty": false,
+    "kind": "git",
+    "revision": "1b5013adda1cd874d2a9c2ab450f511ecd54e7fc",
+    "status_porcelain": ""
+  },
+  "statistics": {
+    "baseline_success_floor": 0.5,
+    "bootstrap_seed": 20261012,
+    "breakpoint_ratio": 0.8,
+    "confirmation_fresh_seeds_separate": true,
+    "coverage": "pointwise",
+    "n_bootstrap": 2000
+  },
+  "trace_window": {
+    "design": "contiguous_evenly_spaced_starts",
+    "end_of_trace": "fail",
+    "formula": "floor(i*(N-32)/(n_episodes-1))",
+    "length": 32,
+    "not_block_resample": true,
+    "not_continuous_full_trace_replay": true
+  }
+}

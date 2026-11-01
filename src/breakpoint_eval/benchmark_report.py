@@ -795,7 +795,7 @@ def diffusion_caveats(data: ReportData) -> list[str]:
     notes.append("Delay is injected in simulated time; host generation time is not added.")
     notes.append(
         "No ONNX, quantization, H.264 or device replay for this candidate "
-        "([methodology](../../../docs/methodology.md))."
+        "([methodology](../../../../docs/methodology.md))."
     )
     return notes
 

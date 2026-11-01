@@ -1,6 +1,6 @@
 # Methodology
 
-This page defines how Breakpoint injects stress, validates the model and turns episodes into numbers. The saved example is described in its [benchmark README](../benchmarks/act-transfer/deployment-stress/README.md). The thresholds below are project conventions, not safety criteria.
+This page defines how Breakpoint injects stress, validates the model and turns episodes into numbers. The saved ACT example is described in its [benchmark README](../benchmarks/act-transfer/deployment-stress/README.md); Diffusion PushT in its [benchmark README](../benchmarks/diffusion-pusht/stress/README.md). The thresholds below are project conventions, not safety criteria.
 
 ## Control timing
 
@@ -114,7 +114,7 @@ Checkpoint settings: `n_obs_steps` 2, `horizon` 16, `n_action_steps` 8, DDPM noi
 
 Constant delay uses the same discrete-event scheduler and `discard_stale` arrival policy as ACT, in simulated time only; host generation time is not added to `L`. With an 8-step chunk and a 100 ms period, `L = 800` ms makes every action in the chunk stale on arrival. Resolution starts from native 96x96. JPEG encode and decode are at native 96x96. A separate policy RNG seed is applied per episode (`env_seed + policy_seed_offset`).
 
-Axes in the config: constant delay, resolution and JPEG. Precision recipes, H.264 and device-profile conditions are not in the plan.
+Axes in the config: constant delay, resolution and JPEG. Precision recipes, H.264 and device-profile conditions are not in the plan. The packaged full phase uses `n_episodes` 5 (env seeds 6000 to 6004): 80 episode rows across 16 condition rows, with resolution and JPEG reusing the delay-plan 0 ms baseline (70 fresh episodes, 15 distinct run reports).
 
 ### Upstream check
 
@@ -122,7 +122,7 @@ Axes in the config: constant delay, resolution and JPEG. Precision recipes, H.26
 
 ### Timing
 
-`scripts/profile_diffusion.py` times one full PyTorch action-generation call (`pytorch_generate_actions_full_denoise`) on real PushT observations (env reset, native image path, then preprocess). Defaults: 5 warm-ups (discarded), then 50 measured calls, each on a distinct reset seed from 2300 upward. The profile is packaged and shown in the report; those latencies are not replayed into episodes as device delay.
+`scripts/profile_diffusion.py` times one full PyTorch action-generation call (`pytorch_generate_actions_full_denoise`) on real PushT observations (env reset, native image path, then preprocess). Defaults: 5 warm-ups (discarded), then 50 measured calls, each on a distinct reset seed from 2300 upward. The packaged laptop-m3 profile (4 torch threads, CPU) has median 13433.8 ms, p95 32554.3 ms, p99 48941.5 ms and max 49842.4 ms. The control period is 100 ms and the largest tested delay is 800 ms. The profile is shown in the report; those latencies are not replayed into episodes as device delay.
 
 ### Not supported
 

@@ -52,7 +52,7 @@ def set_writable(path: Path, *, writable: bool) -> None:
         item.chmod(mode | stat.S_IWUSR if writable else mode & ~mask)
 
 
-def check_installed(wheel: Path, example_data: Path | None) -> None:
+def check_installed(wheel: Path, example_data: list[Path]) -> None:
     with tempfile.TemporaryDirectory(prefix="breakpoint-wheel-") as tmp_name:
         tmp = Path(tmp_name)
         env_dir, outside, home, workspace = (tmp / n for n in ("venv", "outside", "home", "ws"))
@@ -109,16 +109,17 @@ def check_installed(wheel: Path, example_data: Path | None) -> None:
                     [python, "-m", "pip", "install", "-q", f"{wheel}[report]"], cwd=outside, env=env
                 )
                 set_writable(package_dir, writable=False)
-                report_dir = outside / "report"
                 script = Path(__file__).resolve().with_name("render_benchmark.py")
-                run(
-                    [python, script, "--input", example_data, "--out", report_dir],
-                    cwd=outside,
-                    env=env,
-                )
-                if not (report_dir / "index.html").is_file():
-                    raise SystemExit("saved example did not render index.html")
-                LOGGER.info("rendered saved example with the installed wheel")
+                for index, data_dir in enumerate(example_data):
+                    report_dir = outside / f"report-{index}"
+                    run(
+                        [python, script, "--input", data_dir, "--out", report_dir],
+                        cwd=outside,
+                        env=env,
+                    )
+                    if not (report_dir / "index.html").is_file():
+                        raise SystemExit(f"saved example did not render index.html: {data_dir}")
+                    LOGGER.info("rendered saved example with the installed wheel: %s", data_dir)
             if any(workspace.iterdir()):
                 raise SystemExit("commands wrote into the explicit workspace unexpectedly")
 
@@ -130,13 +131,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, required=True)
     parser.add_argument(
-        "--example-data", type=Path, help="packaged benchmark data directory to render"
+        "--example-data",
+        type=Path,
+        action="append",
+        default=[],
+        help="packaged benchmark data directory to render (repeatable)",
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     check_license_files(args.wheel)
     check_installed(
-        args.wheel.resolve(), args.example_data.resolve() if args.example_data else None
+        args.wheel.resolve(),
+        [path.resolve() for path in args.example_data],
     )
     LOGGER.info("wheel checks passed")
     return 0

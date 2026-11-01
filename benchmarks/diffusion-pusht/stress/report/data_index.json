@@ -1,0 +1,329 @@
+{
+  "breakpoint_eval_version": "0.1.0",
+  "derived_by_report": [
+    "device_profile axis counts and paired tables",
+    "threshold-inside-interval flags",
+    "timing statistics",
+    "Pi telemetry summary"
+  ],
+  "displayed_counts": [
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_0",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_latency",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 5,
+      "wilson_high": 1.0,
+      "wilson_low": 0.5655175352168251
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_100",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_latency",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 3,
+      "wilson_high": 0.882379225767352,
+      "wilson_low": 0.2307242812760128
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_200",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_latency",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 4,
+      "wilson_high": 0.9637758913675698,
+      "wilson_low": 0.3755346297625253
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_400",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_latency",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 3,
+      "wilson_high": 0.882379225767352,
+      "wilson_low": 0.2307242812760128
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_600",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_latency",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 2,
+      "wilson_high": 0.769275718723987,
+      "wilson_low": 0.11762077423264783
+    },
+    {
+      "axis": "latency_ms",
+      "condition_id": "latency_ms_800",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_latency",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 0,
+      "wilson_high": 0.43448246478317476,
+      "wilson_low": 0.0
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_native",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 5,
+      "wilson_high": 1.0,
+      "wilson_low": 0.5655175352168251
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_48x48",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 3,
+      "wilson_high": 0.882379225767352,
+      "wilson_low": 0.2307242812760128
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_32x32",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 3,
+      "wilson_high": 0.882379225767352,
+      "wilson_low": 0.2307242812760128
+    },
+    {
+      "axis": "resolution",
+      "condition_id": "resolution_capture_24x24",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_resolution",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 3,
+      "wilson_high": 0.882379225767352,
+      "wilson_low": 0.2307242812760128
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_bypass",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 5,
+      "wilson_high": 1.0,
+      "wilson_low": 0.5655175352168251
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q95",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 3,
+      "wilson_high": 0.882379225767352,
+      "wilson_low": 0.2307242812760128
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q75",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 2,
+      "wilson_high": 0.769275718723987,
+      "wilson_low": 0.11762077423264783
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q50",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 2,
+      "wilson_high": 0.769275718723987,
+      "wilson_low": 0.11762077423264783
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q25",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 2,
+      "wilson_high": 0.769275718723987,
+      "wilson_low": 0.11762077423264783
+    },
+    {
+      "axis": "jpeg",
+      "condition_id": "jpeg_q10",
+      "derived_by_report": false,
+      "eligible": 5,
+      "plan_id": "v0.1_full_jpeg",
+      "planned": 5,
+      "runtime_errors": 0,
+      "successes": 1,
+      "wilson_high": 0.6244653702374747,
+      "wilson_low": 0.036224108632430085
+    }
+  ],
+  "files": [
+    {
+      "bytes": 37675,
+      "path": "index.html",
+      "sha256": "6bebefea9304e883cfde15f77408fff5c020532dda8e045e168e3ced6a3cceef"
+    },
+    {
+      "bytes": 20424,
+      "path": "plots/success_jpeg.dark.svg",
+      "sha256": "6abd5e9e7d131423a7e7c1c6e902041531ac67f9a7b3e06ca848dab811354f93"
+    },
+    {
+      "bytes": 55908,
+      "path": "plots/success_jpeg.png",
+      "sha256": "6bc3465dc78010e0b72bc364b71d73173415378d9b84b12ca6e597fe85e0b97c"
+    },
+    {
+      "bytes": 20424,
+      "path": "plots/success_jpeg.svg",
+      "sha256": "f7d38e3794655d79c6c7f124f478bff32ed5e92a9c4582b7f12e443f19b876f2"
+    },
+    {
+      "bytes": 20603,
+      "path": "plots/success_latency_ms.dark.svg",
+      "sha256": "36cc0573c0e5501134b3f0d638e0096a9b48197266bf4539e686087961a78f7d"
+    },
+    {
+      "bytes": 56995,
+      "path": "plots/success_latency_ms.png",
+      "sha256": "059cf95432bdf7f212e8d93bb7dbbf0f9e5e9e25aaf7a805970518e269153773"
+    },
+    {
+      "bytes": 20603,
+      "path": "plots/success_latency_ms.svg",
+      "sha256": "cf969428325e130f96b0790c99eb2ab575f104fee08d98eef83b7a8acf81c5a7"
+    },
+    {
+      "bytes": 17204,
+      "path": "plots/success_resolution.dark.svg",
+      "sha256": "c00759e40e3fa23804841b4a9672fc0109f9db9401022871f9a4286c05c9bad3"
+    },
+    {
+      "bytes": 56792,
+      "path": "plots/success_resolution.png",
+      "sha256": "5c15dd85499450ab46c85688b5eecd746a2d781420970d65d76edf5a7e387a68"
+    },
+    {
+      "bytes": 17204,
+      "path": "plots/success_resolution.svg",
+      "sha256": "2bddf81884ce9b50ceb4742a626097b21470a950346bb4c4ab322098a0f00783"
+    },
+    {
+      "bytes": 7642,
+      "path": "report.md",
+      "sha256": "6c36005614dc177a61a53b634961f5d1b22a3edfd1e4e8394c0474ab84055e6a"
+    }
+  ],
+  "generator": "scripts/render_benchmark.py",
+  "input": {
+    "episode_rows": 80,
+    "manifest_sha256": "05f68026c418b584a04302ae6683c05ab2620adba3ef282a647fc3c4b508129d",
+    "simulated_runs": 15
+  },
+  "schema_version": 1,
+  "validation": [
+    {
+      "detail": "45 files hashed",
+      "name": "Packaged files match the manifest digests",
+      "passed": true
+    },
+    {
+      "detail": "80 rows",
+      "name": "Episode rows match planned seeds and success flags",
+      "passed": true
+    },
+    {
+      "detail": "outcomes: success, time_limit_truncation",
+      "name": "No runtime errors or policy failures in any episode",
+      "passed": true
+    },
+    {
+      "detail": "16 condition rows",
+      "name": "Every axis lists each planned condition once",
+      "passed": true
+    },
+    {
+      "detail": "6 conditions",
+      "name": "v0.1_full_latency saved summary matches episode records",
+      "passed": true
+    },
+    {
+      "detail": "4 conditions",
+      "name": "v0.1_full_resolution saved summary matches episode records",
+      "passed": true
+    },
+    {
+      "detail": "6 conditions",
+      "name": "v0.1_full_jpeg saved summary matches episode records",
+      "passed": true
+    },
+    {
+      "detail": "10 referenced rows; differing: []",
+      "name": "Shared baseline outcomes match latency_ms_0 seed by seed",
+      "passed": true
+    },
+    {
+      "detail": "all episodes",
+      "name": "Latency axis recorded delay matches the condition label",
+      "passed": true
+    },
+    {
+      "detail": "passed=True; determinism=True",
+      "name": "Upstream agreement passed on 5 seeds with bitwise-equal actions and rerun determinism",
+      "passed": true
+    },
+    {
+      "detail": "candidate=diffusion_pusht",
+      "name": "Every episode row candidate equals the lock candidate (no pooling)",
+      "passed": true
+    },
+    {
+      "detail": "ok",
+      "name": "Timing profile checkpoint hashes equal the lock checkpoint hashes",
+      "passed": true
+    }
+  ]
+}

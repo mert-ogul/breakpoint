@@ -1,0 +1,5 @@
+{
+  "condition_id": "latency_ms_0",
+  "report": "/Users/mertogul/Desktop/breakpoint-1/outputs/diffusion-pusht/full/shared_baselines/default_fp32_native_L0/run_report.json",
+  "by_explicit_reference_only": true
+}

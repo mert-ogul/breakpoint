@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from breakpoint_eval.benchmark_protocol import (
+    BACKEND_ONNXRUNTIME,
     ResolvedArtifacts,
     assert_lock_matches,
     condition_completed,
@@ -136,6 +137,8 @@ class Run:
             plan=self.plan,
             condition=_condition(self.plan, condition_id),
             shared_baseline_dir=self.shared,
+            backend=BACKEND_ONNXRUNTIME,
+            variant_label="onnx_fp32",
         )
 
     def edit(self, path: Path, change) -> None:
@@ -158,6 +161,8 @@ def test_finished_conditions_are_complete(run: Run) -> None:
         plan=run.plan,
         condition=_condition(run.plan, "latency_ms_40"),
         shared_baseline_dir=run.shared,
+        backend=BACKEND_ONNXRUNTIME,
+        variant_label="onnx_fp32",
     )
 
 
@@ -390,7 +395,12 @@ def test_resumed_records_reach_the_packager(run: Run) -> None:
         condition = _condition(run.plan, condition_id)
         condition_dir = run.conditions / condition_id
         assert condition_completed(
-            condition_dir, plan=run.plan, condition=condition, shared_baseline_dir=run.shared
+            condition_dir,
+            plan=run.plan,
+            condition=condition,
+            shared_baseline_dir=run.shared,
+            backend=BACKEND_ONNXRUNTIME,
+            variant_label="onnx_fp32",
         )
         records.append(
             benchmark._resumed_record(condition_dir, condition, condition_dir / "run_report.json")
