@@ -39,7 +39,7 @@ Episode records keep outcome, seeds, step and inference counts, reward sums, ima
 | --- | ---: | ---: | ---: | ---: | ---: |
 | laptop-m3 | 50 | 13433.8 | 32554.3 | 48941.5 | 49842.4 |
 
-One timed call is a full `generate_actions` with all 100 denoising steps on CPU with 4 torch threads (`data/timing/laptop-m3.json`). These timings are not replayed into episodes. The measured median is 13433.8 ms; the largest tested delay is 800 ms and the control period is 100 ms.
+One timed call is a full `generate_actions` with all 100 denoising steps on CPU with 4 torch threads, device label laptop-m3 (`data/timing/laptop-m3.json`). These timings are not replayed into episodes. The measured median is 13433.8 ms and the max is 49842.4 ms; the largest tested delay is 800 ms and the control period is 100 ms. The host is a fanless MacBook Air, so long runs can throttle.
 
 ## Result-specific limitations
 
@@ -48,7 +48,7 @@ One timed call is a full `generate_actions` with all 100 denoising steps on CPU 
 - Model card success is 65.4% over 500 episodes; this run's baseline is 5/5. Stated as context, not a reproduction.
 - Delay is injected in simulated time; host generation time is not added.
 - No ONNX, quantization, H.264 or device replay for this candidate ([methodology](../../../docs/methodology.md#diffusion-policy-on-pusht)).
-- The saved resolution summary used the same ordered value for every point; the report orders by plan (96x96 native, 48x48, 32x32, 24x24).
+- The saved resolution summary used the same ordered value for every point; the report orders by plan (native, 48x48, 32x32, 24x24).
 - Other tasks, policies, physical hardware, and transfer of these thresholds to another setup are not covered.
 
 ## Evidence that is not in the repository

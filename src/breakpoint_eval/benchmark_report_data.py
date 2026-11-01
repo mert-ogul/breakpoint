@@ -24,6 +24,7 @@ from breakpoint_eval.artifact_names import (
     require_artifact,
     resolve_artifact,
 )
+from breakpoint_eval.benchmark_protocol import BACKEND_ONNXRUNTIME, BACKEND_PYTORCH
 from breakpoint_eval.episode_outcome import EpisodeOutcome
 from breakpoint_eval.experiment_summary import wilson_interval
 from breakpoint_eval.latency_trace import contiguous_window_starts
@@ -61,8 +62,6 @@ RATE_TOLERANCE = 1e-9
 ORDERED_AXES = frozenset({"latency_ms", "resolution", "jpeg", "h264"})
 MANIFEST_SCHEMA_VERSION = 1
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
-BACKEND_ONNXRUNTIME = "onnxruntime"
-BACKEND_PYTORCH = "pytorch"
 ROW_KEYS = (
     "plan_id",
     "condition_id",
@@ -140,6 +139,7 @@ class ConditionView:
     paired: dict[str, int] | None = None
     saved_contrast: dict[str, Any] | None = None
     ordered_value: float | None = None
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -561,6 +561,7 @@ def condition_view(
         wilson=wilson_interval(successes, eligible),
         saved_contrast=contrasts.get(entry["condition_id"]),
         ordered_value=(saved or {}).get("ordered_value"),
+        params=dict(entry.get("params") or {}),
     )
 
 

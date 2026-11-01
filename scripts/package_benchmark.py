@@ -27,6 +27,8 @@ from breakpoint_eval.artifact_names import (  # noqa: E402
     resolve_artifact,
 )
 from breakpoint_eval.benchmark_protocol import (  # noqa: E402
+    BACKEND_ONNXRUNTIME,
+    BACKEND_PYTORCH,
     backend_and_variant_from_lock,
     condition_incomplete_reason,
     resolve_profile_by_identity,
@@ -41,8 +43,6 @@ LOGGER = logging.getLogger("package_benchmark")
 DEFAULT_FULL = REPO_ROOT / "outputs" / "act-transfer" / "full"
 DEFAULT_OUT = REPO_ROOT / "benchmarks" / "act-transfer" / "deployment-stress" / "data"
 REFERENCE_NAME = "baseline_reference.json"
-BACKEND_ONNXRUNTIME = "onnxruntime"
-BACKEND_PYTORCH = "pytorch"
 # "resumed_complete" was written by runs resumed before records kept their original status.
 COMPLETED_STATUSES = frozenset({"complete", "resumed_complete"})
 HISTORICAL_NOTE = (

@@ -4,7 +4,7 @@
 
 ## Summary
 
-One pretrained Diffusion Policy (`lerobot/diffusion_pusht` at revision `202c8695947a458d8ce08ce1c0219f2588d60b33`) on PushT in simulation, run as PyTorch FP32 on CPU. Simulation only.
+One pretrained Diffusion Policy (`lerobot/diffusion_pusht` at revision `202c8695947a458d8ce08ce1c0219f2588d60b33`) on PushT, run as PyTorch FP32 on CPU. Simulation only.
 
 Exploratory run with 5 paired episodes per condition; not confirmed with fresh seeds.
 
@@ -20,7 +20,8 @@ Exploratory run with 5 paired episodes per condition; not confirmed with fresh s
 - Sample size: 5 paired episodes per condition. A grid point below the threshold is not an interpolated exact boundary.
 - "Interval spans threshold" means the Wilson interval overlaps the threshold; that is an interval overlap, not a paired significance test. Conditions: Constant added delay: 100 ms, 200 ms, 400 ms; Camera resolution: 48x48, 32x32, 24x24; JPEG quality: q95.
 - 800 ms: the delay is at least one chunk span (800 ms), every action arrived stale and no policy action was applied, so its successes reflect holding the start position.
-- Resolution ordering: the saved summary stored the same ordered value for every resolution, so conditions are ordered by plan order (native, 240x320, 120x160, 60x80), which is mild to severe.
+- Resolution ordering: the saved summary stored the same ordered value for every resolution, so conditions are ordered by plan order (native, 48x48, 32x32, 24x24), which is mild to severe.
+- 5 paired episodes per condition give wide intervals.
 - Model card success is 65.4% over 500 episodes; this run's baseline is 5/5. Stated as context, not a reproduction.
 - Delay is injected in simulated time; host generation time is not added.
 - No ONNX, quantization, H.264 or device replay for this candidate ([methodology](../../../../docs/methodology.md)).
@@ -66,7 +67,7 @@ Stress variable: pixels, height x width (resampled back to model input).
 | 32x32 | 3/5 | 60.0% | 23.1% to 88.2% | below (interval spans threshold) | lost 2; gained 0; both succeeded 3; neither 0 |
 | 24x24 | 3/5 | 60.0% | 23.1% to 88.2% | below (interval spans threshold) | lost 2; gained 0; both succeeded 3; neither 0 |
 
-First tested point below threshold: 48x48 (between 480x640 native and 48x48).
+First tested point below threshold: 48x48 (between 96x96 native and 48x48).
 
 Per-seed outcomes (● success, ○ none, ▼ lost, ▲ gained):
 
@@ -111,9 +112,10 @@ q10               ●▼▼▼▼
 | --- | ---: | ---: | ---: | ---: | ---: |
 | laptop-m3 | 50 | 13433.8 | 32554.3 | 48941.5 | 49842.4 |
 
-The timed call covers one full generate_actions with all 100 denoising steps on cpu with 4 torch threads.
-The measured median is 13433.8 ms; the largest tested delay is 800 ms and the control period is 100 ms.
+The timed call covers one full generate_actions with all 100 denoising steps on cpu with 4 torch threads (device label laptop-m3).
+The measured median is 13433.8 ms and the max is 49842.4 ms; the largest tested delay is 800 ms and the control period is 100 ms.
 These timings are not replayed into episodes.
+The host is a fanless MacBook Air, so long runs can throttle.
 
 ## Checks
 

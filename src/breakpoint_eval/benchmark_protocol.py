@@ -50,7 +50,6 @@ KNOWN_PROTOCOLS = frozenset(
         (DIFFUSION_PROTOCOL_NAME, DIFFUSION_PROTOCOL_VERSION),
     }
 )
-NATIVE_HW = (480, 640)
 BACKEND_ONNXRUNTIME = "onnxruntime"
 BACKEND_PYTORCH = "pytorch"
 # Same label as diffusion_profile.KIND_ACTION_GENERATION_TIMING (avoid importing torch here).

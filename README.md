@@ -49,7 +49,7 @@ Pretrained policy `lerobot/act_aloha_sim_transfer_cube_human`, ONNX Runtime on C
 - Device latency replay (categorical comparison, no ordering) against 0.8 x baseline: laptop-m3 replay 24/30 not below; rpi5 replay 9/30 below.
 <!-- results:end -->
 
-These are observed grid points, not exact boundaries. The [full report](benchmarks/act-transfer/deployment-stress/report/report.md) has intervals, per-seed paired outcomes, latency traces and provenance. Evidence layout and result-specific limitations are in the [benchmark README](benchmarks/act-transfer/deployment-stress/README.md).
+These are observed grid points, not exact boundaries. Thirty episodes per condition give wide intervals. The run is exploratory and has not been confirmed with fresh seeds. The [full report](benchmarks/act-transfer/deployment-stress/report/report.md) has intervals, per-seed paired outcomes, latency traces and provenance. Evidence layout and result-specific limitations are in the [benchmark README](benchmarks/act-transfer/deployment-stress/README.md).
 
 ## Diffusion Policy on PushT
 
@@ -80,7 +80,6 @@ Simulation only. Five episodes per condition give wide intervals; the run is exp
 ## Limitations
 
 - Simulation only. The results say nothing about a physical robot.
-- Thirty episodes per condition give wide intervals. The run is exploratory and has not been confirmed with fresh seeds.
 - The rpi5 replay is one throttled Pi state. The firmware reported throttling or a temperature limit in almost every telemetry sample.
 - INT8 is a static QDQ graph. It is not a full-model INT8 result and was not required to match FP32 numerically ([methodology](docs/methodology.md#export-and-validation)).
 - INT4 stores 29 of 41 MatMul nodes as 4-bit blocks (61.6% of weight parameters); Conv, Gemm and activation MatMuls stay FP32, and weights are dequantized and computed in float. This is not a full-model INT4 result.

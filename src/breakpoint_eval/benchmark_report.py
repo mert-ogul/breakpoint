@@ -36,7 +36,11 @@ from breakpoint_eval.benchmark_report_data import (
     load_report_data,
     lock_backend,
 )
-from breakpoint_eval.benchmark_report_plots import render_all_plots, short_label
+from breakpoint_eval.benchmark_report_plots import (
+    condition_capture_hw,
+    render_all_plots,
+    short_label,
+)
 from breakpoint_eval.benchmark_report_style import CSS
 from breakpoint_eval.candidate_map import CANDIDATES
 
@@ -116,7 +120,7 @@ CANDIDATE_REPORT = {
         "title": "Diffusion Policy on PushT under stress",
         "description": (
             "One pretrained Diffusion Policy (`lerobot/diffusion_pusht` at revision `{revision}`) "
-            "on PushT in simulation, {runtime}. Simulation only."
+            "on PushT, {runtime}. Simulation only."
         ),
     },
 }
@@ -185,12 +189,15 @@ def plain_label(condition_id: str, *, capture_hw: list[int] | tuple[int, ...] | 
 
 
 def plain_label_view(view: ConditionView) -> str:
-    hw = None
-    if view.rows:
-        candidate = view.rows[0].get("capture_hw")
-        if isinstance(candidate, (list, tuple)) and len(candidate) >= 2:
-            hw = candidate
-    return plain_label(view.condition_id, capture_hw=hw)
+    return plain_label(view.condition_id, capture_hw=condition_capture_hw(view))
+
+
+def plain_label_on_axis(axis: AxisView, condition_id: str) -> str:
+    """Label a condition id using that axis plan's params (needed for resolution_native)."""
+    view = next((v for v in axis.conditions if v.condition_id == condition_id), None)
+    if view is not None:
+        return plain_label_view(view)
+    return plain_label(condition_id)
 
 
 def display_label(view: ConditionView) -> str:
@@ -344,9 +351,9 @@ def breakpoint_sentence(axis: AxisView) -> str:
     if bp["status"] == "observed_interval":
         interval = bp["observed_interval"]
         return (
-            f"First tested point below threshold: {plain_label(bp['first_below'])} "
-            f"(between {plain_label(interval['above_condition_id'])} and "
-            f"{plain_label(interval['below_condition_id'])})."
+            f"First tested point below threshold: {plain_label_on_axis(axis, bp['first_below'])} "
+            f"(between {plain_label_on_axis(axis, interval['above_condition_id'])} and "
+            f"{plain_label_on_axis(axis, interval['below_condition_id'])})."
         )
     if bp["status"] == "not_reached_within_tested_range":
         return "No tested point is below the threshold."
@@ -670,24 +677,27 @@ def action_generation_timing_sentences(data: ReportData, timing: TimingView) -> 
         threads = data.lock["host"].get("torch_num_threads")
     first = (
         f"The timed call covers one full generate_actions with all {steps} denoising steps "
-        f"on {device} with {threads} torch threads."
+        f"on {device} with {threads} torch threads (device label {timing.device_label})."
     )
     median_ms = timing.median_s * 1000.0
+    max_ms = timing.max_s * 1000.0
     delay_s = _largest_tested_delay_s(data)
     period_s = _control_period_s(data)
     delay_ms = delay_s * 1000.0 if delay_s is not None else None
     period_ms = period_s * 1000.0 if period_s is not None else None
     if delay_ms is not None and period_ms is not None:
         second = (
-            f"The measured median is {median_ms:.1f} ms; the largest tested delay is "
-            f"{delay_ms:.0f} ms and the control period is {period_ms:.0f} ms."
+            f"The measured median is {median_ms:.1f} ms and the max is {max_ms:.1f} ms; "
+            f"the largest tested delay is {delay_ms:.0f} ms and the control period is "
+            f"{period_ms:.0f} ms."
         )
     else:
-        second = f"The measured median is {median_ms:.1f} ms."
+        second = f"The measured median is {median_ms:.1f} ms and the max is {max_ms:.1f} ms."
     return [
         first,
         second,
         "These timings are not replayed into episodes.",
+        "The host is a fanless MacBook Air, so long runs can throttle.",
     ]
 
 
@@ -831,7 +841,10 @@ def diffusion_caveats(data: ReportData) -> list[str]:
     candidate = data.lock["candidate"]
     spec = CANDIDATES.get(candidate)
     base = baseline_view(data.axes[0])
-    notes: list[str] = []
+    n = episodes_per_condition(data)
+    notes: list[str] = [
+        f"{n} paired episodes per condition give wide intervals.",
+    ]
     if spec is not None and spec.card_success_rate_pct is not None:
         notes.append(
             f"Model card success is {spec.card_success_rate_pct:g}% over {spec.card_n_episodes} "
@@ -892,10 +905,14 @@ def report_limitations(data: ReportData) -> list[str]:
     notes.extend(full_underflow_latency_caveats(data))
     resolution = next((a for a in data.axes if a.axis == "resolution"), None)
     if resolution is not None and len({v.ordered_value for v in resolution.conditions[1:]}) == 1:
+        order = ", ".join(
+            "native" if v.condition_id == "resolution_native" else plain_label_view(v)
+            for v in resolution.conditions
+        )
         notes.append(
             "Resolution ordering: the saved summary stored the same ordered value for "
-            "every resolution, so conditions are ordered by plan order (native, "
-            "240x320, 120x160, 60x80), which is mild to severe."
+            f"every resolution, so conditions are ordered by plan order ({order}), "
+            "which is mild to severe."
         )
     rpi = next((p for p in data.profiles if p.device == "rpi5" and p.telemetry), None)
     if rpi is not None:

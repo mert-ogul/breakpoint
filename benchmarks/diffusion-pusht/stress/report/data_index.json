@@ -202,9 +202,9 @@
   ],
   "files": [
     {
-      "bytes": 37852,
+      "bytes": 38012,
       "path": "index.html",
-      "sha256": "b3935dc62dfe6d5c46d50b6f27d349fa6fffe54f55f512701995338a712c28c4"
+      "sha256": "47b3109c14b795c40390dac5de86b796170b27c39fd9704c07e956bfe215b4da"
     },
     {
       "bytes": 20424,
@@ -252,9 +252,9 @@
       "sha256": "2bddf81884ce9b50ceb4742a626097b21470a950346bb4c4ab322098a0f00783"
     },
     {
-      "bytes": 7813,
+      "bytes": 7961,
       "path": "report.md",
-      "sha256": "1e014f5beeb631a0a28a8ddd07bb28a1ac7a7449e89511490a1dd7ca0abb050d"
+      "sha256": "1c4d2b9f6c63c50ff0398d541d56e348f45978b32b55616e44cfc4c4770899e7"
     }
   ],
   "generator": "scripts/render_benchmark.py",

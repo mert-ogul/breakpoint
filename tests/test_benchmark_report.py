@@ -503,7 +503,9 @@ def test_short_label_resolution_native_uses_capture_hw() -> None:
     from breakpoint_eval.benchmark_report_data import ConditionView
     from breakpoint_eval.benchmark_report_plots import short_label
 
-    assert short_label("resolution_native") == "480x640\nnative"
+    with pytest.raises(ValueError, match="capture_hw or native_hw"):
+        short_label("resolution_native")
+    assert short_label("resolution_native", capture_hw=[480, 640]) == "480x640\nnative"
     assert short_label("resolution_native", capture_hw=[96, 96]) == "96x96\nnative"
     assert plain_label("resolution_native", capture_hw=[96, 96]) == "96x96 native"
     view = ConditionView(
@@ -511,13 +513,26 @@ def test_short_label_resolution_native_uses_capture_hw() -> None:
         label="native",
         referenced_baseline=False,
         is_baseline=True,
-        rows=[{"capture_hw": [96, 96]}],
+        rows=[],
+        successes=1,
+        eligible=1,
+        n_runtime_error=0,
+        wilson={"low": 0.0, "high": 1.0},
+        params={"capture_hw": [96, 96], "native_hw": [96, 96]},
+    )
+    assert plain_label_view(view) == "96x96 native"
+    row_view = ConditionView(
+        condition_id="resolution_native",
+        label="native",
+        referenced_baseline=False,
+        is_baseline=True,
+        rows=[{"capture_hw": [480, 640]}],
         successes=1,
         eligible=1,
         n_runtime_error=0,
         wilson={"low": 0.0, "high": 1.0},
     )
-    assert plain_label_view(view) == "96x96 native"
+    assert plain_label_view(row_view) == "480x640 native"
 
 
 def test_short_label_h264() -> None:
@@ -1183,10 +1198,17 @@ def test_synthetic_pytorch_package_report(tmp_path: Path) -> None:
     assert "Action-generation timing" in html
     sentences = action_generation_timing_sentences(data, data.timings[0])
     assert "100 denoising steps" in sentences[0]
+    assert "laptop-m3" in sentences[0] and "4 torch threads" in sentences[0]
     assert "800" in sentences[1] and "100" in sentences[1]
+    assert "median" in sentences[1] and "max" in sentences[1]
     assert "not replayed into episodes" in sentences[2]
+    assert "fanless MacBook Air" in sentences[3]
+    para = evaluated_paragraph(data)
+    assert para.lower().count("simulation") == 1
+    assert "Simulation only" in para
+    assert "wide intervals" in md
     assert "No ONNX" in md
-    for banned in ("ONNX Runtime", "ONNX FP32", "rpi5", "INT8"):
+    for banned in ("ONNX Runtime", "ONNX FP32", "rpi5", "INT8", "480x640"):
         assert banned not in md
         assert banned not in html
 
