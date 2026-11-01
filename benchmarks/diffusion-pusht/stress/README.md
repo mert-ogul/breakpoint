@@ -41,6 +41,14 @@ Episode records keep outcome, seeds, step and inference counts, reward sums, ima
 
 One timed call is a full `generate_actions` with all 100 denoising steps on CPU with 4 torch threads, device label laptop-m3 (`data/timing/laptop-m3.json`). These timings are not replayed into episodes. The measured median is 13433.8 ms and the max is 49842.4 ms; the largest tested delay is 800 ms and the control period is 100 ms. The host is a fanless MacBook Air, so long runs can throttle.
 
+## Comparison media
+
+`media/comparison.gif` (1.4 MB) and `media/comparison.mp4` (0.3 MB, H.264) show the same 33.2 s, 1280x794 comparison. The left panel is the 0 ms baseline and the right panel is +600 ms, both with env seed 6000 and policy RNG seed 16000.
+
+The stress condition is the largest tested delay strictly below one chunk span (8 actions × 100 ms = 800 ms). At 800 ms every action arrives stale and the agent never moves, so that point is not shown. Among the three seeds where the baseline succeeded and the 600 ms episode did not (6000, 6001, 6003), the lowest was used. No other seeds were run or compared. Frames are every second 100 ms control step at 5 fps, so playback is real time.
+
+Both episodes were re-recorded with the saved settings. Outcome, step count, inference count, actions and the per-step timeline matched exactly. Per-step rewards matched within 1e-12 relative, with a largest difference of 2.2e-16. `media/verification.json` holds the comparison and `media/selection.json` holds the selection record.
+
 ## Result-specific limitations
 
 - Exploratory run, 5 episodes per condition; not confirmed with fresh seeds. An interval that spans the threshold is unresolved.
