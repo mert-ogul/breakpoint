@@ -1,6 +1,6 @@
 # Reproduce the benchmark
 
-This page runs the ACT transfer benchmark from a clean checkout: export, validation, device profiling, evaluation, packaging, report and optional media. To render the saved results only, use the [README](../README.md#render-the-saved-report).
+This page runs the ACT transfer benchmark from a clean checkout: export, validation, device profiling, evaluation, packaging, report and optional media. Diffusion Policy on PushT has its own section below. To render the saved ACT results only, use the [README](../README.md#render-the-saved-report).
 
 Run every command from the clone root. The commands call `.venv/bin/...` directly, so nothing needs to be activated.
 
@@ -148,3 +148,76 @@ Needs the simulator environment, Pillow, matplotlib and `ffmpeg` with libx264 on
 It re-runs the baseline and 640 ms episodes of the selected seed with the saved settings and requires the outcome, step count, inference count, rewards and timeline to equal the saved result. It writes `comparison.mp4`, `comparison.gif`, `social-preview.png`, `selection.json` and `verification.json`. The export is read from `artifacts.export_dir` in the configuration unless `--export-dir` is given.
 
 For the saved example, `--data` defaults to `benchmarks/act-transfer/deployment-stress/data` and the output to its `media/` directory.
+
+## Diffusion Policy on PushT
+
+Separate from ACT transfer: own config (`configs/diffusion-pusht.json`), seeds, package and report. Requires the simulator install from step 1 (includes `gym-pusht`). Commands write under `artifacts/export/diffusion_pusht`, `profiles/laptop-m3/diffusion_pusht` and `outputs/diffusion-pusht/`.
+
+### 1. Export record
+
+Records ONNX and device profiling as unsupported; does not build an ONNX graph.
+
+```bash
+.venv/bin/breakpoint export \
+  --candidate diffusion_pusht \
+  --device cpu \
+  --output-dir artifacts/export/diffusion_pusht
+```
+
+### 2. Verify upstream agreement
+
+Closed-loop L=0 scheduler path versus upstream `select_action` on seeds 2200 to 2204. Must pass before a run will resolve artifacts.
+
+```bash
+.venv/bin/breakpoint verify-upstream \
+  --candidate diffusion_pusht \
+  --device cpu \
+  --torch-threads 4 \
+  --output artifacts/export/diffusion_pusht/upstream_agreement.json
+```
+
+### 3. Profile action generation
+
+Times one full PyTorch `generate_actions` call on real PushT observations (5 warm-ups, 50 measured by default). Use the same thread count as the config.
+
+```bash
+.venv/bin/python scripts/profile_diffusion.py \
+  --device-label laptop-m3 \
+  --device cpu \
+  --torch-threads 4 \
+  --output-dir profiles/laptop-m3/diffusion_pusht
+```
+
+### 4. Dry run, smoke and full run
+
+```bash
+.venv/bin/python scripts/run_benchmark.py \
+  --config configs/diffusion-pusht.json \
+  --phase smoke --out outputs/diffusion-pusht/smoke --dry-run
+
+.venv/bin/python scripts/run_benchmark.py \
+  --config configs/diffusion-pusht.json \
+  --phase smoke --out outputs/diffusion-pusht/smoke
+
+.venv/bin/python scripts/run_benchmark.py \
+  --config configs/diffusion-pusht.json \
+  --phase full --out outputs/diffusion-pusht/full
+```
+
+Smoke: env seeds 4000 to 4004, baseline, 800 ms, 24x24, JPEG 10. Full: env seeds 6000 to 6004, isolated delay, resolution and JPEG. Full-run wall time depends on the measured generation median from step 3. After baseline reuse the full phase has 70 fresh episodes; an order-of-magnitude estimate at the zero-latency cadence is:
+
+`estimate_s ≈ 70 × (300 / 8) × median_s`
+
+where `median_s` is the profile median for one full `generate_actions` call, 300 is the episode step limit and 8 is `n_action_steps`. Under long constant delay a fully stale chunk can trigger a new request every control step, so generations per episode can rise toward 300.
+
+### 5. Package and render
+
+```bash
+.venv/bin/python scripts/package_benchmark.py \
+  --input outputs/diffusion-pusht/full --out outputs/diffusion-pusht/package
+.venv/bin/python scripts/render_benchmark.py \
+  --input outputs/diffusion-pusht/package --out outputs/diffusion-pusht/report \
+  --update-readme README.md --readme-block results-pusht
+```
+
+Pass `--out` on package; the script default is the ACT data directory. Open `outputs/diffusion-pusht/report/index.html`. Comparison media is not part of this candidate's flow.
