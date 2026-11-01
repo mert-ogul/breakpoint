@@ -38,6 +38,7 @@ glfw==2.10.2
 googleapis-common-protos==1.75.5
 gym-aloha==0.1.1
 gym-pusht==0.1.5
+pymunk==6.6.0
 gymnasium==0.29.1
 h11==0.16.0
 hf-xet==1.7.0

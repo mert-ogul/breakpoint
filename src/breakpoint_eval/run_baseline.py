@@ -67,6 +67,7 @@ class RunRequest:
     ort_providers: list[str] | None = None
     ort_intra_op_num_threads: int | None = None
     ort_inter_op_num_threads: int | None = None
+    torch_threads: int | None = None
 
 
 def run_baseline(req: RunRequest) -> Path:
@@ -102,6 +103,8 @@ def run_baseline(req: RunRequest) -> Path:
     env_cfg = make_env_config(spec)
     onnx_runtime = None
     policy = None
+    torch_version: str | None = None
+    torch_thread_count: int | None = None
     ort_providers = list(req.ort_providers) if req.ort_providers else ["CPUExecutionProvider"]
     ort_intra = req.ort_intra_op_num_threads
     ort_inter = req.ort_inter_op_num_threads
@@ -144,9 +147,17 @@ def run_baseline(req: RunRequest) -> Path:
         )
         backend = "onnxruntime"
     else:
+        import torch
+
         policy = load_policy(spec, str(checkpoint_dir), req.device)
         adapter = PolicyAdapter(policy, control_period_s=period_s, device=req.device)
         backend = "pytorch"
+        if req.torch_threads is not None:
+            if req.torch_threads < 1:
+                raise ValueError("torch_threads must be >= 1")
+            torch.set_num_threads(int(req.torch_threads))
+        torch_version = torch.__version__
+        torch_thread_count = torch.get_num_threads()
 
     image_cfg = req.image_cfg or ImageDegradeConfig(mode=ImageMode.NATIVE)
     if image_cfg.frame_rate_hz is None or image_cfg.mode is ImageMode.H264:
@@ -257,6 +268,9 @@ def run_baseline(req: RunRequest) -> Path:
         "cross_task_success_pooling": False,
         "success_semantics": spec.notes,
     }
+    if backend == "pytorch":
+        provenance["torch_version"] = torch_version
+        provenance["torch_threads"] = torch_thread_count
     if spec.policy_type == "diffusion":
         from breakpoint_eval.diffusion_adapter import diffusion_inference_provenance
 

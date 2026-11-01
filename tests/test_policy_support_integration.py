@@ -175,3 +175,31 @@ def test_smoke_diffusion_pusht_gates_and_unsupported_onnx(tmp_path) -> None:
     assert payload["onnx_export"]["status"] == "unsupported"
     assert payload["pytorch_simulation_axes"]["available"] is True
     assert payload["act_timings_reused"] is False
+    assert "config.json" in payload["checkpoint_files"]
+    assert "model.safetensors" in payload["checkpoint_files"]
+    assert payload["torch_dtype"]
+
+
+def test_smoke_diffusion_verify_upstream(tmp_path) -> None:
+    from breakpoint_eval.policy_validate import verify_upstream_agreement
+
+    try:
+        _adapter, _spec, root = _load_adapter("diffusion_pusht")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Diffusion PushT stack unavailable: {exc}")
+
+    out = tmp_path / "upstream_agreement.json"
+    payload = verify_upstream_agreement(
+        "diffusion_pusht",
+        [2200, 2201],
+        "cpu",
+        1,
+        out,
+        repo_root=root,
+    )
+    assert out.is_file()
+    assert "per_seed" in payload
+    assert "determinism" in payload
+    assert "checkpoint_files" in payload
+    assert payload["candidate"] == "diffusion_pusht"
+    assert payload["passed"] is True, payload

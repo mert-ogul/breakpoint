@@ -98,7 +98,7 @@ pydantic==2.14.1
 pydantic-core==2.50.1
 pygame==2.6.1
 pygments==2.21.0
-pymunk==7.3.1
+pymunk==6.6.0
 pyopengl==3.1.10
 pyparsing==3.3.3
 pytest==9.1.1

@@ -517,6 +517,37 @@ def _add_report_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     )
 
 
+def _add_verify_upstream_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    parser = subparsers.add_parser(
+        "verify-upstream",
+        help=(
+            "Closed-loop agreement: L=0 scheduler path vs upstream select_action queue (Diffusion)"
+        ),
+    )
+    parser.add_argument(
+        "--candidate",
+        default="diffusion_pusht",
+        choices=sorted(CANDIDATES),
+    )
+    parser.add_argument(
+        "--seeds",
+        type=str,
+        default="2200,2201,2202,2203,2204",
+        help="Comma-separated env seeds (default 2200 to 2204)",
+    )
+    parser.add_argument("--device", choices=["cuda", "cpu", "mps"], default="cpu")
+    parser.add_argument(
+        "--torch-threads",
+        type=int,
+        required=True,
+        help="torch.set_num_threads value for the agreement run",
+    )
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--repo-root", type=Path, default=None)
+
+
 def _add_summarize_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser(
         "summarize",
@@ -557,6 +588,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_quantize_int4_parser(sub)
     _add_profile_parser(sub)
     _add_plan_parser(sub)
+    _add_verify_upstream_parser(sub)
     _add_summarize_parser(sub)
     return parser
 
@@ -1263,6 +1295,36 @@ def _cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_verify_upstream(args: argparse.Namespace) -> int:
+    from breakpoint_eval.policy_validate import verify_upstream_agreement
+
+    try:
+        seeds = parse_seed_list(args.seeds)
+        payload = verify_upstream_agreement(
+            args.candidate,
+            seeds,
+            args.device,
+            args.torch_threads,
+            Path(args.output).resolve(),
+            repo_root=Path(args.repo_root).resolve() if args.repo_root else None,
+        )
+    except (FileNotFoundError, ValueError, RuntimeError, ImportError, OSError) as exc:
+        logging.error("%s", exc)
+        return 2
+    print(Path(args.output).resolve())
+    print(
+        json.dumps(
+            {
+                "passed": payload.get("passed"),
+                "candidate": payload.get("candidate"),
+                "n_seeds": len(payload.get("per_seed") or []),
+                "determinism_passed": (payload.get("determinism") or {}).get("passed"),
+            }
+        )
+    )
+    return 0 if payload.get("passed") is True else 1
+
+
 def _cmd_summarize(args: argparse.Namespace) -> int:
     from breakpoint_eval.experiment_summary import summarize_from_plan_file
 
@@ -1316,6 +1378,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_profile(args)
     if args.command == "plan":
         return _cmd_plan(args)
+    if args.command == "verify-upstream":
+        return _cmd_verify_upstream(args)
     if args.command == "summarize":
         return _cmd_summarize(args)
     parser.error(f"Unsupported command {args.command!r}")

@@ -33,7 +33,7 @@ INSTALL_GUIDANCE = (
     "optional Python binding PyAV. Core Breakpoint does not bundle these.\n"
     "  macOS:  brew install ffmpeg && pip install 'breakpoint-eval[h264]'\n"
     "  Debian: sudo apt-get install -y ffmpeg && pip install 'breakpoint-eval[h264]'\n"
-    "Then re-run; unsupported environments are marked, not faked."
+    "Then re-run, unsupported environments are marked."
 )
 
 

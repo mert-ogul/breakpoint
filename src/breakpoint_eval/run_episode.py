@@ -403,6 +403,7 @@ def run_episode_baseline_queue(
     episode_index: int,
     render_frames: list[np.ndarray] | None = None,
     image_cfg: ImageDegradeConfig | None = None,
+    policy_rng_seed: int | None = None,
 ) -> EpisodeResult:
     """Legacy direct policy-queue loop (no scheduler). Used only for equivalence tests."""
     chunk = adapter.chunk_info
@@ -421,6 +422,10 @@ def run_episode_baseline_queue(
     frame_stats: list[FrameDegradeStats] = []
 
     try:
+        if policy_rng_seed is not None:
+            from breakpoint_eval.export_runtime import apply_policy_rng_seed
+
+            apply_policy_rng_seed(policy_rng_seed)
         adapter.reset()
         observation, _info = env.reset(seed=[seed])
         if render_frames is not None:
@@ -513,6 +518,7 @@ def run_episode_baseline_queue(
         chunk_size=chunk.chunk_size,
         n_action_steps=chunk.n_action_steps,
         steps=steps,
+        policy_rng_seed=policy_rng_seed,
         latency_s=0.0,
         chunk_arrival_policy=CHUNK_ARRIVAL_POLICY,
         image_mode=cfg.mode.value,
