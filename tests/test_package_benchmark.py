@@ -274,3 +274,77 @@ def test_package_identities_omit_int4_for_old_lock(tmp_path: Path) -> None:
     module.package_identities(lock, [], out)
     identities = json.loads((out / "identities" / "identities.json").read_text())
     assert "model_int4_weight_only" not in identities
+
+
+def test_package_pytorch_validation_and_identities(tmp_path: Path) -> None:
+    module = load_script()
+    export = tmp_path / "export"
+    export.mkdir()
+    checkpoint_files = {"model.safetensors": "a" * 64, "config.json": "b" * 64}
+    (export / "export_manifest.json").write_text(
+        json.dumps(
+            {
+                "candidate": "diffusion_pusht",
+                "checkpoint_files": checkpoint_files,
+                "control_period_s": 0.1,
+                "hub_revision": "rev",
+                "inference": {"num_inference_steps": 100},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    agreement = tmp_path / "upstream_agreement.json"
+    agreement.write_text(
+        json.dumps({"passed": True, "checkpoint_files": checkpoint_files}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    timing = tmp_path / "timing.json"
+    timing.write_text(
+        json.dumps(
+            {
+                "device_label": "laptop-m3",
+                "model": {"checkpoint_files": checkpoint_files},
+                "measurements": {
+                    "inference_latency_s": [0.5, 0.6, 0.7],
+                    "n_measured": 3,
+                    "summary": {"count": 3, "median_s": 0.6, "p95_s": 0.7, "p99_s": 0.7},
+                },
+                "runtime": {
+                    "device": "cpu",
+                    "torch_threads": 4,
+                    "torch_version": "2.6.0",
+                    "timed_boundary": "pytorch_generate_actions_full_denoise",
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "timing.npz").write_bytes(b"npz")
+    lock = {
+        "artifacts": {
+            "checkpoint_files": checkpoint_files,
+            "upstream_agreement_path": str(agreement),
+            "upstream_agreement_sha256": _sha(agreement),
+            "timing_profile_path": str(timing),
+            "timing_profile_sha256": _sha(timing),
+        }
+    }
+    out = tmp_path / "pkg"
+    large: list[dict] = []
+    module.package_pytorch_validation(export, lock, out, large)
+    assert (out / "validation" / "export_manifest.json").is_file()
+    assert (out / "validation" / "upstream_agreement.json").is_file()
+    assert (out / "timing" / "laptop-m3.json").is_file()
+    assert any(e["path"].endswith("timing.npz") for e in large)
+    assert not (out / "validation" / "export_validation.json").exists()
+    assert not (out / "profiles").exists()
+    module.package_pytorch_identities(lock, [], out)
+    identities = json.loads((out / "identities" / "identities.json").read_text())
+    assert identities["checkpoint_files"] == checkpoint_files
+    assert "model_fp32" not in identities

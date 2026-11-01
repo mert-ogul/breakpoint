@@ -47,10 +47,12 @@ THEMES = (
 )
 
 
-def short_label(condition_id: str) -> str:
+def short_label(condition_id: str, *, capture_hw: list[int] | tuple[int, ...] | None = None) -> str:
     if condition_id.startswith("latency_ms_"):
         return f"{condition_id.rsplit('_', 1)[1]} ms"
     if condition_id == "resolution_native":
+        if isinstance(capture_hw, (list, tuple)) and len(capture_hw) >= 2:
+            return f"{capture_hw[0]}x{capture_hw[1]}\nnative"
         return "480x640\nnative"
     if condition_id.startswith("resolution_capture_"):
         return condition_id.rsplit("_", 1)[1]
@@ -73,8 +75,17 @@ def short_label(condition_id: str) -> str:
     return condition_id
 
 
+def _row_capture_hw(view: ConditionView) -> list[int] | tuple[int, ...] | None:
+    if not view.rows:
+        return None
+    hw = view.rows[0].get("capture_hw")
+    if isinstance(hw, (list, tuple)) and len(hw) >= 2:
+        return hw
+    return None
+
+
 def tick_label(axis: AxisView, view: ConditionView) -> str:
-    label = short_label(view.condition_id)
+    label = short_label(view.condition_id, capture_hw=_row_capture_hw(view))
     if view.is_baseline and axis.axis == "device_profile":
         return f"{label}\nbaseline"
     return label

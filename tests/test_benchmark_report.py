@@ -480,6 +480,28 @@ def test_short_label_int4_weight_only() -> None:
     assert short_label("precision_int8") == "INT8 QDQ"
 
 
+def test_short_label_resolution_native_uses_capture_hw() -> None:
+    from breakpoint_eval.benchmark_report import plain_label, plain_label_view
+    from breakpoint_eval.benchmark_report_data import ConditionView
+    from breakpoint_eval.benchmark_report_plots import short_label
+
+    assert short_label("resolution_native") == "480x640\nnative"
+    assert short_label("resolution_native", capture_hw=[96, 96]) == "96x96\nnative"
+    assert plain_label("resolution_native", capture_hw=[96, 96]) == "96x96 native"
+    view = ConditionView(
+        condition_id="resolution_native",
+        label="native",
+        referenced_baseline=False,
+        is_baseline=True,
+        rows=[{"capture_hw": [96, 96]}],
+        successes=1,
+        eligible=1,
+        n_runtime_error=0,
+        wilson={"low": 0.0, "high": 1.0},
+    )
+    assert plain_label_view(view) == "96x96 native"
+
+
 def test_short_label_h264() -> None:
     from breakpoint_eval.benchmark_report_plots import short_label
 
@@ -634,3 +656,377 @@ def test_working_tree_porcelain_note() -> None:
     assert working_tree_porcelain_note("\n") == "clean"
     note = working_tree_porcelain_note(" M src/breakpoint_eval/experiment_plan.py\n")
     assert note == "<code> M src/breakpoint_eval/experiment_plan.py</code>"
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _episode_row(
+    *,
+    axis: str,
+    plan_id: str,
+    condition_id: str,
+    episode_index: int,
+    seed: int,
+    success: bool,
+    latency_s: float = 0.0,
+    referenced: bool = False,
+) -> dict:
+    return {
+        "axis": axis,
+        "plan_id": plan_id,
+        "condition_id": condition_id,
+        "candidate": "diffusion_pusht",
+        "referenced_baseline": referenced,
+        "episode_index": episode_index,
+        "seed": seed,
+        "policy_rng_seed": seed + 10000,
+        "outcome": "success" if success else "time_limit_truncation",
+        "success": success,
+        "runtime_error": None,
+        "n_control_steps": 10,
+        "sim_time_s": 1.0,
+        "success_step_index": 5 if success else None,
+        "final_step_sim_time_s": 1.0,
+        "n_inference_calls": 2,
+        "n_fresh_chunks": 2,
+        "n_underflows": 0,
+        "n_missed_deadlines": 0,
+        "sum_reward": 1.0,
+        "max_reward": 1.0,
+        "latency_mode": "constant",
+        "constant_latency_s": latency_s,
+        "image_mode": "native",
+        "capture_hw": [96, 96],
+        "jpeg_quality": None,
+        "trace_window_start": None,
+        "trace_window_length": None,
+        "consumed_trace_indices": None,
+        "consumed_delays_s": None,
+        "source_report": f"outputs/{plan_id}/{condition_id}/run_report.json",
+        "h264_requested_kbps": None,
+        "h264_encoded_bytes": None,
+        "h264_frames": None,
+        "h264_actual_kbps": None,
+        "h264_holds": None,
+        "h264_keyframes": None,
+        "h264_first_frame_keyframe": None,
+    }
+
+
+def build_synthetic_pytorch_package(root: Path) -> Path:
+    """Minimal Diffusion PushT package: three axes, timing, agreement, manifest."""
+    from breakpoint_eval.experiment_summary import wilson_interval
+
+    data = root / "data"
+    seeds = [6000, 6001, 6002]
+    checkpoint_files = {
+        "model.safetensors": "11" * 32,
+        "config.json": "22" * 32,
+    }
+    phase_config = {
+        "phase": "exploratory",
+        "env_seed_start": 6000,
+        "n_episodes": 3,
+        "policy_seed_offset": 10000,
+        "latency_ms": [0, 100, 800],
+        "resolution_hw": [[96, 96], [24, 24]],
+        "jpeg_qualities": ["bypass", 10],
+        "isolate_axes": True,
+    }
+    lock = {
+        "schema_version": 1,
+        "backend": "pytorch",
+        "candidate": "diffusion_pusht",
+        "protocol_name": "diffusion_pusht_stress",
+        "protocol_version": "0.1",
+        "phase": "full",
+        "phase_config": phase_config,
+        "artifacts": {
+            "export_dir": str(root / "export"),
+            "checkpoint_files": checkpoint_files,
+            "upstream_agreement_path": str(root / "upstream_agreement.json"),
+            "upstream_agreement_sha256": "aa" * 32,
+            "timing_profile_path": str(root / "timing.json"),
+            "timing_profile_sha256": "bb" * 32,
+        },
+        "host": {"compute_device": "cpu", "torch_num_threads": 4},
+        "source_revision": {"revision": "deadbeef", "dirty": False, "status_porcelain": ""},
+        "scheduler": {"chunk_arrival_policy": "discard_stale"},
+        "statistics": {
+            "breakpoint_ratio": 0.8,
+            "baseline_success_floor": 0.5,
+            "bootstrap_seed": 1,
+            "n_bootstrap": 100,
+        },
+        "trace_window": {"length": 32},
+        "baseline_reuse": {"fingerprint": {"latency_s": 0.0}},
+    }
+    plans = [
+        {
+            "plan_id": "v0.1_full_latency",
+            "axis": "latency_ms",
+            "phase": "exploratory",
+            "candidate": "diffusion_pusht",
+            "baseline_condition_id": "latency_ms_0",
+            "env_seeds": seeds,
+            "policy_rng_seeds": [s + 10000 for s in seeds],
+            "conditions": [
+                {
+                    "condition_id": f"latency_ms_{ms}",
+                    "label": f"{ms} ms",
+                    "params": {"latency_s": ms / 1000.0, "latency_ms": ms},
+                }
+                for ms in (0, 100, 800)
+            ],
+        },
+        {
+            "plan_id": "v0.1_full_resolution",
+            "axis": "resolution",
+            "phase": "exploratory",
+            "candidate": "diffusion_pusht",
+            "baseline_condition_id": "resolution_native",
+            "env_seeds": seeds,
+            "policy_rng_seeds": [s + 10000 for s in seeds],
+            "conditions": [
+                {
+                    "condition_id": "resolution_native",
+                    "label": "native 96x96",
+                    "params": {"capture_hw": [96, 96]},
+                },
+                {
+                    "condition_id": "resolution_capture_24x24",
+                    "label": "24x24",
+                    "params": {"capture_hw": [24, 24]},
+                },
+            ],
+        },
+        {
+            "plan_id": "v0.1_full_jpeg",
+            "axis": "jpeg",
+            "phase": "exploratory",
+            "candidate": "diffusion_pusht",
+            "baseline_condition_id": "jpeg_bypass",
+            "env_seeds": seeds,
+            "policy_rng_seeds": [s + 10000 for s in seeds],
+            "conditions": [
+                {"condition_id": "jpeg_bypass", "label": "bypass", "params": {"bypass": True}},
+                {
+                    "condition_id": "jpeg_q10",
+                    "label": "q10",
+                    "params": {"jpeg_quality": 10, "bypass": False},
+                },
+            ],
+        },
+    ]
+    rows: list[dict] = []
+    for plan in plans:
+        for condition in plan["conditions"]:
+            latency_s = float(condition.get("params", {}).get("latency_s") or 0.0)
+            referenced = (
+                plan["axis"] != "latency_ms"
+                and condition["condition_id"] == plan["baseline_condition_id"]
+            )
+            # Shared baseline is latency_ms_0; other axes reference it for their baseline row set.
+            if referenced:
+                # resolution/jpeg baselines are real local baselines in this synthetic package.
+                referenced = False
+            for i, seed in enumerate(seeds):
+                success = not (condition["condition_id"] == "latency_ms_800" and i == 2)
+                rows.append(
+                    _episode_row(
+                        axis=plan["axis"],
+                        plan_id=plan["plan_id"],
+                        condition_id=condition["condition_id"],
+                        episode_index=i,
+                        seed=seed,
+                        success=success,
+                        latency_s=latency_s,
+                        referenced=referenced,
+                    )
+                )
+
+    def summary_for(plan: dict) -> dict:
+        conditions = []
+        for condition in plan["conditions"]:
+            group = [
+                r
+                for r in rows
+                if r["plan_id"] == plan["plan_id"]
+                and r["condition_id"] == condition["condition_id"]
+            ]
+            successes = sum(1 for r in group if r["success"])
+            eligible = len(group)
+            wilson = wilson_interval(successes, eligible)
+            conditions.append(
+                {
+                    "condition_id": condition["condition_id"],
+                    "successes": successes,
+                    "eligible": eligible,
+                    "n_runtime_error": 0,
+                    "planned": eligible,
+                    "success_rate": successes / eligible,
+                    "wilson_95": {"low": wilson["low"], "high": wilson["high"]},
+                }
+            )
+        baseline_id = plan["baseline_condition_id"]
+        return {
+            "plan_id": plan["plan_id"],
+            "ratio": 0.8,
+            "baseline_success_floor": 0.5,
+            "baseline_condition_id": baseline_id,
+            "conditions": conditions,
+            "paired_contrasts_vs_baseline": [
+                {
+                    "condition_id": c["condition_id"],
+                    "n_pairs": 3,
+                    "point": 0.0,
+                    "low": -0.1,
+                    "high": 0.1,
+                }
+                for c in plan["conditions"]
+                if c["condition_id"] != baseline_id
+            ],
+            "axis_summary": {"breakpoint": None, "note": None, "points": []},
+            "isolation_notes": [],
+        }
+
+    _write_json(data / "protocol" / "protocol_lock.json", lock)
+    for plan in plans:
+        _write_json(data / "protocol" / "plans" / f"{plan['plan_id']}.json", plan)
+        _write_json(
+            data / "summaries" / f"{plan['plan_id']}.experiment_summary.json", summary_for(plan)
+        )
+    (data / "episodes").mkdir(parents=True)
+    (data / "episodes" / "episodes.jsonl").write_text(
+        "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8"
+    )
+    agreement = {
+        "passed": True,
+        "candidate": "diffusion_pusht",
+        "checkpoint_files": checkpoint_files,
+        "determinism": {
+            "passed": True,
+            "max_abs_action_difference": 0.0,
+            "seed": 2200,
+        },
+        "diffusion": {"num_inference_steps": 100},
+        "per_seed": [
+            {
+                "seed": 2200 + i,
+                "passed": True,
+                "max_abs_action_difference": 0.0,
+                "success": True,
+            }
+            for i in range(5)
+        ],
+    }
+    _write_json(data / "validation" / "upstream_agreement.json", agreement)
+    _write_json(
+        data / "validation" / "export_manifest.json",
+        {
+            "candidate": "diffusion_pusht",
+            "checkpoint_files": checkpoint_files,
+            "control_period_s": 0.1,
+            "hub_repo": "lerobot/diffusion_pusht",
+            "hub_revision": "202c8695947a458d8ce08ce1c0219f2588d60b33",
+            "inference": {"num_inference_steps": 100},
+        },
+    )
+    samples = [0.4, 0.5, 0.55, 0.6, 0.8]
+    _write_json(
+        data / "timing" / "laptop-m3.json",
+        {
+            "device_label": "laptop-m3",
+            "model": {"checkpoint_files": checkpoint_files},
+            "measurements": {
+                "inference_latency_s": samples,
+                "n_measured": len(samples),
+                "summary": {
+                    "count": len(samples),
+                    "median_s": 0.55,
+                    "p95_s": 0.8,
+                    "p99_s": 0.8,
+                },
+            },
+            "runtime": {
+                "device": "cpu",
+                "torch_threads": 4,
+                "torch_version": "2.6.0",
+                "timed_boundary": "pytorch_generate_actions_full_denoise",
+            },
+        },
+    )
+    _write_json(
+        data / "identities" / "identities.json",
+        {"checkpoint_files": checkpoint_files, "lock_keys": sorted(lock)},
+    )
+    _write_json(data / "identities" / "condition_resolution.json", [])
+    _write_json(
+        data / "large_evidence.json",
+        {"schema_version": 1, "note": "synthetic", "files": []},
+    )
+    refresh_manifest(data)
+    return data
+
+
+def test_synthetic_pytorch_package_report(tmp_path: Path) -> None:
+    from breakpoint_eval.benchmark_report import (
+        action_generation_timing_sentences,
+        evaluated_paragraph,
+        render_benchmark_report,
+        report_title,
+        update_readme_results,
+    )
+    from breakpoint_eval.benchmark_report_data import (
+        load_report_data,
+        required_axes_from_lock,
+        required_profiles_from_lock,
+    )
+
+    data_dir = build_synthetic_pytorch_package(tmp_path)
+    data = load_report_data(data_dir)
+    assert required_axes_from_lock(data.lock) == ("latency_ms", "resolution", "jpeg")
+    assert required_profiles_from_lock(data.lock) == ()
+    assert [a.axis for a in data.axes] == ["latency_ms", "resolution", "jpeg"]
+    assert data.profiles == []
+    assert len(data.timings) == 1
+    assert data.timings[0].device_label == "laptop-m3"
+    check_names = [c.name for c in data.checks]
+    assert any(name.startswith("Upstream agreement passed on 5 seeds") for name in check_names)
+    assert any("lock candidate" in name for name in check_names)
+    assert any("Timing profile checkpoint hashes" in name for name in check_names)
+    assert all(c.passed for c in data.checks)
+
+    out = tmp_path / "report"
+    render_benchmark_report(data_dir, out)
+    md = (out / "report.md").read_text(encoding="utf-8")
+    html = (out / "index.html").read_text(encoding="utf-8")
+    assert report_title(data) == "Diffusion Policy on PushT under stress"
+    assert "Diffusion Policy on PushT under stress" in md
+    assert "lerobot/diffusion_pusht" in evaluated_paragraph(data)
+    assert "Action-generation timing" in md
+    assert "Action-generation timing" in html
+    sentences = action_generation_timing_sentences(data, data.timings[0])
+    assert "100 denoising steps" in sentences[0]
+    assert "800" in sentences[1] and "100" in sentences[1]
+    assert "not replayed into episodes" in sentences[2]
+    assert "No ONNX" in md
+    for banned in ("ONNX Runtime", "ONNX FP32", "rpi5", "INT8"):
+        assert banned not in md
+        assert banned not in html
+
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        "<!-- results-pusht:start (generated by scripts/render_benchmark.py --update-readme) -->\n"
+        "OLD\n"
+        "<!-- results-pusht:end -->\n",
+        encoding="utf-8",
+    )
+    assert update_readme_results(data_dir, readme, readme_block="results-pusht") is True
+    text = readme.read_text(encoding="utf-8")
+    assert "OLD" not in text
+    assert "Constant added delay" in text
+    assert "ONNX Runtime" not in text
