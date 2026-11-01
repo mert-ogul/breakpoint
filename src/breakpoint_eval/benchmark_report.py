@@ -588,7 +588,53 @@ def _control_period_s(data: ReportData) -> float | None:
     manifest = data.validation_files.get("export_manifest.json") or {}
     if manifest.get("control_period_s") is not None:
         return float(manifest["control_period_s"])
+    chunk = manifest.get("chunk_info") or {}
+    if chunk.get("control_period_s") is not None:
+        return float(chunk["control_period_s"])
     return None
+
+
+def _n_action_steps(data: ReportData) -> int | None:
+    manifest = data.validation_files.get("export_manifest.json") or {}
+    if manifest.get("n_action_steps") is not None:
+        return int(manifest["n_action_steps"])
+    inference = manifest.get("inference") or {}
+    if inference.get("n_action_steps") is not None:
+        return int(inference["n_action_steps"])
+    chunk = manifest.get("chunk_info") or {}
+    if chunk.get("n_action_steps") is not None:
+        return int(chunk["n_action_steps"])
+    return None
+
+
+def chunk_span_ms(data: ReportData) -> int | None:
+    period_s = _control_period_s(data)
+    n_action_steps = _n_action_steps(data)
+    if period_s is None or n_action_steps is None:
+        return None
+    return int(round(n_action_steps * period_s * 1000.0))
+
+
+def full_underflow_latency_caveats(data: ReportData) -> list[str]:
+    """Caveats for latency conditions where every control step underflows."""
+    span = chunk_span_ms(data)
+    if span is None:
+        return []
+    latency = next((axis for axis in data.axes if axis.axis == "latency_ms"), None)
+    if latency is None:
+        return []
+    lines: list[str] = []
+    for view in latency.conditions:
+        if not view.rows:
+            continue
+        if not all(int(row["n_underflows"]) == int(row["n_control_steps"]) for row in view.rows):
+            continue
+        lines.append(
+            f"{plain_label_view(view)}: the delay is at least one chunk span ({span} ms), every "
+            "action arrived stale and no policy action was applied, so its successes reflect "
+            "holding the start position."
+        )
+    return lines
 
 
 def _num_inference_steps(data: ReportData) -> int | None:
@@ -843,6 +889,7 @@ def report_limitations(data: ReportData) -> list[str]:
     suppressed = [f"{a.title}: {a.suppressed_reason}" for a in data.axes if a.suppressed_reason]
     if suppressed:
         notes.append("Threshold comparisons not reported: " + "; ".join(suppressed) + ".")
+    notes.extend(full_underflow_latency_caveats(data))
     resolution = next((a for a in data.axes if a.axis == "resolution"), None)
     if resolution is not None and len({v.ordered_value for v in resolution.conditions[1:]}) == 1:
         notes.append(

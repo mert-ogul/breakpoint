@@ -676,6 +676,160 @@ def test_working_tree_porcelain_note() -> None:
     assert note == "<code> M src/breakpoint_eval/experiment_plan.py</code>"
 
 
+def _latency_condition(condition_id: str, rows: list[dict]) -> object:
+    from breakpoint_eval.benchmark_report_data import ConditionView
+
+    return ConditionView(
+        condition_id=condition_id,
+        label=condition_id,
+        referenced_baseline=False,
+        is_baseline=condition_id.endswith("_0"),
+        rows=rows,
+        successes=sum(1 for r in rows if r.get("success")),
+        eligible=len(rows),
+        n_runtime_error=0,
+        wilson={"low": 0.0, "high": 1.0},
+    )
+
+
+def test_full_underflow_latency_caveat_from_synthetic_rows() -> None:
+    from breakpoint_eval.benchmark_report import full_underflow_latency_caveats
+    from breakpoint_eval.benchmark_report_data import AxisView, ReportData
+
+    stale = [
+        {
+            "condition_id": "latency_ms_800",
+            "n_underflows": 300,
+            "n_control_steps": 300,
+            "success": False,
+        }
+        for _ in range(3)
+    ]
+    partial = [
+        {
+            "condition_id": "latency_ms_400",
+            "n_underflows": 100,
+            "n_control_steps": 300,
+            "success": True,
+        }
+        for _ in range(3)
+    ]
+    baseline = [
+        {
+            "condition_id": "latency_ms_0",
+            "n_underflows": 0,
+            "n_control_steps": 200,
+            "success": True,
+        }
+        for _ in range(3)
+    ]
+    axis = AxisView(
+        axis="latency_ms",
+        plan_id="v0.1_full_latency",
+        title="Constant added delay",
+        unit="ms",
+        phase="exploratory",
+        baseline_condition_id="latency_ms_0",
+        ratio=0.8,
+        baseline_floor=0.5,
+        baseline_rate=1.0,
+        threshold_rate=0.8,
+        conditions=[
+            _latency_condition("latency_ms_0", baseline),
+            _latency_condition("latency_ms_400", partial),
+            _latency_condition("latency_ms_800", stale),
+        ],
+        derived=False,
+        saved_breakpoint=None,
+        saved_note=None,
+        isolation_notes=[],
+        ordered=True,
+    )
+    data = ReportData(
+        data_dir=Path("."),
+        axes=[axis],
+        profiles=[],
+        identities={},
+        lock={"candidate": "diffusion_pusht"},
+        large_evidence=[],
+        validation_files={
+            "export_manifest.json": {
+                "control_period_s": 0.1,
+                "inference": {"n_action_steps": 8},
+            }
+        },
+        manifest_sha256="0" * 64,
+        rows=baseline + partial + stale,
+    )
+    lines = full_underflow_latency_caveats(data)
+    assert lines == [
+        "800 ms: the delay is at least one chunk span (800 ms), every action arrived stale "
+        "and no policy action was applied, so its successes reflect holding the start position."
+    ]
+
+
+def test_full_underflow_latency_caveat_absent_when_no_condition_qualifies() -> None:
+    from breakpoint_eval.benchmark_report import full_underflow_latency_caveats
+    from breakpoint_eval.benchmark_report_data import AxisView, ReportData
+
+    rows = [
+        {
+            "condition_id": "latency_ms_640",
+            "n_underflows": 10,
+            "n_control_steps": 400,
+            "success": True,
+        }
+        for _ in range(2)
+    ]
+    axis = AxisView(
+        axis="latency_ms",
+        plan_id="v0.1_full_latency",
+        title="Constant added delay",
+        unit="ms",
+        phase="full",
+        baseline_condition_id="latency_ms_0",
+        ratio=0.8,
+        baseline_floor=0.5,
+        baseline_rate=1.0,
+        threshold_rate=0.8,
+        conditions=[
+            _latency_condition(
+                "latency_ms_0",
+                [
+                    {
+                        "condition_id": "latency_ms_0",
+                        "n_underflows": 0,
+                        "n_control_steps": 400,
+                        "success": True,
+                    }
+                ],
+            ),
+            _latency_condition("latency_ms_640", rows),
+        ],
+        derived=False,
+        saved_breakpoint=None,
+        saved_note=None,
+        isolation_notes=[],
+        ordered=True,
+    )
+    data = ReportData(
+        data_dir=Path("."),
+        axes=[axis],
+        profiles=[],
+        identities={},
+        lock={"candidate": "act_aloha_transfer"},
+        large_evidence=[],
+        validation_files={
+            "export_manifest.json": {
+                "chunk_info": {"control_period_s": 0.02, "n_action_steps": 100},
+            }
+        },
+        manifest_sha256="0" * 64,
+        rows=rows,
+    )
+    assert full_underflow_latency_caveats(data) == []
+
+
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

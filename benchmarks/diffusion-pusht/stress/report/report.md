@@ -19,6 +19,7 @@ Exploratory run with 5 paired episodes per condition; not confirmed with fresh s
 - Baseline 5/5 (100.0%), above the 0.5 floor.
 - Sample size: 5 paired episodes per condition. A grid point below the threshold is not an interpolated exact boundary.
 - "Interval spans threshold" means the Wilson interval overlaps the threshold; that is an interval overlap, not a paired significance test. Conditions: Constant added delay: 100 ms, 200 ms, 400 ms; Camera resolution: 48x48, 32x32, 24x24; JPEG quality: q95.
+- 800 ms: the delay is at least one chunk span (800 ms), every action arrived stale and no policy action was applied, so its successes reflect holding the start position.
 - Resolution ordering: the saved summary stored the same ordered value for every resolution, so conditions are ordered by plan order (native, 240x320, 120x160, 60x80), which is mild to severe.
 - Model card success is 65.4% over 500 episodes; this run's baseline is 5/5. Stated as context, not a reproduction.
 - Delay is injected in simulated time; host generation time is not added.
