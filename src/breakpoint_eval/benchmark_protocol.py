@@ -1,10 +1,10 @@
-"""ACT deployment stress protocol: thin planning/resume helpers over existing plan/runner APIs."""
+"""Benchmark protocol helpers: planning, artifact resolution, and resume locks."""
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -40,35 +40,54 @@ LOGGER = logging.getLogger("breakpoint_eval.benchmark_protocol")
 DEFAULT_CONFIG_REL = Path("configs/act-transfer.json")
 PROTOCOL_NAME = "act_deployment_stress"
 PROTOCOL_VERSION = "0.1"
+DIFFUSION_PROTOCOL_NAME = "diffusion_pusht_stress"
+DIFFUSION_PROTOCOL_VERSION = "0.1"
 # Configs and locks written before the protocol was named carry "protocol": "v0.1".
 LEGACY_PROTOCOL_LABEL = "v0.1"
+KNOWN_PROTOCOLS = frozenset(
+    {
+        (PROTOCOL_NAME, PROTOCOL_VERSION),
+        (DIFFUSION_PROTOCOL_NAME, DIFFUSION_PROTOCOL_VERSION),
+    }
+)
 NATIVE_HW = (480, 640)
+BACKEND_ONNXRUNTIME = "onnxruntime"
+BACKEND_PYTORCH = "pytorch"
+# Same label as diffusion_profile.KIND_ACTION_GENERATION_TIMING (avoid importing torch here).
+_TIMING_PROFILE_KIND = "action_generation_timing"
 
 
 @dataclass(frozen=True)
 class ResolvedArtifacts:
     export_dir: Path
-    fp32_path: Path
-    fp32_sha256: str
-    fp32_recipe_id: str
-    int8_path: Path | None
-    int8_sha256: str | None
-    int8_status: str
-    int8_detail: str | None
-    profiles: dict[str, Path]
-    profile_identities: dict[str, dict[str, Any]]
+    fp32_path: Path | None = None
+    fp32_sha256: str | None = None
+    fp32_recipe_id: str | None = None
+    int8_path: Path | None = None
+    int8_sha256: str | None = None
+    int8_status: str = "missing"
+    int8_detail: str | None = None
+    profiles: dict[str, Path] = field(default_factory=dict)
+    profile_identities: dict[str, dict[str, Any]] = field(default_factory=dict)
     int4_path: Path | None = None
     int4_sha256: str | None = None
     int4_status: str = "missing"
     int4_detail: str | None = None
+    backend: str = BACKEND_ONNXRUNTIME
+    checkpoint_files: dict[str, str] | None = None
+    upstream_agreement_path: Path | None = None
+    upstream_agreement_sha256: str | None = None
+    timing_profile_path: Path | None = None
+    timing_profile_sha256: str | None = None
 
 
 @dataclass(frozen=True)
 class BenchmarkHostSettings:
     compute_device: str
-    ort_providers: list[str]
-    intra_op_num_threads: int
-    inter_op_num_threads: int
+    ort_providers: list[str] | None = None
+    intra_op_num_threads: int | None = None
+    inter_op_num_threads: int | None = None
+    torch_num_threads: int | None = None
 
 
 def protocol_identity(payload: dict[str, Any]) -> tuple[str, str]:
@@ -80,6 +99,20 @@ def protocol_identity(payload: dict[str, Any]) -> tuple[str, str]:
     return str(payload.get("protocol_name")), str(payload.get("protocol_version"))
 
 
+def config_backend(config: dict[str, Any]) -> str:
+    return str(config.get("backend") or BACKEND_ONNXRUNTIME)
+
+
+def native_hw_from_config(config: dict[str, Any]) -> tuple[int, int]:
+    hw = config["image"]["native_hw"]
+    return int(hw[0]), int(hw[1])
+
+
+def baseline_variant_from_config(config: dict[str, Any]) -> str:
+    fingerprint = (config.get("baseline_reuse") or {}).get("fingerprint") or {}
+    return str(fingerprint.get("variant_label") or "onnx_fp32")
+
+
 def load_benchmark_config(path: Path) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if int(payload.get("schema_version", -1)) != 1:
@@ -87,9 +120,10 @@ def load_benchmark_config(path: Path) -> dict[str, Any]:
             f"unsupported benchmark config schema_version={payload.get('schema_version')!r}"
         )
     identity = protocol_identity(payload)
-    if identity != (PROTOCOL_NAME, PROTOCOL_VERSION):
+    if identity not in KNOWN_PROTOCOLS:
         raise ValueError(
-            f"expected protocol {PROTOCOL_NAME} {PROTOCOL_VERSION}, got {identity[0]} {identity[1]}"
+            f"unknown protocol {identity[0]} {identity[1]}; "
+            f"known: {sorted(f'{n} {v}' for n, v in KNOWN_PROTOCOLS)}"
         )
     h264 = payload.get("h264")
     if isinstance(h264, dict):
@@ -247,20 +281,14 @@ def _resolve_optional_quantized_onnx(
     return None, None, status, detail
 
 
-def resolve_benchmark_artifacts(
+def _resolve_onnx_benchmark_artifacts(
     config: dict[str, Any],
     *,
     repo_root: Path,
-    export_dir: Path | None = None,
+    export: Path,
     profile_overrides: dict[str, Path] | None = None,
 ) -> ResolvedArtifacts:
-    repo_root = Path(repo_root).resolve()
     arts = config["artifacts"]
-    export = Path(export_dir) if export_dir else (repo_root / arts["export_dir"])
-    export = export.resolve()
-    if not export.is_dir():
-        raise FileNotFoundError(f"export directory not found: {export}")
-
     fp32_path = (export / arts["fp32_onnx_name"]).resolve()
     if not fp32_path.is_file():
         raise FileNotFoundError(f"FP32 ONNX missing: {fp32_path}")
@@ -342,11 +370,158 @@ def resolve_benchmark_artifacts(
         int4_sha256=int4_sha,
         int4_status=int4_status,
         int4_detail=int4_detail,
+        backend=BACKEND_ONNXRUNTIME,
+    )
+
+
+def resolve_pytorch_timing_profile(
+    profiles_dir: Path,
+    *,
+    candidate: str,
+    checkpoint_files: dict[str, str],
+) -> Path:
+    """Resolve exactly one Diffusion timing profile; refuse device profiles and wrong candidates."""
+    profiles_dir = Path(profiles_dir)
+    if not profiles_dir.is_dir():
+        raise FileNotFoundError(f"timing profile directory not found: {profiles_dir}")
+    matches: list[Path] = []
+    for path in sorted(profiles_dir.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"timing profile {path} unreadable: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"timing profile {path} is not a JSON object")
+        file_candidate = payload.get("candidate")
+        if file_candidate != candidate:
+            raise ValueError(f"refused {path.name}: candidate {file_candidate!r} != {candidate!r}")
+        if payload.get("kind") != _TIMING_PROFILE_KIND:
+            raise ValueError(
+                f"refused device profile or non-timing record in {profiles_dir}: {path.name}"
+            )
+        model = payload.get("model") or {}
+        if model.get("checkpoint_files") == checkpoint_files:
+            matches.append(path)
+    if not matches:
+        raise FileNotFoundError(
+            f"no timing profile in {profiles_dir} for candidate={candidate!r} "
+            "with matching checkpoint hashes"
+        )
+    if len(matches) > 1:
+        raise FileNotFoundError(
+            f"ambiguous timing profiles in {profiles_dir}: {[p.name for p in matches]}"
+        )
+    return matches[0]
+
+
+def _resolve_pytorch_benchmark_artifacts(
+    config: dict[str, Any],
+    *,
+    repo_root: Path,
+    export: Path,
+) -> ResolvedArtifacts:
+    arts = config["artifacts"]
+    candidate = config["candidate"]
+    record_path = export / "export_manifest.json"
+    if not record_path.is_file():
+        raise FileNotFoundError(f"Diffusion export record missing: {record_path}")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    if not isinstance(record, dict):
+        raise ValueError(f"export record {record_path} is not a JSON object")
+    if record.get("candidate") != candidate:
+        raise ValueError(
+            f"export record candidate {record.get('candidate')!r} != config {candidate!r}"
+        )
+    onnx_export = record.get("onnx_export") or {}
+    if onnx_export.get("status") != "unsupported":
+        raise ValueError(
+            f"Diffusion export onnx_export.status must be 'unsupported'; "
+            f"got {onnx_export.get('status')!r}"
+        )
+    recorded_hashes = record.get("checkpoint_files")
+    if not isinstance(recorded_hashes, dict) or not recorded_hashes:
+        raise ValueError(f"export record {record_path} missing checkpoint_files")
+    checkpoint_dir = record.get("checkpoint_dir")
+    if not checkpoint_dir:
+        raise ValueError(f"export record {record_path} missing checkpoint_dir")
+    from breakpoint_eval.diffusion_export import checkpoint_file_hashes
+
+    on_disk = checkpoint_file_hashes(Path(checkpoint_dir))
+    if on_disk != recorded_hashes:
+        raise ValueError(
+            f"export record checkpoint_files do not match files on disk under {checkpoint_dir}"
+        )
+
+    agreement_rel = arts.get("upstream_agreement")
+    if not agreement_rel:
+        raise ValueError("artifacts.upstream_agreement is required for pytorch backend")
+    agreement_path = (repo_root / agreement_rel).resolve()
+    if not agreement_path.is_file():
+        raise FileNotFoundError(f"upstream_agreement missing: {agreement_path}")
+    agreement = json.loads(agreement_path.read_text(encoding="utf-8"))
+    if not isinstance(agreement, dict):
+        raise ValueError(f"upstream_agreement {agreement_path} is not a JSON object")
+    if agreement.get("passed") is not True:
+        raise ValueError(
+            f"upstream_agreement failed or incomplete: passed={agreement.get('passed')!r}"
+        )
+    if agreement.get("checkpoint_files") != recorded_hashes:
+        raise ValueError("upstream_agreement checkpoint_files differ from the export record hashes")
+
+    timing_rel = arts.get("timing_profile_dir")
+    if not timing_rel:
+        raise ValueError("artifacts.timing_profile_dir is required for pytorch backend")
+    timing_path = resolve_pytorch_timing_profile(
+        (repo_root / timing_rel).resolve(),
+        candidate=candidate,
+        checkpoint_files=recorded_hashes,
+    )
+
+    return ResolvedArtifacts(
+        export_dir=export,
+        backend=BACKEND_PYTORCH,
+        checkpoint_files=dict(recorded_hashes),
+        upstream_agreement_path=agreement_path,
+        upstream_agreement_sha256=sha256_file(agreement_path),
+        timing_profile_path=timing_path,
+        timing_profile_sha256=sha256_file(timing_path),
+    )
+
+
+def resolve_benchmark_artifacts(
+    config: dict[str, Any],
+    *,
+    repo_root: Path,
+    export_dir: Path | None = None,
+    profile_overrides: dict[str, Path] | None = None,
+) -> ResolvedArtifacts:
+    repo_root = Path(repo_root).resolve()
+    arts = config["artifacts"]
+    export = Path(export_dir) if export_dir else (repo_root / arts["export_dir"])
+    export = export.resolve()
+    if not export.is_dir():
+        raise FileNotFoundError(f"export directory not found: {export}")
+
+    backend = config_backend(config)
+    if backend == BACKEND_PYTORCH:
+        return _resolve_pytorch_benchmark_artifacts(config, repo_root=repo_root, export=export)
+    if backend != BACKEND_ONNXRUNTIME:
+        raise ValueError(f"unsupported backend {backend!r}")
+    return _resolve_onnx_benchmark_artifacts(
+        config,
+        repo_root=repo_root,
+        export=export,
+        profile_overrides=profile_overrides,
     )
 
 
 def host_settings_from_config(config: dict[str, Any]) -> BenchmarkHostSettings:
     host = config["host"]
+    if config_backend(config) == BACKEND_PYTORCH:
+        return BenchmarkHostSettings(
+            compute_device=str(host["compute_device"]),
+            torch_num_threads=int(host["torch_num_threads"]),
+        )
     return BenchmarkHostSettings(
         compute_device=str(host["compute_device"]),
         ort_providers=list(host["ort_providers"]),
@@ -355,11 +530,15 @@ def host_settings_from_config(config: dict[str, Any]) -> BenchmarkHostSettings:
     )
 
 
-def _resolution_conditions_from_hw(levels: list[list[int]]) -> list[ConditionSpec]:
+def _resolution_conditions_from_hw(
+    levels: list[list[int]],
+    *,
+    native_hw: tuple[int, int],
+) -> list[ConditionSpec]:
     out: list[ConditionSpec] = []
     for hw in levels:
         h, w = int(hw[0]), int(hw[1])
-        if (h, w) == NATIVE_HW:
+        if (h, w) == native_hw:
             out.append(
                 ConditionSpec(
                     condition_id="resolution_native",
@@ -367,11 +546,11 @@ def _resolution_conditions_from_hw(levels: list[list[int]]) -> list[ConditionSpe
                     params={
                         "mode": "native",
                         "linear_scale": 1.0,
-                        "native_hw": list(NATIVE_HW),
-                        "capture_hw": list(NATIVE_HW),
-                        "effective_policy_hw": list(NATIVE_HW),
+                        "native_hw": list(native_hw),
+                        "capture_hw": list(native_hw),
+                        "effective_policy_hw": list(native_hw),
                     },
-                    label=f"resolution native {NATIVE_HW[0]}x{NATIVE_HW[1]}",
+                    label=f"resolution native {native_hw[0]}x{native_hw[1]}",
                 )
             )
         else:
@@ -381,9 +560,9 @@ def _resolution_conditions_from_hw(levels: list[list[int]]) -> list[ConditionSpe
                     axis=ExperimentAxis.RESOLUTION.value,
                     params={
                         "mode": "downsample",
-                        "native_hw": list(NATIVE_HW),
+                        "native_hw": list(native_hw),
                         "capture_hw": [h, w],
-                        "effective_policy_hw": list(NATIVE_HW),
+                        "effective_policy_hw": list(native_hw),
                     },
                     label=f"resolution capture {h}x{w}",
                 )
@@ -428,7 +607,16 @@ def _device_profile_conditions(
     return out
 
 
-def _baseline_fingerprint() -> dict[str, Any]:
+def _baseline_fingerprint(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    if config is not None:
+        fingerprint = (config.get("baseline_reuse") or {}).get("fingerprint")
+        if isinstance(fingerprint, dict):
+            return {
+                "latency_s": float(fingerprint.get("latency_s", 0.0)),
+                "image_mode": str(fingerprint.get("image_mode") or "native"),
+                "variant_label": str(fingerprint.get("variant_label") or "onnx_fp32"),
+                "no_device_profile": bool(fingerprint.get("no_device_profile", True)),
+            }
     return {
         "latency_s": 0.0,
         "image_mode": "native",
@@ -437,7 +625,11 @@ def _baseline_fingerprint() -> dict[str, Any]:
     }
 
 
-def condition_is_shared_baseline(condition: ConditionSpec) -> bool:
+def condition_is_shared_baseline(
+    condition: ConditionSpec,
+    *,
+    baseline_variant: str = "onnx_fp32",
+) -> bool:
     params = condition.params
     if condition.axis == ExperimentAxis.LATENCY_MS.value:
         return float(params.get("latency_s", -1)) == 0.0
@@ -448,8 +640,19 @@ def condition_is_shared_baseline(condition: ConditionSpec) -> bool:
     if condition.axis == ExperimentAxis.H264.value:
         return bool(params.get("bypass"))
     if condition.axis == ExperimentAxis.PRECISION.value:
-        return params.get("variant_label") == "onnx_fp32"
+        return params.get("variant_label") == baseline_variant
     return False
+
+
+def _h264_support_for_plans(
+    config: dict[str, Any],
+    h264_support: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if h264_support is not None:
+        return h264_support
+    if isinstance(config.get("h264"), dict):
+        return resolve_h264_support(config)
+    return None
 
 
 def build_smoke_plan(
@@ -465,12 +668,23 @@ def build_smoke_plan(
         policy_seed_offset=int(smoke["policy_seed_offset"]),
     )
     window_length = int(config["trace_window"]["length"])
-    support = h264_support if h264_support is not None else resolve_h264_support(config)
+    support = _h264_support_for_plans(config, h264_support)
+    native_hw = native_hw_from_config(config)
     conditions: list[ConditionSpec] = []
-    conditions.extend(latency_conditions(tuple(int(x) for x in smoke["latency_ms"])))
-    conditions.extend(_resolution_conditions_from_hw(list(smoke["resolution_hw"])))
-    conditions.extend(jpeg_conditions(tuple(smoke["jpeg_qualities"])))
-    if support.get("status") == "ok" and smoke.get("h264_bitrates_kbps"):
+    if "latency_ms" in smoke:
+        conditions.extend(latency_conditions(tuple(int(x) for x in smoke["latency_ms"])))
+    if "resolution_hw" in smoke:
+        conditions.extend(
+            _resolution_conditions_from_hw(list(smoke["resolution_hw"]), native_hw=native_hw)
+        )
+    if "jpeg_qualities" in smoke:
+        conditions.extend(jpeg_conditions(tuple(smoke["jpeg_qualities"])))
+    if (
+        support is not None
+        and support.get("status") == "ok"
+        and "h264_bitrates_kbps" in smoke
+        and smoke.get("h264_bitrates_kbps")
+    ):
         conditions.extend(
             h264_conditions(
                 tuple(smoke["h264_bitrates_kbps"]),
@@ -480,21 +694,31 @@ def build_smoke_plan(
                 latency_mode="quality_only",
             )
         )
-    # Precision: always list FP32; INT8/INT4 only if runnable, else recorded separately.
-    prec_variants = ["onnx_fp32"]
-    if "int8" in smoke.get("precision_variants", []) and artifacts.int8_status == "ok":
-        prec_variants.append("int8")
-    if "int4_weight_only" in smoke.get("precision_variants", []) and artifacts.int4_status == "ok":
-        prec_variants.append("int4_weight_only")
-    conditions.extend(precision_conditions(tuple(prec_variants)))
-    conditions.extend(
-        _device_profile_conditions(
-            profile_keys=list(smoke["device_profiles"]),
-            artifacts=artifacts,
-            window_length=window_length,
-            n_episodes=len(seeds),
+    notes = ["Smoke plan; not for publication claims."]
+    if "precision_variants" in smoke:
+        # Precision: always list FP32; INT8/INT4 only if runnable, else recorded separately.
+        prec_variants = ["onnx_fp32"]
+        if "int8" in smoke.get("precision_variants", []) and artifacts.int8_status == "ok":
+            prec_variants.append("int8")
+        if (
+            "int4_weight_only" in smoke.get("precision_variants", [])
+            and artifacts.int4_status == "ok"
+        ):
+            prec_variants.append("int4_weight_only")
+        conditions.extend(precision_conditions(tuple(prec_variants)))
+        notes.append(f"INT8 status at plan build: {artifacts.int8_status}")
+        notes.append(f"INT4 status at plan build: {artifacts.int4_status}")
+    if "device_profiles" in smoke:
+        conditions.extend(
+            _device_profile_conditions(
+                profile_keys=list(smoke["device_profiles"]),
+                artifacts=artifacts,
+                window_length=window_length,
+                n_episodes=len(seeds),
+            )
         )
-    )
+    if "h264_bitrates_kbps" in smoke:
+        notes.append(f"H.264 status at plan build: {(support or {}).get('status')}")
     return ExperimentPlan(
         plan_id="v0.1_smoke",
         candidate=config["candidate"],
@@ -508,12 +732,7 @@ def build_smoke_plan(
             "Confirmation with fresh seeds remains separate.",
         ],
         baseline_condition_id="latency_ms_0",
-        notes=[
-            "Smoke plan; not for publication claims.",
-            f"INT8 status at plan build: {artifacts.int8_status}",
-            f"INT4 status at plan build: {artifacts.int4_status}",
-            f"H.264 status at plan build: {support.get('status')}",
-        ],
+        notes=notes,
     )
 
 
@@ -532,52 +751,67 @@ def build_full_axis_plans(
     )
     window_length = int(config["trace_window"]["length"])
     candidate = config["candidate"]
-    support = h264_support if h264_support is not None else resolve_h264_support(config)
+    support = _h264_support_for_plans(config, h264_support)
+    native_hw = native_hw_from_config(config)
+    variant = baseline_variant_from_config(config)
     plans: list[ExperimentPlan] = []
 
-    lat = ExperimentPlan(
-        plan_id="v0.1_full_latency",
-        candidate=candidate,
-        phase=PlanPhase.EXPLORATORY.value,
-        n_episodes=n,
-        axis=ExperimentAxis.LATENCY_MS.value,
-        seed_pairs=seeds,
-        conditions=latency_conditions(tuple(int(x) for x in full["latency_ms"])),
-        isolation_notes=["Synthetic constant delay; precision held at onnx_fp32."],
-        baseline_condition_id="latency_ms_0",
-        notes=["Isolated latency axis."],
-    )
-    plans.append(lat)
+    if "latency_ms" in full:
+        plans.append(
+            ExperimentPlan(
+                plan_id="v0.1_full_latency",
+                candidate=candidate,
+                phase=PlanPhase.EXPLORATORY.value,
+                n_episodes=n,
+                axis=ExperimentAxis.LATENCY_MS.value,
+                seed_pairs=seeds,
+                conditions=latency_conditions(tuple(int(x) for x in full["latency_ms"])),
+                isolation_notes=[f"Synthetic constant delay; precision held at {variant}."],
+                baseline_condition_id="latency_ms_0",
+                notes=["Isolated latency axis."],
+            )
+        )
 
-    res = ExperimentPlan(
-        plan_id="v0.1_full_resolution",
-        candidate=candidate,
-        phase=PlanPhase.EXPLORATORY.value,
-        n_episodes=n,
-        axis=ExperimentAxis.RESOLUTION.value,
-        seed_pairs=seeds,
-        conditions=_resolution_conditions_from_hw(list(full["resolution_hw"])),
-        isolation_notes=["Resolution axis only; latency and precision at defaults."],
-        baseline_condition_id="resolution_native",
-        notes=["Isolated resolution axis; native bypass is not JPEG quality 100."],
-    )
-    plans.append(res)
+    if "resolution_hw" in full:
+        plans.append(
+            ExperimentPlan(
+                plan_id="v0.1_full_resolution",
+                candidate=candidate,
+                phase=PlanPhase.EXPLORATORY.value,
+                n_episodes=n,
+                axis=ExperimentAxis.RESOLUTION.value,
+                seed_pairs=seeds,
+                conditions=_resolution_conditions_from_hw(
+                    list(full["resolution_hw"]), native_hw=native_hw
+                ),
+                isolation_notes=["Resolution axis only; latency and precision at defaults."],
+                baseline_condition_id="resolution_native",
+                notes=["Isolated resolution axis; native bypass is not JPEG quality 100."],
+            )
+        )
 
-    jpeg = ExperimentPlan(
-        plan_id="v0.1_full_jpeg",
-        candidate=candidate,
-        phase=PlanPhase.EXPLORATORY.value,
-        n_episodes=n,
-        axis=ExperimentAxis.JPEG.value,
-        seed_pairs=seeds,
-        conditions=jpeg_conditions(tuple(full["jpeg_qualities"])),
-        isolation_notes=["JPEG visual-quality axis only; native resolution."],
-        baseline_condition_id="jpeg_bypass",
-        notes=["Isolated JPEG axis; bypass ≠ quality 100."],
-    )
-    plans.append(jpeg)
+    if "jpeg_qualities" in full:
+        plans.append(
+            ExperimentPlan(
+                plan_id="v0.1_full_jpeg",
+                candidate=candidate,
+                phase=PlanPhase.EXPLORATORY.value,
+                n_episodes=n,
+                axis=ExperimentAxis.JPEG.value,
+                seed_pairs=seeds,
+                conditions=jpeg_conditions(tuple(full["jpeg_qualities"])),
+                isolation_notes=["JPEG visual-quality axis only; native resolution."],
+                baseline_condition_id="jpeg_bypass",
+                notes=["Isolated JPEG axis; bypass ≠ quality 100."],
+            )
+        )
 
-    if support.get("status") == "ok" and full.get("h264_bitrates_kbps"):
+    if (
+        support is not None
+        and support.get("status") == "ok"
+        and "h264_bitrates_kbps" in full
+        and full.get("h264_bitrates_kbps")
+    ):
         plans.append(
             ExperimentPlan(
                 plan_id="v0.1_full_h264",
@@ -602,52 +836,58 @@ def build_full_axis_plans(
             )
         )
 
-    prec_variants = ["onnx_fp32"]
-    if "int8" in full.get("precision_variants", []) and artifacts.int8_status == "ok":
-        prec_variants.append("int8")
-    if "int4_weight_only" in full.get("precision_variants", []) and artifacts.int4_status == "ok":
-        prec_variants.append("int4_weight_only")
-    prec = ExperimentPlan(
-        plan_id="v0.1_full_precision",
-        candidate=candidate,
-        phase=PlanPhase.EXPLORATORY.value,
-        n_episodes=n,
-        axis=ExperimentAxis.PRECISION.value,
-        seed_pairs=seeds,
-        conditions=precision_conditions(tuple(prec_variants)),
-        isolation_notes=["Precision under constant_latency_ms_0."],
-        baseline_condition_id="precision_onnx_fp32",
-        notes=[
-            f"INT8 status at plan build: {artifacts.int8_status}",
-            f"INT4 status at plan build: {artifacts.int4_status}",
-        ],
-    )
-    plans.append(prec)
-
-    device_conds = _device_profile_conditions(
-        profile_keys=list(full["device_profiles"]),
-        artifacts=artifacts,
-        window_length=window_length,
-        n_episodes=n,
-    )
-    if device_conds:
+    if "precision_variants" in full:
+        prec_variants = ["onnx_fp32"]
+        if "int8" in full.get("precision_variants", []) and artifacts.int8_status == "ok":
+            prec_variants.append("int8")
+        if (
+            "int4_weight_only" in full.get("precision_variants", [])
+            and artifacts.int4_status == "ok"
+        ):
+            prec_variants.append("int4_weight_only")
         plans.append(
             ExperimentPlan(
-                plan_id="v0.1_full_device_profile",
+                plan_id="v0.1_full_precision",
                 candidate=candidate,
                 phase=PlanPhase.EXPLORATORY.value,
                 n_episodes=n,
-                axis=ExperimentAxis.DEVICE_PROFILE.value,
+                axis=ExperimentAxis.PRECISION.value,
                 seed_pairs=seeds,
-                conditions=device_conds,
-                isolation_notes=[
-                    "Measured per-variant hardware timing replay; not constant-delay axis.",
-                    "Contiguous 32-sample windows; not block resampling.",
+                conditions=precision_conditions(tuple(prec_variants)),
+                isolation_notes=["Precision under constant_latency_ms_0."],
+                baseline_condition_id="precision_onnx_fp32",
+                notes=[
+                    f"INT8 status at plan build: {artifacts.int8_status}",
+                    f"INT4 status at plan build: {artifacts.int4_status}",
                 ],
-                baseline_condition_id=None,
-                notes=["Device profile replay with predeclared windows."],
             )
         )
+
+    if "device_profiles" in full:
+        device_conds = _device_profile_conditions(
+            profile_keys=list(full["device_profiles"]),
+            artifacts=artifacts,
+            window_length=window_length,
+            n_episodes=n,
+        )
+        if device_conds:
+            plans.append(
+                ExperimentPlan(
+                    plan_id="v0.1_full_device_profile",
+                    candidate=candidate,
+                    phase=PlanPhase.EXPLORATORY.value,
+                    n_episodes=n,
+                    axis=ExperimentAxis.DEVICE_PROFILE.value,
+                    seed_pairs=seeds,
+                    conditions=device_conds,
+                    isolation_notes=[
+                        "Measured per-variant hardware timing replay; not constant-delay axis.",
+                        "Contiguous 32-sample windows; not block resampling.",
+                    ],
+                    baseline_condition_id=None,
+                    notes=["Device profile replay with predeclared windows."],
+                )
+            )
     return plans
 
 
@@ -661,13 +901,56 @@ def freeze_protocol_lock(
     h264_support: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     stats = config["statistics"]
-    lock: dict[str, Any] = {
+    shared = {
         "schema_version": 1,
         "protocol_name": protocol_identity(config)[0],
         "protocol_version": protocol_identity(config)[1],
         "phase": phase,
         "candidate": config["candidate"],
         "source_revision": source_revision,
+        "trace_window": config["trace_window"],
+        "scheduler": config["scheduler"],
+        "statistics": {
+            "breakpoint_ratio": float(stats.get("breakpoint_ratio", DEFAULT_BREAKPOINT_RATIO)),
+            "baseline_success_floor": float(
+                stats.get("baseline_success_floor", DEFAULT_BASELINE_SUCCESS_FLOOR)
+            ),
+            "n_bootstrap": int(stats.get("n_bootstrap", DEFAULT_BOOTSTRAP_SAMPLES)),
+            "bootstrap_seed": int(stats.get("bootstrap_seed", DEFAULT_BOOTSTRAP_SEED)),
+            "coverage": stats.get("coverage", "pointwise"),
+            "confirmation_fresh_seeds_separate": True,
+        },
+        "baseline_reuse": config.get("baseline_reuse") or {"enabled": True},
+        "phase_config": config[phase] if phase in config else config.get("smoke"),
+    }
+    if config_backend(config) == BACKEND_PYTORCH:
+        lock: dict[str, Any] = {
+            **shared,
+            "backend": BACKEND_PYTORCH,
+            "artifacts": {
+                "export_dir": str(artifacts.export_dir),
+                "checkpoint_files": dict(artifacts.checkpoint_files or {}),
+                "upstream_agreement_path": (
+                    str(artifacts.upstream_agreement_path)
+                    if artifacts.upstream_agreement_path
+                    else None
+                ),
+                "upstream_agreement_sha256": artifacts.upstream_agreement_sha256,
+                "timing_profile_path": (
+                    str(artifacts.timing_profile_path) if artifacts.timing_profile_path else None
+                ),
+                "timing_profile_sha256": artifacts.timing_profile_sha256,
+            },
+            "host": {
+                "compute_device": host.compute_device,
+                "torch_num_threads": host.torch_num_threads,
+            },
+        }
+        return lock
+
+    assert artifacts.fp32_path is not None
+    lock = {
+        **shared,
         "artifacts": {
             "export_dir": str(artifacts.export_dir),
             "fp32_path": str(artifacts.fp32_path),
@@ -691,20 +974,6 @@ def freeze_protocol_lock(
             "intra_op_num_threads": host.intra_op_num_threads,
             "inter_op_num_threads": host.inter_op_num_threads,
         },
-        "trace_window": config["trace_window"],
-        "scheduler": config["scheduler"],
-        "statistics": {
-            "breakpoint_ratio": float(stats.get("breakpoint_ratio", DEFAULT_BREAKPOINT_RATIO)),
-            "baseline_success_floor": float(
-                stats.get("baseline_success_floor", DEFAULT_BASELINE_SUCCESS_FLOOR)
-            ),
-            "n_bootstrap": int(stats.get("n_bootstrap", DEFAULT_BOOTSTRAP_SAMPLES)),
-            "bootstrap_seed": int(stats.get("bootstrap_seed", DEFAULT_BOOTSTRAP_SEED)),
-            "coverage": stats.get("coverage", "pointwise"),
-            "confirmation_fresh_seeds_separate": True,
-        },
-        "baseline_reuse": config.get("baseline_reuse") or {"enabled": True},
-        "phase_config": config[phase] if phase in config else config.get("smoke"),
     }
     if h264_support is not None:
         lock["h264"] = dict(h264_support)
@@ -743,7 +1012,12 @@ def assert_lock_matches(existing: dict[str, Any], fresh: dict[str, Any]) -> None
             )
 
 
-def _expected_runtime(condition: ConditionSpec) -> dict[str, Any]:
+def _expected_runtime(
+    condition: ConditionSpec,
+    *,
+    backend: str = BACKEND_ONNXRUNTIME,
+    variant_label: str = "onnx_fp32",
+) -> dict[str, Any]:
     """Runtime identity a finished report must show for this condition."""
     params = condition.params
     axis = condition.axis
@@ -753,7 +1027,8 @@ def _expected_runtime(condition: ConditionSpec) -> dict[str, Any]:
         else "constant",
         "latency_s": float(params["latency_s"]) if axis == ExperimentAxis.LATENCY_MS.value else 0.0,
         "image_mode": "native",
-        "variant_label": "onnx_fp32",
+        "variant_label": variant_label,
+        "policy_backend": backend,
     }
     if axis in {
         ExperimentAxis.RESOLUTION.value,
@@ -809,13 +1084,19 @@ def _h264_summary_problem(episode: dict[str, Any], condition: ConditionSpec) -> 
     return None
 
 
-def _shared_baseline_runtime() -> dict[str, Any]:
-    fingerprint = _baseline_fingerprint()
+def _shared_baseline_runtime(
+    *,
+    backend: str = BACKEND_ONNXRUNTIME,
+    variant_label: str = "onnx_fp32",
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    fingerprint = _baseline_fingerprint(config)
     return {
         "latency_mode": "constant",
         "latency_s": fingerprint["latency_s"],
         "image_mode": fingerprint["image_mode"],
-        "variant_label": fingerprint["variant_label"],
+        "variant_label": variant_label or fingerprint["variant_label"],
+        "policy_backend": backend,
     }
 
 
@@ -862,11 +1143,18 @@ def run_report_problem(
         return "provenance policy_rng_seeds differ from the plan"
     if provenance.get("latency_mode") != expected_runtime["latency_mode"]:
         return f"latency_mode {provenance.get('latency_mode')!r} differs from the condition"
-    onnx_runtime = provenance.get("onnx_runtime")
-    if not isinstance(onnx_runtime, dict) or (
-        onnx_runtime.get("variant_label") != expected_runtime["variant_label"]
-    ):
-        return f"runtime variant is not {expected_runtime['variant_label']!r}"
+    backend = expected_runtime.get("policy_backend", BACKEND_ONNXRUNTIME)
+    if backend == BACKEND_PYTORCH:
+        if provenance.get("policy_backend") != BACKEND_PYTORCH:
+            return f"policy_backend {provenance.get('policy_backend')!r} is not 'pytorch'"
+        if provenance.get("onnx_runtime") is not None:
+            return "pytorch run must not include onnx_runtime provenance"
+    else:
+        onnx_runtime = provenance.get("onnx_runtime")
+        if not isinstance(onnx_runtime, dict) or (
+            onnx_runtime.get("variant_label") != expected_runtime["variant_label"]
+        ):
+            return f"runtime variant is not {expected_runtime['variant_label']!r}"
     if summary.get("n_episodes_total") != len(episodes):
         return "summary episode count differs from episodes"
     if summary.get("n_runtime_error"):
@@ -893,10 +1181,17 @@ def run_report_problem(
 
 
 def condition_report_problem(
-    report_path: Path, plan: ExperimentPlan, condition: ConditionSpec
+    report_path: Path,
+    plan: ExperimentPlan,
+    condition: ConditionSpec,
+    *,
+    backend: str = BACKEND_ONNXRUNTIME,
+    variant_label: str = "onnx_fp32",
 ) -> str | None:
     problem = run_report_problem(
-        report_path, plan=plan, expected_runtime=_expected_runtime(condition)
+        report_path,
+        plan=plan,
+        expected_runtime=_expected_runtime(condition, backend=backend, variant_label=variant_label),
     )
     if problem is not None:
         return problem
@@ -919,12 +1214,22 @@ def condition_report_problem(
     return None
 
 
-def shared_baseline_problem(shared_baseline_dir: Path, *, plan: ExperimentPlan) -> str | None:
+def shared_baseline_problem(
+    shared_baseline_dir: Path,
+    *,
+    plan: ExperimentPlan,
+    backend: str = BACKEND_ONNXRUNTIME,
+    variant_label: str = "onnx_fp32",
+) -> str | None:
     """Check the shared baseline report that reference conditions point to."""
     report_path = Path(shared_baseline_dir) / "run_report.json"
     if not report_path.is_file():
         return f"shared baseline report missing: {report_path}"
-    return run_report_problem(report_path, plan=plan, expected_runtime=_shared_baseline_runtime())
+    return run_report_problem(
+        report_path,
+        plan=plan,
+        expected_runtime=_shared_baseline_runtime(backend=backend, variant_label=variant_label),
+    )
 
 
 def condition_incomplete_reason(
@@ -933,6 +1238,8 @@ def condition_incomplete_reason(
     plan: ExperimentPlan,
     condition: ConditionSpec,
     shared_baseline_dir: Path,
+    backend: str = BACKEND_ONNXRUNTIME,
+    variant_label: str = "onnx_fp32",
 ) -> str | None:
     """Return why a condition directory is not a finished, matching run, else None."""
     condition_dir = Path(condition_dir)
@@ -941,7 +1248,9 @@ def condition_incomplete_reason(
         return "run_report.json missing"
     reference_path = condition_dir / "baseline_reference.json"
     if not reference_path.is_file():
-        return condition_report_problem(report_path, plan, condition)
+        return condition_report_problem(
+            report_path, plan, condition, backend=backend, variant_label=variant_label
+        )
 
     reference, problem = _load_json_object(reference_path)
     if reference is None:
@@ -950,11 +1259,13 @@ def condition_incomplete_reason(
         return f"baseline_reference status={reference.get('status')!r}"
     if reference.get("condition_id") != condition.condition_id:
         return "baseline_reference belongs to another condition"
-    if not condition_is_shared_baseline(condition):
+    if not condition_is_shared_baseline(condition, baseline_variant=variant_label):
         return "condition is not eligible for baseline reuse"
     if Path(str(reference.get("reference_dir", ""))).name != Path(shared_baseline_dir).name:
         return "baseline_reference points to a different shared baseline"
-    problem = shared_baseline_problem(shared_baseline_dir, plan=plan)
+    problem = shared_baseline_problem(
+        shared_baseline_dir, plan=plan, backend=backend, variant_label=variant_label
+    )
     if problem is not None:
         return f"referenced baseline: {problem}"
     shared_report = Path(shared_baseline_dir) / "run_report.json"
@@ -969,9 +1280,16 @@ def condition_completed(
     plan: ExperimentPlan,
     condition: ConditionSpec,
     shared_baseline_dir: Path,
+    backend: str = BACKEND_ONNXRUNTIME,
+    variant_label: str = "onnx_fp32",
 ) -> bool:
     reason = condition_incomplete_reason(
-        condition_dir, plan=plan, condition=condition, shared_baseline_dir=shared_baseline_dir
+        condition_dir,
+        plan=plan,
+        condition=condition,
+        shared_baseline_dir=shared_baseline_dir,
+        backend=backend,
+        variant_label=variant_label,
     )
     if reason is not None:
         LOGGER.warning("condition %s not complete: %s", condition.condition_id, reason)
